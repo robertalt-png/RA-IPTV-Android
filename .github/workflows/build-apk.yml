@@ -58,4 +58,4 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-# Source archive complete: 10/10 parts
+# Source archive complete: 11 parts with split 05a/05b
