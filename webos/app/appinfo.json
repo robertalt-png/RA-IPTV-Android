@@ -1,0 +1,17 @@
+{
+  "id": "com.nivaroplayer.app",
+  "version": "0.1.0",
+  "vendor": "Nivaro",
+  "type": "web",
+  "main": "index.html",
+  "title": "Nivaro IPTV Player",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "splashBackground": "splash.png",
+  "splashColor": "#07090d",
+  "iconColor": "#11151c",
+  "resolution": "1920x1080",
+  "appDescription": "IPTV player for your own provider",
+  "requiredMemory": 80,
+  "disableBackHistoryAPI": true
+}
