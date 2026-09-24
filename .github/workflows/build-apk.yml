@@ -1,4 +1,4 @@
-name: Build Nivaro v0.4.0
+name: Build Android APK
 
 on:
   push:
@@ -16,19 +16,361 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore Nivaro v0.4.0 source
+      - name: Restore verified source archive
         shell: bash
         run: |
           set -euo pipefail
-          echo "1d31cf30c35031657fe5d416bdb726515e7bfb3b297123202fd33d643e4f24b7  source_archives/Nivaro-v0.4.0-source.tar.gz" | sha256sum -c -
-          mkdir -p source
-          tar -xzf source_archives/Nivaro-v0.4.0-source.tar.gz -C source
+          cat cleanv2/p00 cleanv2/p01 cleanv2/p02 cleanv2/p03 cleanv2/p04 cleanv2/p05 cleanv2/p06 cleanv2/p07 > source.b64
+          test "$(wc -c < source.b64)" -eq 46924
+          echo "4c274c5647b85941952c3d59e2133f7dd9f134f239ceea1adc41051e97b8198e  source.b64" | sha256sum -c -
+          base64 --decode source.b64 > source.zip
+          echo "cf47b084a4af078c45db5b756ab54b3717f6879a107026e0315601ed9c75266e  source.zip" | sha256sum -c -
+          unzip -t source.zip
+          rm -rf source
+          unzip -q source.zip -d source
           test -f source/RA_IPTV_Android_v0.1/settings.gradle
-          grep -q "versionName '0.4.0'" source/RA_IPTV_Android_v0.1/app/build.gradle
-          grep -q 'navEpg' source/RA_IPTV_Android_v0.1/app/src/main/res/layout/activity_main.xml
-          grep -q 'showGenreChooser' source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
-          grep -q 'class MediaDetails' source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/model/MediaDetails.java
-          grep -q 'showEpgDetails' source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
+          test -f source/RA_IPTV_Android_v0.1/app/build.gradle
+
+      - name: Apply v0.2.0 redesign
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat patches/v0.2.0/parts/p00 patches/v0.2.0/parts/p01 patches/v0.2.0/parts/p02 patches/v0.2.0/parts/p03 patches/v0.2.0/parts/p04 patches/v0.2.0/parts/p05 > overlay.b64
+          test "$(wc -c < overlay.b64)" -eq 34828
+          echo "13309bb713a32ebc1f1b61112aaf263393f57b17d09da6c7b9e30a752fc36a89  overlay.b64" | sha256sum -c -
+          base64 --decode overlay.b64 > overlay.zip
+          echo "b54f5b159bb5e67834549f292887df98aab4770bffc5760a075d97b457dda5c9  overlay.zip" | sha256sum -c -
+          unzip -t overlay.zip
+          unzip -qo overlay.zip -d source/RA_IPTV_Android_v0.1
+          grep -q "versionName '0.2.0'" source/RA_IPTV_Android_v0.1/app/build.gradle
+
+      - name: Apply final v0.2.1 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat patches/v0.2.1-final/parts/p00 patches/v0.2.1-final/parts/p01 patches/v0.2.1-final/parts/p02 patches/v0.2.1-final/parts/p03 patches/v0.2.1-final/parts/p04 patches/v0.2.1-final/parts/p05 patches/v0.2.1-final/parts/p06 > final021.b64
+          test "$(wc -c < final021.b64)" -eq 33084
+          echo "ec87b0ac60e44028c7ee15c52ef907efeb4a4505d51382c9ccea432ead0870cd  final021.b64" | sha256sum -c -
+          base64 --decode final021.b64 > final021.zip
+          echo "14c3f2694a5c546767704c069b9094eacd211998cf836f16ec5966d094466926  final021.zip" | sha256sum -c -
+          unzip -t final021.zip
+          unzip -qo final021.zip -d source/RA_IPTV_Android_v0.1
+          grep -q "versionName '0.2.1'" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "Anti-freeze" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/PlayerActivity.java
+          grep -q "heroImage" source/RA_IPTV_Android_v0.1/app/src/main/res/layout/activity_main.xml
+          grep -q "episodeCandidates" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/core/XtreamUrls.java
+
+      - name: Apply final v0.2.2 startup and navigation patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat patches/v0.2.2-final2/parts/p00 patches/v0.2.2-final2/parts/p01 patches/v0.2.2-final2/parts/p02 patches/v0.2.2-final2/parts/p03 patches/v0.2.2-final2/parts/p04 patches/v0.2.2-final2/parts/p05 patches/v0.2.2-final2/parts/p06 > final022.b64
+          test "$(wc -c < final022.b64)" -eq 12516
+          echo "8030ddeeb59391caf43a2785c1b318d3ff0e9c840c0d084679a960c6f18b73f9  final022.b64" | sha256sum -c -
+          base64 --decode final022.b64 > final022.zip
+          echo "93f6dc5f1ed0e2bb7e4813b5d9172f4f7d3bfd5084719c9da23b5977899667ff  final022.zip" | sha256sum -c -
+          unzip -t final022.zip
+          unzip -qo final022.zip -d source/RA_IPTV_Android_v0.1
+          grep -q "versionName '0.2.2'" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "navFavorites" source/RA_IPTV_Android_v0.1/app/src/main/res/layout/activity_main.xml
+          ! grep -q "liveButton" source/RA_IPTV_Android_v0.1/app/src/main/res/layout/activity_main.xml
+          grep -q "Klaar · kies Live tv" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
+
+      - name: Apply Nivaro v0.3.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd source/RA_IPTV_Android_v0.1
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p=Path('app/build.gradle')
+          s=p.read_text().replace("versionCode 4","versionCode 5").replace("versionName '0.2.2'","versionName '0.3.0'")
+          p.write_text(s)
+
+          p=Path('app/src/main/AndroidManifest.xml')
+          p.write_text(p.read_text().replace('android:label="RA IPTV"','android:label="@string/app_name"'))
+
+          Path('app/src/main/res/values/strings.xml').write_text('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <string name="app_name">Nivaro IPTV Player</string>\n</resources>\n')
+
+          p=Path('app/src/main/res/layout/activity_main.xml')
+          xml=p.read_text().replace('android:text="RA IPTV"','android:text="Nivaro"')
+          xml=xml.replace('android:backgroundTint="@color/muted" />','android:backgroundTint="@color/muted" android:spinnerMode="dropdown" android:popupBackground="@color/card" android:dropDownWidth="match_parent" />',1)
+          p.write_text(xml)
+
+          p=Path('app/src/main/res/layout/activity_profile.xml')
+          p.write_text(p.read_text().replace('RA IPTV levert zelf geen tv-dienst.','Nivaro levert zelf geen tv-dienst.'))
+
+          p=Path('app/src/main/java/com/robertalt/raiptv/MediaRowAdapter.java')
+          p.write_text(p.read_text().replace('RA-IPTV/0.2.1','Nivaro/0.3.0'))
+
+          p=Path('app/src/main/java/com/robertalt/raiptv/core/XmltvGuide.java')
+          p.write_text(p.read_text().replace('RA-IPTV-Android/0.1','Nivaro-Android/0.3.0'))
+
+          p=Path('app/src/main/java/com/robertalt/raiptv/net/HttpText.java')
+          p.write_text(p.read_text().replace('RA-IPTV/0.2.0','Nivaro/0.3.0'))
+
+          p=Path('app/src/main/java/com/robertalt/raiptv/MainActivity.java')
+          s=p.read_text()
+          s=s.replace('    LibraryStore library;','    LibraryStore library;\n    SearchIndexStore searchIndex;')
+          s=s.replace('    ExecutorService heroExec=Executors.newSingleThreadExecutor();','    ExecutorService heroExec=Executors.newSingleThreadExecutor();\n    ExecutorService indexExec=Executors.newSingleThreadExecutor();\n    volatile boolean indexRefreshRunning=false;\n    static final long SEARCH_INDEX_TTL_MS=6*60*60*1000L;')
+          s=s.replace('        library=new LibraryStore(this);','        library=new LibraryStore(this);\n        searchIndex=new SearchIndexStore(this);')
+          s=s.replace('            public void onTextChanged(CharSequence s,int a,int b,int c){scheduleSearch(s.toString());}','            public void onTextChanged(CharSequence s,int a,int b,int c){String q=s.toString();if(!q.trim().isEmpty()){categories.setVisibility(View.GONE);adapter.set(Collections.emptyList());status.setText("Zoeken…");}scheduleSearch(q);}')
+          s=s.replace('        title.setText("RA IPTV");\n        setHeroDefault(profile.name==null||profile.name.trim().isEmpty()?"Welkom bij RA IPTV":profile.name,"Even verbinden…");','        title.setText("Nivaro");\n        setHeroDefault(profile.name==null||profile.name.trim().isEmpty()?"Welkom bij Nivaro":profile.name,"Even verbinden…");')
+          s=s.replace('                runOnUiThread(()->{if(current(token))loadHome();});','                runOnUiThread(()->{if(current(token)){loadHome();refreshSearchIndex(false);}});',1)
+          s=s.replace('                List<MediaEntry>x=provider.items(requestedSection,cat);\n                runOnUiThread', '                List<MediaEntry>x=provider.items(requestedSection,cat);\n                try{searchIndex.upsert(profileKey(),x);}catch(Exception ignored){}\n                runOnUiThread')
+
+          start=s.index('    void scheduleSearch(String q){')
+          end=s.index('    void showLocal(List<MediaEntry>x,String label){')
+          new='''    void scheduleSearch(String q){
+              if(pendingSearch!=null)ui.removeCallbacks(pendingSearch);
+              final String asked=q==null?"":q;
+              pendingSearch=()->searchEverywhere(asked);
+              ui.postDelayed(pendingSearch,180);
+          }
+
+          void searchEverywhere(String q){
+              String z=q==null?"":q.trim().toLowerCase(Locale.ROOT);
+              latestSearchQuery=z;
+              if(z.isEmpty()){
+                  if(section.equals("home")||section.equals("local"))loadHome();
+                  else if(section.equals("live")||section.equals("vod")||section.equals("series")){
+                      categories.setVisibility(View.VISIBLE);adapter.set(new ArrayList<>(all));busy(false,all.size()+" resultaten");
+                  }
+                  return;
+              }
+              if(z.length()<2){adapter.set(Collections.emptyList());status.setText("Typ minimaal 2 letters");return;}
+              categories.setVisibility(View.GONE);
+              final int token=nextRequest();
+              final String query=z;
+              adapter.set(Collections.emptyList());
+              status.setText("Zoeken…");
+              exec.execute(()->{
+                  try{
+                      List<MediaEntry>x=searchIndex.search(profileKey(),query,120);
+                      runOnUiThread(()->{
+                          if(!current(token)||!query.equals(latestSearchQuery))return;
+                          adapter.set(x);
+                          int indexed=searchIndex.count(profileKey());
+                          if(x.isEmpty()&&indexed==0){
+                              status.setText(indexRefreshRunning?"Zoekindex wordt op de achtergrond opgebouwd…":"Nog geen lokale zoekindex · open een categorie of probeer straks opnieuw");
+                          }else busy(false,x.isEmpty()?"Geen resultaten voor ‘"+query+"’":x.size()+" resultaten · lokale zoekindex");
+                      });
+                  }catch(Exception e){runOnUiThread(()->{if(current(token)&&query.equals(latestSearchQuery))busy(false,"Zoeken lokaal mislukt: "+friendly(e));});}
+              });
+          }
+
+          String safe(String s){return s==null?"":s;}
+
+          String profileKey(){
+              if(profile==null)return "none";
+              String base=profile.type.name()+"|"+safe(profile.server)+"|"+safe(profile.username)+"|"+safe(profile.m3uUrl);
+              return Integer.toHexString(base.hashCode())+":"+profile.type.name();
+          }
+
+          void refreshSearchIndex(boolean force){
+              if(provider==null||profile==null||indexRefreshRunning)return;
+              indexRefreshRunning=true;
+              final String key=profileKey();
+              indexExec.execute(()->{
+                  try{
+                      if(profile.type==Profile.Type.M3U){
+                          List<MediaEntry>x=provider.items("live","all");searchIndex.replaceSection(key,"live",x);
+                      }else{
+                          for(String type:new String[]{"vod","series","live"}){
+                              if(!force&&searchIndex.isFresh(key,type,SEARCH_INDEX_TTL_MS))continue;
+                              try{
+                                  List<MediaEntry>x=provider.items(type,"all");
+                                  searchIndex.replaceSection(key,type,x);
+                                  String q=latestSearchQuery;
+                                  if(q!=null&&!q.isEmpty())runOnUiThread(()->searchEverywhere(q));
+                              }catch(Exception ignored){}
+                          }
+                      }
+                  }catch(Exception ignored){}finally{indexRefreshRunning=false;}
+              });
+          }
+
+          '''
+          s=s[:start]+new+s[end:]
+          s=s.replace('return s.equals("live")?"Live tv":s.equals("vod")?"Films":s.equals("series")?"Series":"RA IPTV";','return s.equals("live")?"Live tv":s.equals("vod")?"Films":s.equals("series")?"Series":"Nivaro";')
+          s=s.replace('Mozilla/5.0 (Linux; Android) RA-IPTV/0.2.1','Mozilla/5.0 (Linux; Android) Nivaro/0.3.0')
+          s=s.replace('if(v instanceof TextView)((TextView)v).setTextColor(0xFF111111);','if(v instanceof TextView){TextView t=(TextView)v;t.setTextColor(getResources().getColor(R.color.text));t.setBackgroundColor(getResources().getColor(R.color.card));t.setPadding(24,18,24,18);}')
+          s=s.replace('exec.shutdownNow();heroExec.shutdownNow();super.onDestroy();','exec.shutdownNow();heroExec.shutdownNow();indexExec.shutdownNow();if(searchIndex!=null)searchIndex.close();super.onDestroy();')
+          p.write_text(s)
+
+          p=Path('app/src/main/java/com/robertalt/raiptv/PlayerActivity.java')
+          s=p.read_text()
+          s=s.replace('import androidx.media3.ui.PlayerView;','import androidx.media3.ui.PlayerView;\nimport androidx.media3.ui.CaptionStyleCompat;')
+          s=s.replace('ArrayList<String>args=new ArrayList<>(Arrays.asList("--network-caching=1800","--http-reconnect","--audio-language=eng,en","--sub-language=dut,nld,nl","--no-video-title-show"));','ArrayList<String>args=new ArrayList<>(Arrays.asList("--network-caching=1800","--http-reconnect","--audio-language=eng,en","--sub-language=dut,nld,nl","--no-video-title-show","--freetype-color=16777215","--freetype-outline-color=0","--freetype-outline-opacity=255","--freetype-outline-thickness=2","--freetype-shadow-opacity=0","--freetype-background-opacity=0"));')
+          s=s.replace('.setUserAgent("Mozilla/5.0 (Linux; Android) RA-IPTV/0.2.1")','.setUserAgent("Mozilla/5.0 (Linux; Android) Nivaro/0.3.0")')
+          needle='exo.setTrackSelectionParameters(exo.getTrackSelectionParameters().buildUpon().setPreferredAudioLanguages("en","eng","nl","nld").setPreferredTextLanguages("nl","nld","dut").build());media3View.setPlayer(exo);index=0;playMedia3Candidate(resume>0?resume:library.progress(entry));'
+          repl='exo.setTrackSelectionParameters(exo.getTrackSelectionParameters().buildUpon().setPreferredAudioLanguages("en","eng","nl","nld").setPreferredTextLanguages("nl","nld","dut").build());media3View.setPlayer(exo);\n        if(media3View.getSubtitleView()!=null){media3View.getSubtitleView().setApplyEmbeddedStyles(false);media3View.getSubtitleView().setApplyEmbeddedFontSizes(false);media3View.getSubtitleView().setStyle(new CaptionStyleCompat(0xFFFFFFFF,0x00000000,0x00000000,CaptionStyleCompat.EDGE_TYPE_OUTLINE,0xFF000000,null));}\n        index=0;playMedia3Candidate(resume>0?resume:library.progress(entry));'
+          if needle not in s: raise SystemExit('Media3 subtitle insertion point missing')
+          s=s.replace(needle,repl)
+          p.write_text(s)
+          PY
+
+          sed -i 's#@mipmap/ic_launcher#@drawable/ic_nivaro_launcher#' app/src/main/AndroidManifest.xml
+          cat > app/src/main/res/drawable/ic_nivaro_launcher.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path android:fillColor="#0B0E14" android:pathData="M0,0h108v108h-108z"/>
+              <path android:fillColor="#181D27" android:pathData="M10,10h88v88h-88z"/>
+              <path android:fillColor="#F04455"
+                  android:pathData="M26,80 L26,28 L40,28 L68,62 L68,28 L82,28 L82,80 L68,80 L40,46 L40,80 Z"/>
+              <path android:fillColor="#FFFFFFFF"
+                  android:pathData="M85,46 L98,54 L85,62 Z"/>
+          </vector>
+          XML
+
+          cat > app/src/main/java/com/robertalt/raiptv/storage/SearchIndexStore.java <<'JAVA'
+          package com.robertalt.raiptv.storage;
+
+          import android.content.*;
+          import android.database.Cursor;
+          import android.database.sqlite.*;
+          import com.robertalt.raiptv.model.MediaEntry;
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+          import java.util.*;
+
+          public class SearchIndexStore extends SQLiteOpenHelper {
+              private static final String DB="nivaro_search.db";
+              private static final int VERSION=1;
+
+              public SearchIndexStore(Context c){ super(c,DB,null,VERSION); }
+
+              @Override public void onCreate(SQLiteDatabase db){
+                  db.execSQL("CREATE TABLE entries(profile TEXT NOT NULL, item_key TEXT NOT NULL, type TEXT NOT NULL, name TEXT, name_norm TEXT, hay_norm TEXT, payload TEXT NOT NULL, PRIMARY KEY(profile,item_key))");
+                  db.execSQL("CREATE INDEX idx_entries_name ON entries(profile,name_norm)");
+                  db.execSQL("CREATE INDEX idx_entries_type ON entries(profile,type)");
+                  db.execSQL("CREATE TABLE meta(profile TEXT NOT NULL, section TEXT NOT NULL, updated INTEGER NOT NULL, item_count INTEGER NOT NULL, PRIMARY KEY(profile,section))");
+              }
+              @Override public void onUpgrade(SQLiteDatabase db,int oldV,int newV){ db.execSQL("DROP TABLE IF EXISTS entries"); db.execSQL("DROP TABLE IF EXISTS meta"); onCreate(db); }
+
+              public synchronized void replaceSection(String profile,String section,List<MediaEntry> items){
+                  SQLiteDatabase db=getWritableDatabase(); db.beginTransaction();
+                  try{
+                      db.delete("entries","profile=? AND type=?",new String[]{profile,section});
+                      for(MediaEntry e:items) upsertInternal(db,profile,e);
+                      ContentValues m=new ContentValues();m.put("profile",profile);m.put("section",section);m.put("updated",System.currentTimeMillis());m.put("item_count",items.size());
+                      db.insertWithOnConflict("meta",null,m,SQLiteDatabase.CONFLICT_REPLACE);
+                      db.setTransactionSuccessful();
+                  }finally{db.endTransaction();}
+              }
+
+              public synchronized void upsert(String profile,List<MediaEntry> items){
+                  SQLiteDatabase db=getWritableDatabase(); db.beginTransaction();
+                  try{ for(MediaEntry e:items) upsertInternal(db,profile,e); db.setTransactionSuccessful(); }finally{db.endTransaction();}
+              }
+
+              private void upsertInternal(SQLiteDatabase db,String profile,MediaEntry e){
+                  try{
+                      ContentValues v=new ContentValues();v.put("profile",profile);v.put("item_key",e.uniqueKey());v.put("type",e.type);v.put("name",safe(e.name));
+                      String nameNorm=norm(e.name);String hay=norm(safe(e.name)+" "+safe(e.plot)+" "+safe(e.group)+" "+safe(e.seriesTitle)+" "+safe(e.tvgName));
+                      v.put("name_norm",nameNorm);v.put("hay_norm",hay);v.put("payload",encode(e));
+                      db.insertWithOnConflict("entries",null,v,SQLiteDatabase.CONFLICT_REPLACE);
+                  }catch(Exception ignored){}
+              }
+
+              public synchronized boolean isFresh(String profile,String section,long ttlMs){
+                  try(Cursor c=getReadableDatabase().rawQuery("SELECT updated FROM meta WHERE profile=? AND section=?",new String[]{profile,section})){
+                      return c.moveToFirst() && System.currentTimeMillis()-c.getLong(0)<ttlMs;
+                  }
+              }
+
+              public synchronized int count(String profile){
+                  try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM entries WHERE profile=?",new String[]{profile})){
+                      return c.moveToFirst()?c.getInt(0):0;
+                  }
+              }
+
+              public synchronized List<MediaEntry> search(String profile,String query,int limit){
+                  String q=norm(query); if(q.isEmpty())return Collections.emptyList();
+                  LinkedHashMap<String,MediaEntry> out=new LinkedHashMap<>();
+                  queryInto(out,"SELECT payload FROM entries WHERE profile=? AND name_norm=? LIMIT ?",new String[]{profile,q,String.valueOf(limit)});
+                  if(out.size()<limit)queryInto(out,"SELECT payload FROM entries WHERE profile=? AND name_norm LIKE ? ORDER BY length(name_norm) ASC LIMIT ?",new String[]{profile,q+"%",String.valueOf(limit)});
+                  if(out.size()<limit)queryInto(out,"SELECT payload FROM entries WHERE profile=? AND hay_norm LIKE ? LIMIT ?",new String[]{profile,"%"+q+"%",String.valueOf(limit*2)});
+                  List<MediaEntry> result=new ArrayList<>(out.values());
+                  result.sort((a,b)->Integer.compare(score(b,q),score(a,q)));
+                  if(result.size()>limit)return new ArrayList<>(result.subList(0,limit));
+                  return result;
+              }
+
+              private void queryInto(LinkedHashMap<String,MediaEntry> out,String sql,String[] args){
+                  try(Cursor c=getReadableDatabase().rawQuery(sql,args)){
+                      while(c.moveToNext()){MediaEntry e=decode(c.getString(0));if(e!=null)out.putIfAbsent(e.uniqueKey(),e);}
+                  }
+              }
+
+              private static int score(MediaEntry e,String q){
+                  String n=norm(e.name), g=norm(e.group); int s=0;
+                  if(n.equals(q))s+=1000; else if(n.startsWith(q))s+=500; else if(n.contains(" "+q)||n.contains(q+" "))s+=250; else if(n.contains(q))s+=120;
+                  String nl=" "+n+" "+g+" ";String[] tags={" nederland "," dutch "," nl "," npo "," rtl "," sbs "," veronica "," net5 "," vlaams "," belgie "," belgië "};
+                  for(String t:tags)if(nl.contains(t))s+=10;
+                  if("series".equals(e.type))s+=4; else if("vod".equals(e.type))s+=3; else if("live".equals(e.type))s+=2;
+                  return s;
+              }
+
+              private static String encode(MediaEntry e)throws Exception{
+                  JSONObject x=new JSONObject();x.put("id",e.id);x.put("streamId",e.streamId);x.put("seriesId",e.seriesId);x.put("name",e.name);x.put("logo",e.logo);x.put("backdrop",e.backdrop);x.put("categoryId",e.categoryId);x.put("type",e.type);x.put("rating",e.rating);x.put("year",e.year);x.put("plot",e.plot);x.put("extension",e.extension);x.put("directSource",e.directSource);x.put("url",e.url);x.put("group",e.group);x.put("tvgId",e.tvgId);x.put("tvgName",e.tvgName);x.put("seriesTitle",e.seriesTitle);x.put("tmdbId",e.tmdbId);x.put("imdbId",e.imdbId);x.put("season",e.season);x.put("episode",e.episode);x.put("candidates",new JSONArray(e.candidates));return x.toString();
+              }
+              private static MediaEntry decode(String raw){
+                  try{JSONObject x=new JSONObject(raw);MediaEntry e=new MediaEntry();e.id=x.optString("id");e.streamId=x.optString("streamId");e.seriesId=x.optString("seriesId");e.name=x.optString("name","Untitled");e.logo=x.optString("logo");e.backdrop=x.optString("backdrop");e.categoryId=x.optString("categoryId");e.type=x.optString("type","live");e.rating=x.optString("rating");e.year=x.optString("year");e.plot=x.optString("plot");e.extension=x.optString("extension");e.directSource=x.optString("directSource");e.url=x.optString("url");e.group=x.optString("group");e.tvgId=x.optString("tvgId");e.tvgName=x.optString("tvgName");e.seriesTitle=x.optString("seriesTitle");e.tmdbId=x.optString("tmdbId");e.imdbId=x.optString("imdbId");e.season=x.optInt("season");e.episode=x.optInt("episode");JSONArray a=x.optJSONArray("candidates");if(a!=null)for(int i=0;i<a.length();i++)e.candidates.add(a.optString(i));return e;}catch(Exception ex){return null;}
+              }
+              private static String safe(String s){return s==null?"":s;}
+              private static String norm(String s){return safe(s).toLowerCase(Locale.ROOT).replace('|',' ').replaceAll("\\s+"," ").trim();}
+          }
+          JAVA
+
+          grep -q "versionName '0.3.0'" app/build.gradle
+          grep -q "Nivaro IPTV Player" app/src/main/res/values/strings.xml
+          grep -q "ic_nivaro_launcher" app/src/main/AndroidManifest.xml
+          grep -q "class SearchIndexStore" app/src/main/java/com/robertalt/raiptv/storage/SearchIndexStore.java
+          grep -q "freetype-shadow-opacity=0" app/src/main/java/com/robertalt/raiptv/PlayerActivity.java
+          grep -q 'spinnerMode="dropdown"' app/src/main/res/layout/activity_main.xml
+          grep -q 'setBackgroundColor(getResources().getColor(R.color.card))' app/src/main/java/com/robertalt/raiptv/MainActivity.java
+
+      - name: Apply Nivaro v0.4.0 feature patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat source_archives/v0.4.0_parts/00 source_archives/v0.4.0_parts/01a source_archives/v0.4.0_parts/01b source_archives/v0.4.0_parts/02 source_archives/v0.4.0_parts/03 source_archives/v0.4.0_parts/04 > v040.patch.gz.b64
+          test "$(wc -c < v040.patch.gz.b64)" -eq 29196
+          echo "e30873cc5e0062b2637afa06c246a21b0c2772a4739470cc2553c372c8806499  v040.patch.gz.b64" | sha256sum -c -
+          base64 --decode v040.patch.gz.b64 > v040.patch.gz
+          echo "27b2c47c8b99c619b7fa92ce7090b122f0799c54f6c864ade3d36a5804aedf90  v040.patch.gz" | sha256sum -c -
+          gzip -dc v040.patch.gz > v040.patch
+          echo "ee7a8d26eaa1d28ac48cfb3f1011736f972d1615b979f0efc00f3b00467db916  v040.patch" | sha256sum -c -
+          cd source
+          patch -p0 --batch < ../v040.patch
+          cd RA_IPTV_Android_v0.1
+          grep -q "versionName '0.4.0'" app/build.gradle
+          grep -q 'navEpg' app/src/main/res/layout/activity_main.xml
+          grep -q 'showGenreChooser' app/src/main/java/com/robertalt/raiptv/MainActivity.java
+          grep -q 'class MediaDetails' app/src/main/java/com/robertalt/raiptv/model/MediaDetails.java
+          grep -q 'showEpgDetails' app/src/main/java/com/robertalt/raiptv/MainActivity.java
+          grep -q 'nextEpisodeFor' app/src/main/java/com/robertalt/raiptv/MainActivity.java
+
+      - name: Export Nivaro v0.4.0 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf Nivaro-v0.4.0-source.tar.gz -C source RA_IPTV_Android_v0.1
+
+      - name: Upload Nivaro source
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nivaro-v0.4.0-source
+          path: Nivaro-v0.4.0-source.tar.gz
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -40,8 +382,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "ANDROID_HOME=$ANDROID_HOME"
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
           test -n "$SDKMANAGER"
+          echo "Using $SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
@@ -50,23 +394,36 @@ jobs:
         with:
           gradle-version: '8.13'
 
-      - name: Build unsigned release APK
+      - name: Build debug and unsigned release APK
         working-directory: source/RA_IPTV_Android_v0.1
-        run: gradle --no-daemon --stacktrace assembleRelease
+        run: gradle --no-daemon --stacktrace assembleDebug assembleRelease
 
-      - name: Verify release APK
+      - name: Verify APKs
         shell: bash
         run: |
           set -euo pipefail
-          APK=source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
-          test -f "$APK"
-          ls -lh "$APK"
-          sha256sum "$APK"
+          test -f source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
+          test -f source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
+          ls -lh source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
+          ls -lh source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
+          sha256sum source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
+          sha256sum source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
+          test -f "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar"
 
-      - name: Upload unsigned release
+      - name: Upload unsigned release and signing tool
         uses: actions/upload-artifact@v4
         with:
           name: Nivaro-v0.4.0-unsigned-release
-          path: source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
+          path: |
+            source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
+            /opt/hostedtoolcache/Android_SDK/build-tools/36.0.0/lib/apksigner.jar
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nivaro-IPTV-Player-v0.4.0-debug-apk
+          path: source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
