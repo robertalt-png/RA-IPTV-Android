@@ -1,0 +1,1 @@
+{"id":"com.nivaroplayer.app.service","description":"Nivaro IPTV provider service","services":[{"name":"com.nivaroplayer.app.service","commands":[{"name":"xtream"},{"name":"m3u"}]}]}
