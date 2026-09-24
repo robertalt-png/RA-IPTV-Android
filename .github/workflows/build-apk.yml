@@ -551,6 +551,59 @@ jobs:
           print("v0.4.2 UI/settings patch applied")
           PY
 
+      - name: Complete Nivaro v0.4.2 media settings and info links
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path("source/RA_IPTV_Android_v0.1")
+
+          p=root/"app/src/main/java/com/robertalt/raiptv/PlayerActivity.java"
+          s=p.read_text()
+          old='ArrayList<String>args=new ArrayList<>(Arrays.asList("--network-caching="+SettingsStore.bufferMs(this)+"","--http-reconnect","--audio-language=eng,en","--sub-language=dut,nld,nl","--no-video-title-show","--freetype-color=16777215","--freetype-outline-color=0","--freetype-outline-opacity=255","--freetype-outline-thickness=2","--freetype-shadow-opacity=0","--freetype-background-opacity=0"));'
+          new='String ap=audioCodes(),sp=subtitleCodes();ArrayList<String>args=new ArrayList<>(Arrays.asList("--network-caching="+SettingsStore.bufferMs(this),"--http-reconnect","--no-video-title-show","--freetype-color=16777215","--freetype-outline-color=0","--freetype-outline-opacity=255","--freetype-outline-thickness=2","--freetype-shadow-opacity=0","--freetype-background-opacity=0"));if(!ap.isEmpty())args.add("--audio-language="+ap);if(!sp.isEmpty())args.add("--sub-language="+sp);'
+          if old not in s: raise SystemExit("VLC options anchor missing")
+          s=s.replace(old,new)
+          old='m.addOption(":network-caching="+SettingsStore.bufferMs(this));m.addOption(":http-reconnect");m.addOption(":audio-language=eng,en");m.addOption(":sub-language=dut,nld,nl");'
+          new='m.addOption(":network-caching="+SettingsStore.bufferMs(this));m.addOption(":http-reconnect");String ap=audioCodes(),sp=subtitleCodes();if(!ap.isEmpty())m.addOption(":audio-language="+ap);if(!sp.isEmpty())m.addOption(":sub-language="+sp);'
+          if old not in s: raise SystemExit("VLC media options anchor missing")
+          s=s.replace(old,new)
+          old='exo.setTrackSelectionParameters(exo.getTrackSelectionParameters().buildUpon().setPreferredAudioLanguages("en","eng","nl","nld").setPreferredTextLanguages("nl","nld","dut").build());media3View.setPlayer(exo);'
+          new='androidx.media3.common.TrackSelectionParameters.Builder ts=exo.getTrackSelectionParameters().buildUpon();String au=SettingsStore.audio(this),su=SettingsStore.subtitles(this);if("nl".equals(au))ts.setPreferredAudioLanguages("nl","nld","dut","en","eng");else if("en".equals(au))ts.setPreferredAudioLanguages("en","eng","nl","nld");if("nl".equals(su))ts.setPreferredTextLanguages("nl","nld","dut");else if("en".equals(su))ts.setPreferredTextLanguages("en","eng");else if("off".equals(su))ts.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT,true);exo.setTrackSelectionParameters(ts.build());media3View.setPlayer(exo);'
+          if old not in s: raise SystemExit("Media3 tracks anchor missing")
+          s=s.replace(old,new)
+          s=s.replace('if(index>=candidates.size()){startMedia3();return;}','if(index>=candidates.size()){if("vlc".equals(SettingsStore.player(this))){status.setText("VLC kon deze stream niet openen");wantPlaying=false;return;}startMedia3();return;}')
+          s=s.replace('else{status.setText("VLC lukt niet · Media3 proberen");startMedia3();}}','else{if("vlc".equals(SettingsStore.player(this))){status.setText("VLC kon deze stream niet openen");wantPlaying=false;}else{status.setText("VLC lukt niet · Media3 proberen");startMedia3();}}}')
+          marker='    void showAudioMenu(){'
+          if 'String audioCodes()' not in s:
+              helpers='''    String audioCodes(){String a=SettingsStore.audio(this);return "nl".equals(a)?"dut,nld,nl,en,eng":"en".equals(a)?"eng,en,dut,nld,nl":"";}
+              String subtitleCodes(){String x=SettingsStore.subtitles(this);return "nl".equals(x)?"dut,nld,nl":"en".equals(x)?"eng,en":"off".equals(x)?"none":"";}
+
+          '''
+              if marker not in s: raise SystemExit("audio menu marker missing")
+              s=s.replace(marker,helpers+marker)
+          p.write_text(s)
+
+          p=root/"app/src/main/java/com/robertalt/raiptv/MainActivity.java"
+          s=p.read_text()
+          old='Button close=new Button(this);close.setText(nl?"Sluiten":"Close");close.setAllCaps(false);box.addView(close);Dialog dialog=new Dialog(this);'
+          new='LinearLayout links=new LinearLayout(this);links.setOrientation(LinearLayout.HORIZONTAL);links.setGravity(Gravity.END);links.setPadding(0,dp(12),0,0);if(d.hasImdb()){Button imdb=new Button(this);imdb.setText("IMDb");imdb.setAllCaps(false);imdb.setOnClickListener(v->openWeb("https://www.imdb.com/title/"+d.imdbId+"/"));links.addView(imdb);}if(d.hasTmdb()){Button tmdb=new Button(this);tmdb.setText("TMDb");tmdb.setAllCaps(false);tmdb.setOnClickListener(v->openWeb("https://www.themoviedb.org/"+(("series".equals(item.type)||"episode".equals(item.type))?"tv/":"movie/")+d.tmdbId));links.addView(tmdb);}Button close=new Button(this);close.setText(nl?"Sluiten":"Close");close.setAllCaps(false);links.addView(close);box.addView(links);Dialog dialog=new Dialog(this);'
+          if old not in s: raise SystemExit("details buttons anchor missing")
+          s=s.replace(old,new)
+          p.write_text(s)
+
+          p=root/"app/src/main/java/com/robertalt/raiptv/SettingsActivity.java"
+          s=p.read_text()
+          s=s.replace(';toggle("Picture-in-Picture","pip",true);toggle("Volgende aflevering automatisch","autoplay_next",true);',';toggle("Picture-in-Picture","pip",true);')
+          p.write_text(s)
+
+          assert "String audioCodes()" in (root/"app/src/main/java/com/robertalt/raiptv/PlayerActivity.java").read_text()
+          assert 'imdb.setText("IMDb")' in (root/"app/src/main/java/com/robertalt/raiptv/MainActivity.java").read_text()
+          assert 'Volgende aflevering automatisch' not in (root/"app/src/main/java/com/robertalt/raiptv/SettingsActivity.java").read_text()
+          print("v0.4.2 completion fixes applied")
+          PY
+
       - name: Export Nivaro v0.4.2 source
         shell: bash
         run: |
