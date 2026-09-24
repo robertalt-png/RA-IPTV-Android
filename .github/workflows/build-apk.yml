@@ -95,7 +95,9 @@ jobs:
           Path('app/src/main/res/values/strings.xml').write_text('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <string name="app_name">Nivaro IPTV Player</string>\n</resources>\n')
 
           p=Path('app/src/main/res/layout/activity_main.xml')
-          p.write_text(p.read_text().replace('android:text="RA IPTV"','android:text="Nivaro"'))
+          xml=p.read_text().replace('android:text="RA IPTV"','android:text="Nivaro"')
+          xml=xml.replace('android:backgroundTint="@color/muted" />','android:backgroundTint="@color/muted" android:spinnerMode="dropdown" android:popupBackground="@color/card" android:dropDownWidth="match_parent" />',1)
+          p.write_text(xml)
 
           p=Path('app/src/main/res/layout/activity_profile.xml')
           p.write_text(p.read_text().replace('RA IPTV levert zelf geen tv-dienst.','Nivaro levert zelf geen tv-dienst.'))
@@ -194,6 +196,7 @@ jobs:
           s=s[:start]+new+s[end:]
           s=s.replace('return s.equals("live")?"Live tv":s.equals("vod")?"Films":s.equals("series")?"Series":"RA IPTV";','return s.equals("live")?"Live tv":s.equals("vod")?"Films":s.equals("series")?"Series":"Nivaro";')
           s=s.replace('Mozilla/5.0 (Linux; Android) RA-IPTV/0.2.1','Mozilla/5.0 (Linux; Android) Nivaro/0.3.0')
+          s=s.replace('if(v instanceof TextView)((TextView)v).setTextColor(0xFF111111);','if(v instanceof TextView){TextView t=(TextView)v;t.setTextColor(getResources().getColor(R.color.text));t.setBackgroundColor(getResources().getColor(R.color.card));t.setPadding(24,18,24,18);}')
           s=s.replace('exec.shutdownNow();heroExec.shutdownNow();super.onDestroy();','exec.shutdownNow();heroExec.shutdownNow();indexExec.shutdownNow();if(searchIndex!=null)searchIndex.close();super.onDestroy();')
           p.write_text(s)
 
@@ -331,6 +334,8 @@ jobs:
           grep -q "ic_nivaro_launcher" app/src/main/AndroidManifest.xml
           grep -q "class SearchIndexStore" app/src/main/java/com/robertalt/raiptv/storage/SearchIndexStore.java
           grep -q "freetype-shadow-opacity=0" app/src/main/java/com/robertalt/raiptv/PlayerActivity.java
+          grep -q 'spinnerMode="dropdown"' app/src/main/res/layout/activity_main.xml
+          grep -q 'setBackgroundColor(getResources().getColor(R.color.card))' app/src/main/java/com/robertalt/raiptv/MainActivity.java
 
       - name: Export Nivaro v0.3.0 source
         shell: bash
