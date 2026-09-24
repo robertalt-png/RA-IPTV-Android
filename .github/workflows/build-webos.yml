@@ -17,10 +17,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 16
+      - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: '20'
 
       - name: Install webOS CLI
         run: npm install -g @webos-tools/cli
@@ -30,11 +30,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .webosdeps
-          cd .webosdeps
-          npm init -y >/dev/null 2>&1
-          npm install webostvjs@1.2.13
-          cp node_modules/webostvjs/webOSTV.js ../webos/app/webOSTV.js
-          cd ../webos/service
+          npm install --prefix .webosdeps webostvjs@1.2.13
+          cp .webosdeps/node_modules/webostvjs/webOSTV.js webos/app/webOSTV.js
+          cd webos/service
           npm install --omit=dev
 
       - name: Generate Nivaro TV icons
