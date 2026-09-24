@@ -35,9 +35,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(wc -c < patches/v0.2.0/overlay.b64)" -eq 34828
-          echo "13309bb713a32ebc1f1b61112aaf263393f57b17d09da6c7b9e30a752fc36a89  patches/v0.2.0/overlay.b64" | sha256sum -c -
-          base64 --decode patches/v0.2.0/overlay.b64 > overlay.zip
+          cat patches/v0.2.0/parts/p00 patches/v0.2.0/parts/p01 patches/v0.2.0/parts/p02 patches/v0.2.0/parts/p03 patches/v0.2.0/parts/p04 patches/v0.2.0/parts/p05 > overlay.b64
+          test "$(wc -c < overlay.b64)" -eq 34828
+          echo "13309bb713a32ebc1f1b61112aaf263393f57b17d09da6c7b9e30a752fc36a89  overlay.b64" | sha256sum -c -
+          base64 --decode overlay.b64 > overlay.zip
           echo "b54f5b159bb5e67834549f292887df98aab4770bffc5760a075d97b457dda5c9  overlay.zip" | sha256sum -c -
           unzip -t overlay.zip
           unzip -qo overlay.zip -d source/RA_IPTV_Android_v0.1
