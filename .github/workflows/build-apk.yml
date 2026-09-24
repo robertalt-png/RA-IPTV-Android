@@ -337,7 +337,7 @@ jobs:
           grep -q 'spinnerMode="dropdown"' app/src/main/res/layout/activity_main.xml
           grep -q 'setBackgroundColor(getResources().getColor(R.color.card))' app/src/main/java/com/robertalt/raiptv/MainActivity.java
 
-      - name: Apply Nivaro v0.4.1 feature patch
+      - name: Apply Nivaro v0.4.2 feature patch
         shell: bash
         run: |
           set -euo pipefail
@@ -358,7 +358,7 @@ jobs:
           grep -q 'showEpgDetails' app/src/main/java/com/robertalt/raiptv/MainActivity.java
           grep -q 'nextEpisodeFor' app/src/main/java/com/robertalt/raiptv/MainActivity.java
 
-      - name: Apply Nivaro v0.4.1 stability patch
+      - name: Apply Nivaro v0.4.2 stability patch
         shell: bash
         run: |
           set -euo pipefail
@@ -378,17 +378,190 @@ jobs:
           grep -q "class CrashGuard" app/src/main/java/com/robertalt/raiptv/storage/CrashGuard.java
           grep -q "epgAdapter.shutdown" app/src/main/java/com/robertalt/raiptv/MainActivity.java
 
-      - name: Export Nivaro v0.4.1 source
+      - name: Apply Nivaro v0.4.2 compact UI and settings
         shell: bash
         run: |
           set -euo pipefail
-          tar -czf Nivaro-v0.4.1-source.tar.gz -C source RA_IPTV_Android_v0.1
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+          root=Path("source/RA_IPTV_Android_v0.1")
+
+          p=root/"app/build.gradle"
+          s=p.read_text().replace("versionCode 7","versionCode 8").replace("versionName '0.4.1'","versionName '0.4.2'")
+          if "com.google.mlkit:translate" not in s:
+              s=s.replace("    implementation 'androidx.media3:media3-ui:1.11.1'","    implementation 'androidx.media3:media3-ui:1.11.1'\\n    implementation 'com.google.mlkit:translate:17.0.3'\\n    implementation 'com.google.mlkit:language-id:17.0.6'")
+          p.write_text(s)
+
+          shutil.copy("patches/v0.4.2/InfoTranslator.java",root/"app/src/main/java/com/robertalt/raiptv/InfoTranslator.java")
+
+          (root/"app/src/main/java/com/robertalt/raiptv/storage/SettingsStore.java").write_text(r'''package com.robertalt.raiptv.storage;
+          import android.content.*;
+          public final class SettingsStore {
+              private SettingsStore(){}
+              public static SharedPreferences prefs(Context c){return c.getSharedPreferences("nivaro_settings",Context.MODE_PRIVATE);}
+              public static String language(Context c){return prefs(c).getString("language","nl");}
+              public static boolean compact(Context c){return prefs(c).getBoolean("compact",true);}
+              public static String hero(Context c){return prefs(c).getString("hero_size","normal");}
+              public static String player(Context c){return prefs(c).getString("player","auto");}
+              public static String audio(Context c){return prefs(c).getString("audio","en");}
+              public static String subtitles(Context c){return prefs(c).getString("subtitles","nl");}
+              public static String buffer(Context c){return prefs(c).getString("buffer","stable");}
+              public static boolean pip(Context c){return prefs(c).getBoolean("pip",true);}
+              public static boolean autoplay(Context c){return prefs(c).getBoolean("autoplay_next",true);}
+              public static int bufferMs(Context c){String b=buffer(c);return "max".equals(b)?5000:"normal".equals(b)?1200:2500;}
+          }''')
+
+          (root/"app/src/main/java/com/robertalt/raiptv/SettingsActivity.java").write_text(r'''package com.robertalt.raiptv;
+          import android.app.*;import android.os.*;import android.graphics.Typeface;import android.view.*;import android.widget.*;
+          import com.robertalt.raiptv.storage.*;
+          public class SettingsActivity extends Activity{
+            LinearLayout box; android.content.SharedPreferences p;
+            int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
+            TextView t(String x,int z){TextView v=new TextView(this);v.setText(x);v.setTextColor(0xFFF7F8FA);v.setTextSize(z);return v;}
+            Button b(String x){Button v=new Button(this);v.setText(x);v.setTextAllCaps(false);v.setTextColor(0xFFF7F8FA);v.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));return v;}
+            @Override public void onCreate(Bundle x){super.onCreate(x);p=SettingsStore.prefs(this);ScrollView sv=new ScrollView(this);sv.setBackgroundColor(0xFF07090D);box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(12),dp(18),dp(30));sv.addView(box);
+              LinearLayout h=new LinearLayout(this);h.setGravity(Gravity.CENTER_VERTICAL);TextView title=t("Instellingen",28);title.setTypeface(null,Typeface.BOLD);h.addView(title,new LinearLayout.LayoutParams(0,-2,1));Button close=b("Sluiten");close.setOnClickListener(v->finish());h.addView(close);box.addView(h);
+              sec("Algemeen");spin("Taal van info","language",new String[]{"Nederlands","English"},new String[]{"nl","en"});toggle("Compacte mobiele weergave","compact",true);spin("Grootte hero","hero_size",new String[]{"Klein","Normaal","Groot"},new String[]{"small","normal","large"});
+              sec("Afspelen");spin("Speler","player",new String[]{"Automatisch","VLC","Media3"},new String[]{"auto","vlc","media3"});spin("Buffer","buffer",new String[]{"Snel","Stabiel","Maximaal"},new String[]{"normal","stable","max"});spin("Standaard audio","audio",new String[]{"Engels","Nederlands","Origineel"},new String[]{"en","nl","original"});spin("Ondertiteling","subtitles",new String[]{"Nederlands","Engels","Uit"},new String[]{"nl","en","off"});toggle("Picture-in-Picture","pip",true);toggle("Volgende aflevering automatisch","autoplay_next",true);
+              sec("Onderhoud");Button re=b("Zoekindex opnieuw opbouwen");re.setOnClickListener(v->{p.edit().putBoolean("force_reindex",true).apply();Toast.makeText(this,"Zoekindex wordt opnieuw opgebouwd",Toast.LENGTH_SHORT).show();});box.addView(re,new LinearLayout.LayoutParams(-1,dp(50)));Button cl=b("Afbeeldingscache legen");cl.setOnClickListener(v->{MediaRowAdapter.clearArtworkCache();MainActivity.clearHeroCache();Toast.makeText(this,"Cache geleegd",Toast.LENGTH_SHORT).show();});box.addView(cl,new LinearLayout.LayoutParams(-1,dp(50)));
+              sec("Over Nivaro");TextView a=t("Nivaro IPTV Player 0.4.2\\nVoor je eigen IPTV-bronnen. Nivaro levert zelf geen tv-dienst.",13);a.setTextColor(0xFFA7AFBC);box.addView(a);setContentView(sv);}
+            void sec(String x){TextView v=t(x,18);v.setTypeface(null,Typeface.BOLD);v.setPadding(0,dp(20),0,dp(7));box.addView(v);}
+            void toggle(String l,String k,boolean d){Switch v=new Switch(this);v.setText(l);v.setTextColor(0xFFF7F8FA);v.setChecked(p.getBoolean(k,d));v.setOnCheckedChangeListener((a,on)->p.edit().putBoolean(k,on).apply());box.addView(v,new LinearLayout.LayoutParams(-1,dp(52)));}
+            void spin(String l,String k,String[]ls,String[]vs){TextView z=t(l,13);z.setTextColor(0xFFA7AFBC);box.addView(z);Spinner sp=new Spinner(this);ArrayAdapter<String>ad=new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,ls){@Override public View getDropDownView(int q,View v,ViewGroup g){TextView x=(TextView)super.getDropDownView(q,v,g);x.setTextColor(0xFFF7F8FA);x.setBackgroundColor(0xFF181C22);x.setPadding(dp(16),dp(14),dp(16),dp(14));return x;}};ad.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);sp.setAdapter(ad);String cur=p.getString(k,vs[0]);int n=0;for(int i=0;i<vs.length;i++)if(vs[i].equals(cur))n=i;sp.setSelection(n,false);sp.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){public void onNothingSelected(AdapterView<?>x){}public void onItemSelected(AdapterView<?>x,View v,int q,long id){p.edit().putString(k,vs[q]).apply();}});box.addView(sp,new LinearLayout.LayoutParams(-1,dp(48)));}
+          }''')
+
+          p=root/"app/src/main/AndroidManifest.xml"
+          s=p.read_text()
+          if 'android:name=".SettingsActivity"' not in s:
+              s=s.replace('<activity android:name=".ProfileActivity" android:exported="false" />','<activity android:name=".ProfileActivity" android:exported="false" />\\n        <activity android:name=".SettingsActivity" android:exported="false" />')
+          p.write_text(s)
+
+          (root/"app/src/main/res/layout/activity_main.xml").write_text(r'''<?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:background="@color/bg">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:paddingLeft="16dp" android:paddingRight="12dp" android:paddingTop="8dp" android:paddingBottom="5dp">
+              <TextView android:id="@+id/title" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Nivaro" android:textColor="@color/text" android:textSize="27sp" android:textStyle="bold"/>
+              <Button android:id="@+id/searchToggle" android:layout_width="44dp" android:layout_height="42dp" android:text="⌕" android:textSize="21sp" android:textAllCaps="false" android:textColor="@color/text" android:backgroundTint="@color/panel2"/>
+              <Button android:id="@+id/settingsButton" android:layout_width="44dp" android:layout_height="42dp" android:layout_marginLeft="5dp" android:text="⚙" android:textSize="18sp" android:textAllCaps="false" android:textColor="@color/text" android:backgroundTint="@color/panel2"/>
+              <Button android:id="@+id/profileButton" android:layout_width="wrap_content" android:layout_height="42dp" android:layout_marginLeft="5dp" android:text="Profiel" android:textAllCaps="false" android:textColor="@color/text" android:backgroundTint="@color/panel2"/>
+            </LinearLayout>
+            <FrameLayout android:id="@+id/heroContainer" android:layout_width="match_parent" android:layout_height="215dp" android:layout_marginLeft="14dp" android:layout_marginRight="14dp" android:background="@drawable/bg_hero" android:clipToOutline="true">
+              <ImageView android:id="@+id/heroImage" android:layout_width="match_parent" android:layout_height="match_parent" android:scaleType="centerCrop"/>
+              <View android:layout_width="match_parent" android:layout_height="match_parent" android:background="@drawable/bg_hero_overlay"/>
+              <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:gravity="bottom" android:padding="15dp">
+                <TextView android:id="@+id/heroTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/text" android:textSize="23sp" android:textStyle="bold" android:maxLines="2"/>
+                <TextView android:id="@+id/heroSubtitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#E2E5EA" android:textSize="12sp" android:maxLines="2" android:paddingTop="3dp"/>
+                <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="7dp">
+                  <Button android:id="@+id/heroAction" android:layout_width="wrap_content" android:layout_height="40dp" android:text="▶ Afspelen" android:textAllCaps="false" android:textColor="#FFFFFFFF" android:backgroundTint="@color/accent" android:visibility="gone"/>
+                  <Button android:id="@+id/heroInfo" android:layout_width="wrap_content" android:layout_height="40dp" android:layout_marginLeft="6dp" android:text="ⓘ Info" android:textAllCaps="false" android:textColor="@color/text" android:backgroundTint="@color/panel2" android:visibility="gone"/>
+                </LinearLayout>
+              </LinearLayout>
+            </FrameLayout>
+            <EditText android:id="@+id/searchBox" android:layout_width="match_parent" android:layout_height="46dp" android:layout_marginLeft="14dp" android:layout_marginRight="14dp" android:layout_marginTop="6dp" android:hint="Zoek in live tv, films en series" android:singleLine="true" android:textColor="@color/text" android:textColorHint="@color/muted" android:paddingLeft="14dp" android:paddingRight="14dp" android:background="@drawable/bg_search" android:visibility="gone"/>
+            <LinearLayout android:id="@+id/filterBar" android:layout_width="match_parent" android:layout_height="44dp" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginLeft="14dp" android:layout_marginRight="14dp" android:layout_marginTop="3dp">
+              <Spinner android:id="@+id/categorySpinner" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:spinnerMode="dropdown" android:popupBackground="@color/card"/>
+              <Button android:id="@+id/genreButton" android:layout_width="92dp" android:layout_height="40dp" android:layout_marginLeft="6dp" android:text="Genre ▾" android:textAllCaps="false" android:textColor="@color/text" android:textSize="11sp" android:backgroundTint="@color/panel2" android:visibility="gone"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="26dp" android:gravity="center_vertical" android:paddingLeft="14dp" android:paddingRight="14dp"><ProgressBar android:id="@+id/progress" android:layout_width="17dp" android:layout_height="17dp" android:visibility="gone"/><TextView android:id="@+id/status" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="@color/muted" android:textSize="11sp" android:paddingLeft="7dp"/></LinearLayout>
+            <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+              <ListView android:id="@+id/itemList" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginLeft="14dp" android:layout_marginRight="14dp" android:divider="@android:color/transparent" android:dividerHeight="6dp" android:scrollbars="none"/>
+              <ScrollView android:id="@+id/browseScroll" android:layout_width="match_parent" android:layout_height="match_parent" android:visibility="gone" android:scrollbars="none"><LinearLayout android:id="@+id/browseContainer" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingBottom="8dp"/></ScrollView>
+            </FrameLayout>
+            <LinearLayout android:id="@+id/bottomNav" android:layout_width="match_parent" android:layout_height="64dp" android:orientation="horizontal" android:gravity="center" android:background="@drawable/bg_bottom_nav">
+              <Button android:id="@+id/navHome" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:text="⌂&#10;Home" android:textAllCaps="false" android:textColor="@color/text" android:textSize="10sp" android:backgroundTint="@android:color/transparent"/>
+              <Button android:id="@+id/navLive" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:text="●&#10;Live" android:textAllCaps="false" android:textColor="@color/muted" android:textSize="10sp" android:backgroundTint="@android:color/transparent"/>
+              <Button android:id="@+id/navEpg" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:text="▦&#10;EPG" android:textAllCaps="false" android:textColor="@color/muted" android:textSize="10sp" android:backgroundTint="@android:color/transparent"/>
+              <Button android:id="@+id/navMovies" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:text="▣&#10;Films" android:textAllCaps="false" android:textColor="@color/muted" android:textSize="10sp" android:backgroundTint="@android:color/transparent"/>
+              <Button android:id="@+id/navSeries" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:text="▤&#10;Series" android:textAllCaps="false" android:textColor="@color/muted" android:textSize="10sp" android:backgroundTint="@android:color/transparent"/>
+            </LinearLayout>
+          </LinearLayout>''')
+
+          p=root/"app/src/main/java/com/robertalt/raiptv/storage/SearchIndexStore.java"
+          s=p.read_text()
+          if "void clearAll()" not in s:
+              s=s.replace("    public synchronized void markSection(","    public synchronized void clearAll(){try{SQLiteDatabase db=getWritableDatabase();db.delete(\"entries\",null,null);db.delete(\"meta\",null,null);}catch(Exception ignored){}}\\n\\n    public synchronized void markSection(")
+          p.write_text(s)
+
+          p=root/"app/src/main/java/com/robertalt/raiptv/MediaRowAdapter.java"
+          s=p.read_text().replace("Nivaro/0.4.0","Nivaro/0.4.2")
+          if "clearArtworkCache" not in s:
+              s=s.replace("    public static void loadArtwork(","    public static void clearArtworkCache(){cache.evictAll();}\\n    public static void loadArtwork(")
+          p.write_text(s)
+
+          p=root/"app/src/main/java/com/robertalt/raiptv/MainActivity.java"
+          s=p.read_text()
+          s=s.replace("import android.graphics.*;","import android.graphics.*;\\nimport android.graphics.RenderEffect;\\nimport android.graphics.Shader;")
+          s=s.replace("Button heroAction,heroInfo,genreButton;","Button heroAction,heroInfo,genreButton,searchToggle,settingsButton;")
+          s=s.replace("search=findViewById(R.id.searchBox);status=","search=findViewById(R.id.searchBox);searchToggle=findViewById(R.id.searchToggle);settingsButton=findViewById(R.id.settingsButton);status=")
+          s=s.replace("lp.height=dp(72)+bottom;","lp.height=dp(64)+bottom;")
+          s=s.replace('findViewById(R.id.profileButton).setOnClickListener(v->startActivityForResult(new Intent(this,ProfileActivity.class),10));','findViewById(R.id.profileButton).setOnClickListener(v->startActivityForResult(new Intent(this,ProfileActivity.class),10));\\n        settingsButton.setOnClickListener(v->startActivity(new Intent(this,SettingsActivity.class)));\\n        searchToggle.setOnClickListener(v->toggleSearch());')
+          s=s.replace('findViewById(R.id.navSeries).setOnClickListener(v->loadSection("series"));findViewById(R.id.navFavorites).setOnClickListener(v->showLocal(library.favorites(),"Favorieten"));','findViewById(R.id.navSeries).setOnClickListener(v->loadSection("series"));')
+          marker="    int nextRequest(){return ++requestSerial;}"
+          if "void toggleSearch()" not in s:
+              s=s.replace(marker,'''    void toggleSearch(){if(search.getVisibility()==View.VISIBLE){if(search.getText().length()>0)search.setText("");search.clearFocus();search.setVisibility(View.GONE);searchToggle.setText("⌕");((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(search.getWindowToken(),0);}else{search.setVisibility(View.VISIBLE);searchToggle.setText("✕");search.requestFocus();((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(search,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);}}
+              void collapseSearch(){if(search.getText().length()==0){search.clearFocus();search.setVisibility(View.GONE);searchToggle.setText("⌕");}}
+              public static void clearHeroCache(){HERO_CACHE.evictAll();}
+              int heroHeight(){String h=SettingsStore.hero(this);return dp("small".equals(h)?180:"large".equals(h)?250:215);}
+
+          '''+marker)
+          old='nextRequest();setHeroHeight(dp(250));section="home";seriesEpisodeMode=false;currentCategories.clear();genreButton.setVisibility(View.GONE);categories.setVisibility(View.GONE);filterBar.setVisibility(View.GONE);showMediaList();setHeroDefault("Kijken zonder zoeken","Live tv, films en series op één plek");search.setHint("Zoek in live tv, films en series");List<MediaEntry>local=new ArrayList<>();local.addAll(library.recent());for(MediaEntry e:library.favorites())if(!contains(local,e))local.add(e);all=local;adapter.set(local);'
+          new='nextRequest();section="home";setHeroHeight(heroHeight());seriesEpisodeMode=false;currentCategories.clear();genreButton.setVisibility(View.GONE);categories.setVisibility(View.GONE);filterBar.setVisibility(View.GONE);collapseSearch();showBrowse();browseContainer.removeAllViews();setHeroDefault("Kijken zonder zoeken","Live tv, films en series op één plek");search.setHint("Zoek in live tv, films en series");List<MediaEntry>local=new ArrayList<>();local.addAll(library.recent());for(MediaEntry e:library.favorites())if(!contains(local,e))local.add(e);all=local;addShelf("Verder kijken",library.recent());addShelf("Mijn favorieten",library.favorites());if(browseContainer.getChildCount()==0)addEmptyBrowse("Nog niets bekeken. Open Films, Series of Live om te beginnen.");if(!local.isEmpty())previewAuto(local.get(0));'
+          s=s.replace(old,new)
+          s=s.replace('setHeroHeight((s.equals("vod")||s.equals("series"))?dp(310):dp(245));search.setHint("Zoek overal");','setHeroHeight(heroHeight());collapseSearch();search.setHint("Zoek overal");')
+          s=s.replace('final int token=nextRequest();setHeroHeight(dp(220));section="epg";','final int token=nextRequest();section="epg";setHeroHeight(heroHeight());collapseSearch();')
+          old1='void addShelf(String name,List<MediaEntry>items){if(items==null||items.isEmpty())return;TextView head=new TextView(this);head.setText(name);head.setTextColor(getResources().getColor(R.color.text));head.setTextSize(20);head.setTypeface(null,Typeface.BOLD);head.setPadding(dp(16),dp(12),dp(12),dp(10));browseContainer.addView(head);HorizontalScrollView hsv=new HorizontalScrollView(this);hsv.setHorizontalScrollBarEnabled(false);LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);row.setPadding(dp(12),0,dp(10),dp(12));hsv.addView(row,new HorizontalScrollView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT));int n=Math.min(14,items.size());for(int i=0;i<n;i++)row.addView(posterCard(items.get(i)));browseContainer.addView(hsv,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));}'
+          new1='void addShelf(String name,List<MediaEntry>items){if(items==null||items.isEmpty())return;TextView head=new TextView(this);head.setText(name);head.setTextColor(getResources().getColor(R.color.text));head.setTextSize(17);head.setTypeface(null,Typeface.BOLD);head.setPadding(dp(15),dp(8),dp(10),dp(6));browseContainer.addView(head);HorizontalScrollView hsv=new HorizontalScrollView(this);hsv.setHorizontalScrollBarEnabled(false);LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);row.setPadding(dp(11),0,dp(8),dp(7));hsv.addView(row,new HorizontalScrollView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT));int n=Math.min(20,items.size());for(int i=0;i<n;i++)row.addView(posterCard(items.get(i)));browseContainer.addView(hsv,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));}'
+          s=s.replace(old1,new1)
+          a=s.index("    View posterCard(MediaEntry e){")
+          b=s.index("\\n\\n    void showGenreChooser",a)
+          s=s[:a]+'''    View posterCard(MediaEntry e){boolean compact=SettingsStore.compact(this);int w=compact?112:142,imgH=compact?158:202,cardH=compact?202:250;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(3),dp(3),dp(3),dp(4));card.setBackgroundResource(R.drawable.bg_card);LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(dp(w),dp(cardH));cp.setMargins(dp(4),0,dp(6),0);card.setLayoutParams(cp);ImageView image=new ImageView(this);image.setScaleType(ImageView.ScaleType.CENTER_CROP);card.addView(image,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(imgH)));TextView n=new TextView(this);n.setText(e.name);n.setTextColor(getResources().getColor(R.color.text));n.setTextSize(compact?11:12);n.setTypeface(null,Typeface.BOLD);n.setMaxLines(2);n.setEllipsize(TextUtils.TruncateAt.END);n.setPadding(dp(4),dp(4),dp(4),0);card.addView(n,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(cardH-imgH-7)));MediaRowAdapter.loadArtwork(image,e.logo,e.name,compact?250:320,compact?380:480);card.setOnClickListener(v->{if(selectedHero!=null&&selectedHero.uniqueKey().equals(e.uniqueKey()))select(e);else preview(e);});card.setOnLongClickListener(v->{actions(e);return true;});return card;}'''+s[b:]
+          a=s.index("    void showDetailsDialog(MediaEntry item,MediaDetails d){")
+          b=s.index("    void openWeb(String url)",a)
+          s=s[:a]+'''    void showDetailsDialog(MediaEntry item,MediaDetails d){
+              boolean nl="nl".equals(SettingsStore.language(this));FrameLayout root=new FrameLayout(this);root.setBackgroundColor(0xFF171A20);ImageView bg=new ImageView(this);bg.setScaleType(ImageView.ScaleType.CENTER_CROP);bg.setAlpha(.30f);root.addView(bg,new FrameLayout.LayoutParams(-1,-1));if(Build.VERSION.SDK_INT>=31)try{bg.setRenderEffect(RenderEffect.createBlurEffect(18f,18f,Shader.TileMode.CLAMP));}catch(Exception ignored){}View shade=new View(this);shade.setBackgroundColor(0xAA080A0E);root.addView(shade,new FrameLayout.LayoutParams(-1,-1));ScrollView scroll=new ScrollView(this);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(22),dp(20),dp(22),dp(18));scroll.addView(box);root.addView(scroll,new FrameLayout.LayoutParams(-1,-1));TextView h=new TextView(this);h.setText(safe(d.title).isEmpty()?item.name:d.title);h.setTextColor(Color.WHITE);h.setTextSize(25);h.setTypeface(null,Typeface.BOLD);box.addView(h);String score=d.scoreLabel();if(!score.isEmpty())addInfoLine(box,"Score: "+score,true);ArrayList<String> f=new ArrayList<>();if(!safe(d.year).isEmpty())f.add((nl?"Jaar ":"Year ")+d.year);if(!safe(d.genre).isEmpty())f.add("Genre "+d.genre);if(!safe(d.duration).isEmpty())f.add((nl?"Speelduur ":"Duration ")+d.duration);if(!f.isEmpty())addInfoLine(box,TextUtils.join(" · ",f),false);if(!safe(d.director).isEmpty())addInfoBlock(box,nl?"Regisseur":"Director",d.director);if(!safe(d.cast).isEmpty())addInfoBlock(box,nl?"Acteurs":"Cast",d.cast);if(!safe(d.plot).isEmpty()){TextView plot=addInfoBlock(box,nl?"Beschrijving":"Description",d.plot);InfoTranslator.translate(d.plot,nl?"nl":"en",out->runOnUiThread(()->{if(isUiAlive())plot.setText(out);}));}Button close=new Button(this);close.setText(nl?"Sluiten":"Close");close.setTextAllCaps(false);box.addView(close);Dialog dialog=new Dialog(this);dialog.setContentView(root);close.setOnClickListener(v->dialog.dismiss());dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout((int)(getResources().getDisplayMetrics().widthPixels*.93f),(int)(getResources().getDisplayMetrics().heightPixels*.80f));String u=safe(d.backdrop);if(u.isEmpty())u=safe(item.backdrop);if(u.isEmpty())u=safe(d.poster);if(u.isEmpty())u=safe(item.logo);final String url=u;if(!url.isEmpty())heroExec.execute(()->{Bitmap bm=downloadHero(url);runOnUiThread(()->{if(isUiAlive()&&bm!=null)bg.setImageBitmap(bm);});});
+          }
+          void addInfoLine(LinearLayout b,String x,boolean strong){TextView v=new TextView(this);v.setText(x);v.setTextColor(0xFFF7F8FA);v.setTextSize(strong?16:14);if(strong)v.setTypeface(null,Typeface.BOLD);v.setPadding(0,dp(8),0,0);b.addView(v);}
+          TextView addInfoBlock(LinearLayout b,String l,String x){TextView h=new TextView(this);h.setText(l);h.setTextColor(0xFFF7F8FA);h.setTextSize(15);h.setTypeface(null,Typeface.BOLD);h.setPadding(0,dp(14),0,dp(3));b.addView(h);TextView v=new TextView(this);v.setText(x);v.setTextColor(0xFFE5E8ED);v.setTextSize(14);b.addView(v);return v;}
+          '''+s[b:]
+          s=s.replace("@Override protected void onResume(){super.onResume();activityPaused=false;}","@Override protected void onResume(){super.onResume();activityPaused=false;if(provider!=null){setHeroHeight(heroHeight());android.content.SharedPreferences sp=SettingsStore.prefs(this);if(sp.getBoolean(\"force_reindex\",false)){sp.edit().putBoolean(\"force_reindex\",false).apply();try{searchIndex.clearAll();}catch(Exception ignored){}refreshSearchIndex(true);}}}")
+          s=s.replace("Nivaro/0.4.0","Nivaro/0.4.2")
+          p.write_text(s)
+
+          p=root/"app/src/main/java/com/robertalt/raiptv/PlayerActivity.java"
+          s=p.read_text()
+          if "storage.SettingsStore" not in s:s=s.replace("import com.robertalt.raiptv.storage.CrashGuard;","import com.robertalt.raiptv.storage.CrashGuard;\\nimport com.robertalt.raiptv.storage.SettingsStore;")
+          s=s.replace("wireControls();startVlc();searchExternalSubtitle();ui.post(tick);showControls();",'wireControls();if("media3".equals(SettingsStore.player(this)))startMedia3();else startVlc();searchExternalSubtitle();ui.post(tick);showControls();')
+          s=s.replace("--network-caching=1800",'--network-caching="+SettingsStore.bufferMs(this)+"')
+          s=s.replace('m.addOption(":network-caching=1800");','m.addOption(":network-caching="+SettingsStore.bufferMs(this));')
+          s=s.replace('void enterPip(){if(Build.VERSION.SDK_INT>=26','void enterPip(){if(!SettingsStore.pip(this))return;if(Build.VERSION.SDK_INT>=26')
+          s=s.replace("Nivaro/0.4.0","Nivaro/0.4.2")
+          p.write_text(s)
+
+          grep_targets=[
+            root/"app/build.gradle",
+            root/"app/src/main/res/layout/activity_main.xml",
+            root/"app/src/main/java/com/robertalt/raiptv/MainActivity.java",
+            root/"app/src/main/java/com/robertalt/raiptv/SettingsActivity.java"
+          ]
+          assert all(x.exists() for x in grep_targets)
+          assert "versionName '0.4.2'" in (root/"app/build.gradle").read_text()
+          assert "searchToggle" in (root/"app/src/main/res/layout/activity_main.xml").read_text()
+          assert "SettingsActivity" in (root/"app/src/main/AndroidManifest.xml").read_text()
+          assert "navFavorites" not in (root/"app/src/main/res/layout/activity_main.xml").read_text()
+          print("v0.4.2 UI/settings patch applied")
+          PY
+
+      - name: Export Nivaro v0.4.2 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf Nivaro-v0.4.2-source.tar.gz -C source RA_IPTV_Android_v0.1
 
       - name: Upload Nivaro source
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.4.1-source
-          path: Nivaro-v0.4.1-source.tar.gz
+          name: Nivaro-v0.4.2-source
+          path: Nivaro-v0.4.2-source.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -433,7 +606,7 @@ jobs:
       - name: Upload unsigned release and signing tool
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.4.1-unsigned-release
+          name: Nivaro-v0.4.2-unsigned-release
           path: |
             source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
             /opt/hostedtoolcache/Android_SDK/build-tools/36.0.0/lib/apksigner.jar
@@ -443,7 +616,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-IPTV-Player-v0.4.1-debug-apk
+          name: Nivaro-IPTV-Player-v0.4.2-debug-apk
           path: source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
