@@ -2,6 +2,7 @@ package com.robertalt.raiptv;
 
 import com.google.mlkit.nl.languageid.*;
 import com.google.mlkit.nl.translate.*;
+import com.google.mlkit.common.model.DownloadConditions;
 
 public final class InfoTranslator {
     public interface Callback { void done(String text); }
