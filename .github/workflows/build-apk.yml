@@ -16,12 +16,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore clean source archive
+      - name: Restore verified source archive
         shell: bash
         run: |
           set -euo pipefail
-          cat cleanbuild/source.part* > source.b64
+          cat cleanv2/p00 cleanv2/p01 cleanv2/p02 cleanv2/p03 cleanv2/p04 cleanv2/p05 cleanv2/p06 cleanv2/p07 > source.b64
+          test "$(wc -c < source.b64)" -eq 46924
+          echo "4c274c5647b85941952c3d59e2133f7dd9f134f239ceea1adc41051e97b8198e  source.b64" | sha256sum -c -
           base64 --decode source.b64 > source.zip
+          echo "cf47b084a4af078c45db5b756ab54b3717f6879a107026e0315601ed9c75266e  source.zip" | sha256sum -c -
           unzip -t source.zip
           rm -rf source
           unzip -q source.zip -d source
@@ -39,8 +42,7 @@ jobs:
 
       - name: Install Android platform
         shell: bash
-        run: |
-          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
