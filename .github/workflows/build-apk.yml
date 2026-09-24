@@ -76,6 +76,20 @@ jobs:
           ! grep -q "liveButton" source/RA_IPTV_Android_v0.1/app/src/main/res/layout/activity_main.xml
           grep -q "Klaar · kies Live tv" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
 
+      - name: Export reconstructed source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf ra-iptv-v0.2.2-source.tar.gz -C source RA_IPTV_Android_v0.1
+
+      - name: Upload reconstructed source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RA-IPTV-v0.2.2-reconstructed-source
+          path: ra-iptv-v0.2.2-source.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
