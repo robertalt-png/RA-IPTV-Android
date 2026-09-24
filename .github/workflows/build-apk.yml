@@ -350,18 +350,33 @@ jobs:
         with:
           gradle-version: '8.13'
 
-      - name: Build debug APK
+      - name: Build debug and unsigned release APK
         working-directory: source/RA_IPTV_Android_v0.1
-        run: gradle --no-daemon --stacktrace assembleDebug
+        run: gradle --no-daemon --stacktrace assembleDebug assembleRelease
 
-      - name: Verify APK
+      - name: Verify APKs
         shell: bash
         run: |
+          set -euo pipefail
           test -f source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
+          test -f source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
           ls -lh source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
+          ls -lh source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
           sha256sum source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
+          sha256sum source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
+          test -f "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar"
 
-      - name: Upload APK
+      - name: Upload unsigned release and signing tool
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nivaro-v0.3.0-unsigned-release
+          path: |
+            source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
+            /opt/hostedtoolcache/Android_SDK/build-tools/36.0.0/lib/apksigner.jar
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: Nivaro-IPTV-Player-v0.3.0-debug-apk
