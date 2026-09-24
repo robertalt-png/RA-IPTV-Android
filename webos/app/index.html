@@ -1,0 +1,132 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1920,height=1080,initial-scale=1,user-scalable=no">
+  <title>Nivaro IPTV Player</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">NIVARO</div>
+      <div class="top-actions">
+        <button class="icon-btn focusable" id="searchBtn" data-action="search" tabindex="0">⌕</button>
+        <button class="icon-btn focusable" id="settingsBtn" data-action="settings" tabindex="0">⚙</button>
+        <button class="profile-btn focusable" id="profileBtn" data-action="profile" tabindex="0">Profiel</button>
+      </div>
+    </header>
+
+    <main id="main">
+      <section id="hero" class="hero">
+        <div id="heroBackdrop" class="hero-backdrop"></div>
+        <div class="hero-shade"></div>
+        <div class="hero-copy">
+          <div class="eyebrow" id="heroEyebrow">Nivaro IPTV Player</div>
+          <h1 id="heroTitle">Kijken zonder zoeken</h1>
+          <p id="heroSubtitle">Live tv, films en series op één plek.</p>
+          <div id="heroButtons" class="hero-buttons hidden">
+            <button class="primary focusable" id="heroPlay" tabindex="0">▶ Afspelen</button>
+            <button class="secondary focusable" id="heroInfo" tabindex="0">ⓘ Info</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="content" class="content">
+        <div class="loading" id="loading">Nivaro laden…</div>
+      </section>
+    </main>
+
+    <nav class="nav" id="nav">
+      <button class="nav-item focusable active" data-section="home" tabindex="0"><span>⌂</span>Home</button>
+      <button class="nav-item focusable" data-section="live" tabindex="0"><span>●</span>Live</button>
+      <button class="nav-item focusable" data-section="epg" tabindex="0"><span>▦</span>EPG</button>
+      <button class="nav-item focusable" data-section="movies" tabindex="0"><span>▣</span>Films</button>
+      <button class="nav-item focusable" data-section="series" tabindex="0"><span>▤</span>Series</button>
+    </nav>
+
+    <div class="overlay hidden" id="setupOverlay">
+      <div class="dialog setup-dialog">
+        <h2>Welkom bij Nivaro</h2>
+        <p>Voeg de gegevens van je eigen IPTV-provider toe.</p>
+        <label>Type
+          <select id="sourceType" class="focusable" tabindex="0">
+            <option value="xtream">Xtream Codes</option>
+            <option value="m3u">M3U URL</option>
+          </select>
+        </label>
+        <div id="xtreamFields">
+          <label>Server URL<input id="serverUrl" class="focusable" tabindex="0" placeholder="http://provider.example:8080"></label>
+          <label>Gebruikersnaam<input id="username" class="focusable" tabindex="0"></label>
+          <label>Wachtwoord<input id="password" class="focusable" tabindex="0" type="password"></label>
+        </div>
+        <div id="m3uFields" class="hidden">
+          <label>M3U URL<input id="m3uUrl" class="focusable" tabindex="0" placeholder="http://provider.example/list.m3u"></label>
+        </div>
+        <div class="dialog-actions">
+          <button id="saveProfile" class="primary focusable" tabindex="0">Opslaan en verbinden</button>
+        </div>
+        <div id="setupStatus" class="status"></div>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="searchOverlay">
+      <div class="dialog search-dialog">
+        <div class="dialog-title-row">
+          <h2>Zoeken</h2><button class="icon-btn focusable close-overlay" tabindex="0">✕</button>
+        </div>
+        <input id="searchInput" class="search-input focusable" tabindex="0" placeholder="Zoek live tv, films en series">
+        <div id="searchResults" class="search-results"></div>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="infoOverlay">
+      <div class="info-dialog">
+        <div id="infoBackdrop" class="info-backdrop"></div>
+        <div class="info-shade"></div>
+        <div class="info-body">
+          <div class="dialog-title-row">
+            <h2 id="infoTitle"></h2><button class="icon-btn focusable close-overlay" tabindex="0">✕</button>
+          </div>
+          <div id="infoMeta" class="info-meta"></div>
+          <div id="infoText" class="info-text"></div>
+          <div class="dialog-actions">
+            <button id="infoPlay" class="primary focusable" tabindex="0">▶ Afspelen</button>
+            <button id="infoFavorite" class="secondary focusable" tabindex="0">☆ Favoriet</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="settingsOverlay">
+      <div class="dialog settings-dialog">
+        <div class="dialog-title-row">
+          <h2>Instellingen</h2><button class="icon-btn focusable close-overlay" tabindex="0">✕</button>
+        </div>
+        <label>Taal
+          <select id="languageSelect" class="focusable" tabindex="0"><option value="nl">Nederlands</option><option value="en">English</option></select>
+        </label>
+        <label>Live stream voorkeur
+          <select id="liveFormat" class="focusable" tabindex="0"><option value="m3u8">HLS (.m3u8)</option><option value="ts">MPEG-TS (.ts)</option></select>
+        </label>
+        <label class="switch-row"><input id="autoReconnect" type="checkbox" checked class="focusable" tabindex="0"> Automatisch opnieuw verbinden</label>
+        <button id="saveSettings" class="primary focusable" tabindex="0">Instellingen opslaan</button>
+        <button id="resetProfile" class="danger focusable" tabindex="0">Provider verwijderen</button>
+        <p class="small">Nivaro levert zelf geen IPTV-dienst. Gebruik alleen bronnen waarvoor je toegang hebt.</p>
+      </div>
+    </div>
+
+    <div id="player" class="player hidden">
+      <video id="video" autoplay></video>
+      <div class="player-ui" id="playerUi">
+        <div class="player-title" id="playerTitle"></div>
+        <div class="player-status" id="playerStatus">Laden…</div>
+        <div class="player-help">OK: pauze/afspelen · ←/→: 30 sec · BACK: terug</div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
