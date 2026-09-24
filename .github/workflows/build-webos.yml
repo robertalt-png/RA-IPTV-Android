@@ -96,7 +96,7 @@ jobs:
           set -euo pipefail
           mkdir -p webos/dist
           cd webos/dist
-          ares-package ../app ../service ../package
+          ares-package ../app ../service
           ls -lah
           test "$(find . -maxdepth 1 -name '*.ipk' | wc -l)" -ge 1
           mv "$(find . -maxdepth 1 -name '*.ipk' | head -n1)" Nivaro-IPTV-Player-webOS-v0.1.0.ipk
