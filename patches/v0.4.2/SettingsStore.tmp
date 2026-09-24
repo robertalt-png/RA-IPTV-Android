@@ -1,0 +1,2 @@
+package com.robertalt.raiptv.storage;
+public final class SettingsStore {}
