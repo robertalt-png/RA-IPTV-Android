@@ -1,0 +1,82 @@
+diff -ruN base_v041/app/build.gradle src/RA_IPTV_Android_v0.1/app/build.gradle
+--- base_v041/app/build.gradle	2026-09-24 10:56:37.000000000 +0000
++++ src/RA_IPTV_Android_v0.1/app/build.gradle	2026-09-24 12:59:19.005588259 +0000
+@@ -10,8 +10,8 @@
+         applicationId 'com.robertalt.raiptv'
+         minSdk 26
+         targetSdk 36
+-        versionCode 7
+-        versionName '0.4.1'
++        versionCode 8
++        versionName '0.4.2'
+     }
+ 
+     buildFeatures { buildConfig true }
+@@ -31,4 +31,6 @@
+     implementation 'androidx.media3:media3-exoplayer:1.11.1'
+     implementation 'androidx.media3:media3-exoplayer-hls:1.11.1'
+     implementation 'androidx.media3:media3-ui:1.11.1'
++    implementation 'com.google.mlkit:translate:17.0.3'
++    implementation 'com.google.mlkit:language-id:17.0.6'
+ }
+diff -ruN base_v041/app/src/main/AndroidManifest.xml src/RA_IPTV_Android_v0.1/app/src/main/AndroidManifest.xml
+--- base_v041/app/src/main/AndroidManifest.xml	2026-09-24 10:56:36.000000000 +0000
++++ src/RA_IPTV_Android_v0.1/app/src/main/AndroidManifest.xml	2026-09-24 12:56:13.183030848 +0000
+@@ -19,6 +19,7 @@
+             android:screenOrientation="sensorLandscape"
+             android:supportsPictureInPicture="true" />
+         <activity android:name=".ProfileActivity" android:exported="false" />
++        <activity android:name=".SettingsActivity" android:exported="false" />
+         <activity
+             android:name=".MainActivity"
+             android:exported="true">
+diff -ruN base_v041/app/src/main/java/com/robertalt/raiptv/InfoTranslator.java src/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/InfoTranslator.java
+--- base_v041/app/src/main/java/com/robertalt/raiptv/InfoTranslator.java	1970-01-01 00:00:00.000000000 +0000
++++ src/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/InfoTranslator.java	2026-09-24 12:59:19.006110888 +0000
+@@ -0,0 +1,19 @@
++package com.robertalt.raiptv;
++import com.google.mlkit.nl.languageid.*;import com.google.mlkit.nl.translate.*;
++public final class InfoTranslator {
++    public interface Callback{void done(String text);}
++    private InfoTranslator(){}
++    public static void translate(String text,String target,Callback cb){
++        if(text==null||text.trim().isEmpty()||target==null){cb.done(text==null?"":text);return;}
++        LanguageIdentifier id=LanguageIdentification.getClient();
++        id.identifyLanguage(text).addOnSuccessListener(code->{
++            try{
++                String source=TranslateLanguage.fromLanguageTag(code);String dest=TranslateLanguage.fromLanguageTag(target);
++                if(source==null||dest==null||source.equals(dest)||"und".equals(code)){cb.done(text);id.close();return;}
++                TranslatorOptions o=new TranslatorOptions.Builder().setSourceLanguage(source).setTargetLanguage(dest).build();Translator tr=Translation.getClient(o);
++                DownloadConditions conditions=new DownloadConditions.Builder().build();
++                tr.downloadModelIfNeeded(conditions).addOnSuccessListener(v->tr.translate(text).addOnSuccessListener(out->{cb.done(out==null||out.trim().isEmpty()?text:out);tr.close();id.close();}).addOnFailureListener(e->{cb.done(text);tr.close();id.close();})).addOnFailureListener(e->{cb.done(text);tr.close();id.close();});
++            }catch(Exception e){cb.done(text);try{id.close();}catch(Exception ignored){}}
++        }).addOnFailureListener(e->{cb.done(text);try{id.close();}catch(Exception ignored){}});
++    }
++}
++diff -ruN base_v041/app/src/main/java/com/robertalt/raiptv/MainActivity.java src/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
++--- base_v041/app/src/main/java/com/robertalt/raiptv/MainActivity.java	2026-09-24 10:56:37.000000000 +0000
+++++ src/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java	2026-09-24 12:59:19.009636016 +0000
++@@ -4,6 +4,8 @@
++ import android.content.*;
++ import android.os.*;
++ import android.graphics.*;
+++import android.graphics.RenderEffect;
+++import android.graphics.Shader;
++ import android.graphics.drawable.ColorDrawable;
++ import android.util.LruCache;
++ import android.text.*;
++@@ -21,7 +23,7 @@
++     SecureProfileStore profiles; LibraryStore library; SearchIndexStore searchIndex; EpgStore epgStore;
++     Profile profile; Provider provider;
++     ExecutorService exec=Executors.newFixedThreadPool(4), heroExec=Executors.newSingleThreadExecutor(), indexExec=Executors.newSingleThreadExecutor();
++-    Spinner categories; ListView list; EditText search; TextView status,title,heroTitle,heroSubtitle; ImageView heroImage; Button heroAction,heroInfo,genreButton; ProgressBar progress;
+++    Spinner categories; ListView list; EditText search; TextView status,title,heroTitle,heroSubtitle; ImageView heroImage; Button heroAction,heroInfo,genreButton,searchToggle,settingsButton; ProgressBar progress;
++     ScrollView browseScroll; LinearLayout browseContainer; View filterBar;
++     MediaRowAdapter adapter; EpgAdapter epgAdapter;
++     List<MediaEntry> all=new ArrayList<>(); List<Category> currentCategories=new ArrayList<>();
++@@ -35,15 +37,17 @@
++     @Override public void onCreate(Bundle b){
++         super.onCreate(b);CrashGuard.install(this);setContentView(R.layout.activity_main);
++         profiles=new SecureProfileStore(this);library=new LibraryStore(this);searchIndex=new SearchIndexStore(this);epgStore=new EpgStore(this);
++-        categories=findViewById(R.id.categorySpinner);list=findViewById(R.id.itemList);search=findViewById(R.id.searchBox);status=findViewById(R.id.status);title=findViewById(R.id.title);heroTitle=findViewById(R.id.heroTitle);heroSubtitle=findViewById(R.id.heroSubtitle);heroImage=findViewById(R.id.heroImage);heroAction=findViewById(R.id.heroAction);heroInfo=findViewById(R.id.heroInfo);progress=findViewById(R.id.progress);genreButton=findViewById(R.id.genreButton);browseScroll=findViewById(R.id.browseScroll);browseContainer=findViewById(R.id.browseContainer);filterBar=findViewById(R.id.filterBar);
++-        View bottomNav=findViewById(R.id.bottomNav);if(bottomNav!=null){final int baseBottom=dp(8);bottomNav.setOnApplyWindowInsetsListener((v,insets)->{int bottom=insets.getSystemWindowInsetBottom();v.setPadding(v.getPaddingLeft(),v.getPaddingTop(),v.getPaddingRight(),baseBottom+bottom);ViewGroup.LayoutParams lp=v.getLayoutParams();lp.height=dp(72)+bottom;v.setLayoutParams(lp);return insets;});bottomNav.requestApplyInsets();}
