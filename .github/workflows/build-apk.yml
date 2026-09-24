@@ -369,9 +369,9 @@ jobs:
           echo "8e9d70d9b94a4fd4dbe5c83751e3f647068f9c7b3252952d5968bc48aab6667f  v041.patch.gz" | sha256sum -c -
           gzip -dc v041.patch.gz > v041.patch
           echo "3fe9e73a0c7bc7258248d323ac0b3b47ebb5a0282d9649d1d35e13c0911ef8fa  v041.patch" | sha256sum -c -
-          cd source
-          patch -p0 --batch < ../v041.patch
-          cd RA_IPTV_Android_v0.1
+          sed -i 's#nivaro_v040_runtime/src/RA_IPTV_Android_v0.1/#old/RA_IPTV_Android_v0.1/#g; s#nivaro_v041_work/#new/RA_IPTV_Android_v0.1/#g' v041.patch
+          cd source/RA_IPTV_Android_v0.1
+          patch -p2 --batch < ../../v041.patch
           grep -q "versionName '0.4.1'" app/build.gradle
           grep -q "markSection" app/src/main/java/com/robertalt/raiptv/storage/SearchIndexStore.java
           grep -q "trimItemCache" app/src/main/java/com/robertalt/raiptv/provider/XtreamProvider.java
