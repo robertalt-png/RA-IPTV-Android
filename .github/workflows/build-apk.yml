@@ -337,7 +337,7 @@ jobs:
           grep -q 'spinnerMode="dropdown"' app/src/main/res/layout/activity_main.xml
           grep -q 'setBackgroundColor(getResources().getColor(R.color.card))' app/src/main/java/com/robertalt/raiptv/MainActivity.java
 
-      - name: Apply Nivaro v0.4.0 feature patch
+      - name: Apply Nivaro v0.4.1 feature patch
         shell: bash
         run: |
           set -euo pipefail
@@ -358,17 +358,37 @@ jobs:
           grep -q 'showEpgDetails' app/src/main/java/com/robertalt/raiptv/MainActivity.java
           grep -q 'nextEpisodeFor' app/src/main/java/com/robertalt/raiptv/MainActivity.java
 
-      - name: Export Nivaro v0.4.0 source
+      - name: Apply Nivaro v0.4.1 stability patch
         shell: bash
         run: |
           set -euo pipefail
-          tar -czf Nivaro-v0.4.0-source.tar.gz -C source RA_IPTV_Android_v0.1
+          cat source_archives/v0.4.1_parts/00 source_archives/v0.4.1_parts/01 source_archives/v0.4.1_parts/02 > v041.patch.gz.b64
+          test "$(wc -c < v041.patch.gz.b64)" -eq 13964
+          echo "916a6c34329827124ad42a3eaff64b21a2861074e261e921a8161aaa71aadfab  v041.patch.gz.b64" | sha256sum -c -
+          base64 --decode v041.patch.gz.b64 > v041.patch.gz
+          echo "8e9d70d9b94a4fd4dbe5c83751e3f647068f9c7b3252952d5968bc48aab6667f  v041.patch.gz" | sha256sum -c -
+          gzip -dc v041.patch.gz > v041.patch
+          echo "3fe9e73a0c7bc7258248d323ac0b3b47ebb5a0282d9649d1d35e13c0911ef8fa  v041.patch" | sha256sum -c -
+          cd source
+          patch -p0 --batch < ../v041.patch
+          cd RA_IPTV_Android_v0.1
+          grep -q "versionName '0.4.1'" app/build.gradle
+          grep -q "markSection" app/src/main/java/com/robertalt/raiptv/storage/SearchIndexStore.java
+          grep -q "trimItemCache" app/src/main/java/com/robertalt/raiptv/provider/XtreamProvider.java
+          grep -q "class CrashGuard" app/src/main/java/com/robertalt/raiptv/storage/CrashGuard.java
+          grep -q "epgAdapter.shutdown" app/src/main/java/com/robertalt/raiptv/MainActivity.java
+
+      - name: Export Nivaro v0.4.1 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf Nivaro-v0.4.1-source.tar.gz -C source RA_IPTV_Android_v0.1
 
       - name: Upload Nivaro source
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.4.0-source
-          path: Nivaro-v0.4.0-source.tar.gz
+          name: Nivaro-v0.4.1-source
+          path: Nivaro-v0.4.1-source.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -413,7 +433,7 @@ jobs:
       - name: Upload unsigned release and signing tool
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.4.0-unsigned-release
+          name: Nivaro-v0.4.1-unsigned-release
           path: |
             source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
             /opt/hostedtoolcache/Android_SDK/build-tools/36.0.0/lib/apksigner.jar
@@ -423,7 +443,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-IPTV-Player-v0.4.0-debug-apk
+          name: Nivaro-IPTV-Player-v0.4.1-debug-apk
           path: source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
