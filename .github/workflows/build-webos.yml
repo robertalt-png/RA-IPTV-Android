@@ -1,0 +1,117 @@
+name: Build Nivaro webOS TV
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'webos/**'
+      - '.github/workflows/build-webos.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 16
+        uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+
+      - name: Install webOS CLI
+        run: npm install -g @webos-tools/cli
+
+      - name: Install app and service dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .webosdeps
+          cd .webosdeps
+          npm init -y >/dev/null 2>&1
+          npm install webostvjs@1.2.13
+          cp node_modules/webostvjs/webOSTV.js ../webos/app/webOSTV.js
+          cd ../webos/service
+          npm install --omit=dev
+
+      - name: Generate Nivaro TV icons
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import struct,zlib
+          from pathlib import Path
+          out=Path("webos/app")
+          def png(path,w,h,bg=(17,21,28),fg=(247,248,250),accent=(229,9,20),splash=False):
+              rows=[]
+              for y in range(h):
+                  row=bytearray()
+                  for x in range(w):
+                      r,g,b=bg
+                      if splash:
+                          band=max(1,h//120)
+                          cx,cy=w//2,h//2
+                          nw=max(12,w//18); nh=max(18,h//9)
+                          left=cx-nw//2; top=cy-nh//2
+                          thick=max(2,nw//8)
+                          in_n=(left<=x<left+thick and top<=y<top+nh) or (left+nw-thick<=x<left+nw and top<=y<top+nh)
+                          diagx=left+int((y-top)*max(1,(nw-thick*2))/max(1,nh))+thick//2
+                          in_n=in_n or (top<=y<top+nh and abs(x-diagx)<thick)
+                          if in_n:r,g,b=fg
+                          if cy+nh//2+18*band<=y<cy+nh//2+22*band and cx-nw<=x<cx+nw:r,g,b=accent
+                      else:
+                          m=max(4,w//8); thick=max(3,w//10)
+                          in_n=(m<=x<m+thick and m<=y<h-m) or (w-m-thick<=x<w-m and m<=y<h-m)
+                          diag=m+int((y-m)*max(1,(w-2*m-thick))/max(1,(h-2*m)))
+                          in_n=in_n or (m<=y<h-m and abs(x-diag)<thick//2+1)
+                          if in_n:r,g,b=fg
+                          if h-m-thick<=y<h-m and m<=x<w-m:r,g,b=accent
+                      row.extend((r,g,b,255))
+                  rows.append(b'\x00'+bytes(row))
+              raw=b''.join(rows)
+              def chunk(t,d):return struct.pack(">I",len(d))+t+d+struct.pack(">I",zlib.crc32(t+d)&0xffffffff)
+              data=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack(">IIBBBBB",w,h,8,6,0,0,0))+chunk(b'IDAT',zlib.compress(raw,9))+chunk(b'IEND',b'')
+              path.write_bytes(data)
+          png(out/"icon.png",80,80)
+          png(out/"largeIcon.png",130,130)
+          png(out/"splash.png",1920,1080,splash=True)
+          PY
+          file webos/app/icon.png webos/app/largeIcon.png webos/app/splash.png
+
+      - name: Validate app files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m json.tool webos/app/appinfo.json >/dev/null
+          python3 -m json.tool webos/service/services.json >/dev/null
+          python3 -m json.tool webos/service/package.json >/dev/null
+          test -s webos/app/index.html
+          test -s webos/app/app.js
+          test -s webos/app/styles.css
+          test -s webos/app/webOSTV.js
+          test -d webos/service/node_modules/webos-service
+
+      - name: Package webOS IPK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p webos/dist
+          cd webos/dist
+          ares-package ../app ../service ../package
+          ls -lah
+          test "$(find . -maxdepth 1 -name '*.ipk' | wc -l)" -ge 1
+          mv "$(find . -maxdepth 1 -name '*.ipk' | head -n1)" Nivaro-IPTV-Player-webOS-v0.1.0.ipk
+          sha256sum Nivaro-IPTV-Player-webOS-v0.1.0.ipk > Nivaro-IPTV-Player-webOS-v0.1.0.sha256
+
+      - name: Upload webOS package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nivaro-IPTV-Player-webOS-v0.1.0
+          path: |
+            webos/dist/Nivaro-IPTV-Player-webOS-v0.1.0.ipk
+            webos/dist/Nivaro-IPTV-Player-webOS-v0.1.0.sha256
+          if-no-files-found: error
+          retention-days: 30
