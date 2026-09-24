@@ -44,39 +44,21 @@ jobs:
           unzip -qo overlay.zip -d source/RA_IPTV_Android_v0.1
           grep -q "versionName '0.2.0'" source/RA_IPTV_Android_v0.1/app/build.gradle
 
-      - name: Apply v0.2.1 performance patch
+      - name: Apply final v0.2.1 patch
         shell: bash
         run: |
           set -euo pipefail
-          cat patches/v0.2.1/parts/p00 patches/v0.2.1/parts/p01 patches/v0.2.1/parts/p02 > performance.raw.b64
-          python3 - <<'PY'
-          from pathlib import Path
-          import hashlib
-          raw=Path("performance.raw.b64").read_bytes()
-          expected="8469a646d89c1cc29684794327076e47feca7cfde87e8640770710729b0185f6"
-          if hashlib.sha256(raw).hexdigest()==expected:
-              fixed=raw
-          elif len(raw)==14365:
-              fixed=None
-              for i in range(len(raw)):
-                  candidate=raw[:i]+raw[i+1:]
-                  if hashlib.sha256(candidate).hexdigest()==expected:
-                      fixed=candidate
-                      print("Removed one connector-added byte at offset", i)
-                      break
-              if fixed is None:
-                  raise SystemExit("Could not repair v0.2.1 patch to expected SHA-256")
-          else:
-              raise SystemExit(f"Unexpected v0.2.1 patch size: {len(raw)}")
-          Path("performance.b64").write_bytes(fixed)
-          PY
-          test "$(wc -c < performance.b64)" -eq 14364
-          echo "8469a646d89c1cc29684794327076e47feca7cfde87e8640770710729b0185f6  performance.b64" | sha256sum -c -
-          base64 --decode performance.b64 > performance.zip
-          echo "052c539a6dc018840c891e24d0ba37907d1b3a5dd558b1f2ab98ea8a863aca84  performance.zip" | sha256sum -c -
-          unzip -t performance.zip
-          unzip -qo performance.zip -d source/RA_IPTV_Android_v0.1
+          cat patches/v0.2.1-final/parts/p00 patches/v0.2.1-final/parts/p01 patches/v0.2.1-final/parts/p02 patches/v0.2.1-final/parts/p03 patches/v0.2.1-final/parts/p04 patches/v0.2.1-final/parts/p05 patches/v0.2.1-final/parts/p06 > final021.b64
+          test "$(wc -c < final021.b64)" -eq 33084
+          echo "ec87b0ac60e44028c7ee15c52ef907efeb4a4505d51382c9ccea432ead0870cd  final021.b64" | sha256sum -c -
+          base64 --decode final021.b64 > final021.zip
+          echo "14c3f2694a5c546767704c069b9094eacd211998cf836f16ec5966d094466926  final021.zip" | sha256sum -c -
+          unzip -t final021.zip
+          unzip -qo final021.zip -d source/RA_IPTV_Android_v0.1
           grep -q "versionName '0.2.1'" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "Anti-freeze" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/PlayerActivity.java
+          grep -q "heroImage" source/RA_IPTV_Android_v0.1/app/src/main/res/layout/activity_main.xml
+          grep -q "episodeCandidates" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/core/XtreamUrls.java
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
