@@ -48,7 +48,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat patches/v0.2.1/parts/p00 patches/v0.2.1/parts/p01 patches/v0.2.1/parts/p02 > performance.b64
+          cat patches/v0.2.1/parts/p00 patches/v0.2.1/parts/p01 patches/v0.2.1/parts/p02 > performance.raw.b64
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          raw=Path("performance.raw.b64").read_bytes()
+          expected="8469a646d89c1cc29684794327076e47feca7cfde87e8640770710729b0185f6"
+          if hashlib.sha256(raw).hexdigest()==expected:
+              fixed=raw
+          elif len(raw)==14365:
+              fixed=None
+              for i in range(len(raw)):
+                  candidate=raw[:i]+raw[i+1:]
+                  if hashlib.sha256(candidate).hexdigest()==expected:
+                      fixed=candidate
+                      print("Removed one connector-added byte at offset", i)
+                      break
+              if fixed is None:
+                  raise SystemExit("Could not repair v0.2.1 patch to expected SHA-256")
+          else:
+              raise SystemExit(f"Unexpected v0.2.1 patch size: {len(raw)}")
+          Path("performance.b64").write_bytes(fixed)
+          PY
           test "$(wc -c < performance.b64)" -eq 14364
           echo "8469a646d89c1cc29684794327076e47feca7cfde87e8640770710729b0185f6  performance.b64" | sha256sum -c -
           base64 --decode performance.b64 > performance.zip
