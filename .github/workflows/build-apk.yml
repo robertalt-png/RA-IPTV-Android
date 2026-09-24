@@ -390,7 +390,7 @@ jobs:
           p=root/"app/build.gradle"
           s=p.read_text().replace("versionCode 7","versionCode 8").replace("versionName '0.4.1'","versionName '0.4.2'")
           if "com.google.mlkit:translate" not in s:
-              s=s.replace("    implementation 'androidx.media3:media3-ui:1.11.1'","    implementation 'androidx.media3:media3-ui:1.11.1'\\n    implementation 'com.google.mlkit:translate:17.0.3'\\n    implementation 'com.google.mlkit:language-id:17.0.6'")
+              s=s.replace("    implementation 'androidx.media3:media3-ui:1.11.1'","    implementation 'androidx.media3:media3-ui:1.11.1'\n    implementation 'com.google.mlkit:translate:17.0.3'\n    implementation 'com.google.mlkit:language-id:17.0.6'")
           p.write_text(s)
 
           shutil.copy("patches/v0.4.2/InfoTranslator.java",root/"app/src/main/java/com/robertalt/raiptv/InfoTranslator.java")
@@ -425,7 +425,7 @@ jobs:
               sec("Algemeen");spin("Taal van info","language",new String[]{"Nederlands","English"},new String[]{"nl","en"});toggle("Compacte mobiele weergave","compact",true);spin("Grootte hero","hero_size",new String[]{"Klein","Normaal","Groot"},new String[]{"small","normal","large"});
               sec("Afspelen");spin("Speler","player",new String[]{"Automatisch","VLC","Media3"},new String[]{"auto","vlc","media3"});spin("Buffer","buffer",new String[]{"Snel","Stabiel","Maximaal"},new String[]{"normal","stable","max"});spin("Standaard audio","audio",new String[]{"Engels","Nederlands","Origineel"},new String[]{"en","nl","original"});spin("Ondertiteling","subtitles",new String[]{"Nederlands","Engels","Uit"},new String[]{"nl","en","off"});toggle("Picture-in-Picture","pip",true);toggle("Volgende aflevering automatisch","autoplay_next",true);
               sec("Onderhoud");Button re=b("Zoekindex opnieuw opbouwen");re.setOnClickListener(v->{p.edit().putBoolean("force_reindex",true).apply();Toast.makeText(this,"Zoekindex wordt opnieuw opgebouwd",Toast.LENGTH_SHORT).show();});box.addView(re,new LinearLayout.LayoutParams(-1,dp(50)));Button cl=b("Afbeeldingscache legen");cl.setOnClickListener(v->{MediaRowAdapter.clearArtworkCache();MainActivity.clearHeroCache();Toast.makeText(this,"Cache geleegd",Toast.LENGTH_SHORT).show();});box.addView(cl,new LinearLayout.LayoutParams(-1,dp(50)));
-              sec("Over Nivaro");TextView a=t("Nivaro IPTV Player 0.4.2\\nVoor je eigen IPTV-bronnen. Nivaro levert zelf geen tv-dienst.",13);a.setTextColor(0xFFA7AFBC);box.addView(a);setContentView(sv);}
+              sec("Over Nivaro");TextView a=t("Nivaro IPTV Player 0.4.2\nVoor je eigen IPTV-bronnen. Nivaro levert zelf geen tv-dienst.",13);a.setTextColor(0xFFA7AFBC);box.addView(a);setContentView(sv);}
             void sec(String x){TextView v=t(x,18);v.setTypeface(null,Typeface.BOLD);v.setPadding(0,dp(20),0,dp(7));box.addView(v);}
             void toggle(String l,String k,boolean d){Switch v=new Switch(this);v.setText(l);v.setTextColor(0xFFF7F8FA);v.setChecked(p.getBoolean(k,d));v.setOnCheckedChangeListener((a,on)->p.edit().putBoolean(k,on).apply());box.addView(v,new LinearLayout.LayoutParams(-1,dp(52)));}
             void spin(String l,String k,String[]ls,String[]vs){TextView z=t(l,13);z.setTextColor(0xFFA7AFBC);box.addView(z);Spinner sp=new Spinner(this);ArrayAdapter<String>ad=new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,ls){@Override public View getDropDownView(int q,View v,ViewGroup g){TextView x=(TextView)super.getDropDownView(q,v,g);x.setTextColor(0xFFF7F8FA);x.setBackgroundColor(0xFF181C22);x.setPadding(dp(16),dp(14),dp(16),dp(14));return x;}};ad.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);sp.setAdapter(ad);String cur=p.getString(k,vs[0]);int n=0;for(int i=0;i<vs.length;i++)if(vs[i].equals(cur))n=i;sp.setSelection(n,false);sp.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){public void onNothingSelected(AdapterView<?>x){}public void onItemSelected(AdapterView<?>x,View v,int q,long id){p.edit().putString(k,vs[q]).apply();}});box.addView(sp,new LinearLayout.LayoutParams(-1,dp(48)));}
@@ -434,7 +434,7 @@ jobs:
           p=root/"app/src/main/AndroidManifest.xml"
           s=p.read_text()
           if 'android:name=".SettingsActivity"' not in s:
-              s=s.replace('<activity android:name=".ProfileActivity" android:exported="false" />','<activity android:name=".ProfileActivity" android:exported="false" />\\n        <activity android:name=".SettingsActivity" android:exported="false" />')
+              s=s.replace('<activity android:name=".ProfileActivity" android:exported="false" />','<activity android:name=".ProfileActivity" android:exported="false" />\n        <activity android:name=".SettingsActivity" android:exported="false" />')
           p.write_text(s)
 
           (root/"app/src/main/res/layout/activity_main.xml").write_text(r'''<?xml version="1.0" encoding="utf-8"?>
@@ -479,22 +479,22 @@ jobs:
           p=root/"app/src/main/java/com/robertalt/raiptv/storage/SearchIndexStore.java"
           s=p.read_text()
           if "void clearAll()" not in s:
-              s=s.replace("    public synchronized void markSection(","    public synchronized void clearAll(){try{SQLiteDatabase db=getWritableDatabase();db.delete(\"entries\",null,null);db.delete(\"meta\",null,null);}catch(Exception ignored){}}\\n\\n    public synchronized void markSection(")
+              s=s.replace("    public synchronized void markSection(","    public synchronized void clearAll(){try{SQLiteDatabase db=getWritableDatabase();db.delete(\"entries\",null,null);db.delete(\"meta\",null,null);}catch(Exception ignored){}}\n\n    public synchronized void markSection(")
           p.write_text(s)
 
           p=root/"app/src/main/java/com/robertalt/raiptv/MediaRowAdapter.java"
           s=p.read_text().replace("Nivaro/0.4.0","Nivaro/0.4.2")
           if "clearArtworkCache" not in s:
-              s=s.replace("    public static void loadArtwork(","    public static void clearArtworkCache(){cache.evictAll();}\\n    public static void loadArtwork(")
+              s=s.replace("    public static void loadArtwork(","    public static void clearArtworkCache(){cache.evictAll();}\n    public static void loadArtwork(")
           p.write_text(s)
 
           p=root/"app/src/main/java/com/robertalt/raiptv/MainActivity.java"
           s=p.read_text()
-          s=s.replace("import android.graphics.*;","import android.graphics.*;\\nimport android.graphics.RenderEffect;\\nimport android.graphics.Shader;")
+          s=s.replace("import android.graphics.*;","import android.graphics.*;\nimport android.graphics.RenderEffect;\nimport android.graphics.Shader;")
           s=s.replace("Button heroAction,heroInfo,genreButton;","Button heroAction,heroInfo,genreButton,searchToggle,settingsButton;")
           s=s.replace("search=findViewById(R.id.searchBox);status=","search=findViewById(R.id.searchBox);searchToggle=findViewById(R.id.searchToggle);settingsButton=findViewById(R.id.settingsButton);status=")
           s=s.replace("lp.height=dp(72)+bottom;","lp.height=dp(64)+bottom;")
-          s=s.replace('findViewById(R.id.profileButton).setOnClickListener(v->startActivityForResult(new Intent(this,ProfileActivity.class),10));','findViewById(R.id.profileButton).setOnClickListener(v->startActivityForResult(new Intent(this,ProfileActivity.class),10));\\n        settingsButton.setOnClickListener(v->startActivity(new Intent(this,SettingsActivity.class)));\\n        searchToggle.setOnClickListener(v->toggleSearch());')
+          s=s.replace('findViewById(R.id.profileButton).setOnClickListener(v->startActivityForResult(new Intent(this,ProfileActivity.class),10));','findViewById(R.id.profileButton).setOnClickListener(v->startActivityForResult(new Intent(this,ProfileActivity.class),10));\n        settingsButton.setOnClickListener(v->startActivity(new Intent(this,SettingsActivity.class)));\n        searchToggle.setOnClickListener(v->toggleSearch());')
           s=s.replace('findViewById(R.id.navSeries).setOnClickListener(v->loadSection("series"));findViewById(R.id.navFavorites).setOnClickListener(v->showLocal(library.favorites(),"Favorieten"));','findViewById(R.id.navSeries).setOnClickListener(v->loadSection("series"));')
           marker="    int nextRequest(){return ++requestSerial;}"
           if "void toggleSearch()" not in s:
@@ -513,7 +513,7 @@ jobs:
           new1='void addShelf(String name,List<MediaEntry>items){if(items==null||items.isEmpty())return;TextView head=new TextView(this);head.setText(name);head.setTextColor(getResources().getColor(R.color.text));head.setTextSize(17);head.setTypeface(null,Typeface.BOLD);head.setPadding(dp(15),dp(8),dp(10),dp(6));browseContainer.addView(head);HorizontalScrollView hsv=new HorizontalScrollView(this);hsv.setHorizontalScrollBarEnabled(false);LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);row.setPadding(dp(11),0,dp(8),dp(7));hsv.addView(row,new HorizontalScrollView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT));int n=Math.min(20,items.size());for(int i=0;i<n;i++)row.addView(posterCard(items.get(i)));browseContainer.addView(hsv,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));}'
           s=s.replace(old1,new1)
           a=s.index("    View posterCard(MediaEntry e){")
-          b=s.find("\\n\\n    void showGenreChooser",a); b=b if b>=0 else s.index("    void showGenreChooser",a)
+          b=s.find("\n\n    void showGenreChooser",a); b=b if b>=0 else s.index("    void showGenreChooser",a)
           s=s[:a]+'''    View posterCard(MediaEntry e){boolean compact=SettingsStore.compact(this);int w=compact?112:142,imgH=compact?158:202,cardH=compact?202:250;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(3),dp(3),dp(3),dp(4));card.setBackgroundResource(R.drawable.bg_card);LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(dp(w),dp(cardH));cp.setMargins(dp(4),0,dp(6),0);card.setLayoutParams(cp);ImageView image=new ImageView(this);image.setScaleType(ImageView.ScaleType.CENTER_CROP);card.addView(image,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(imgH)));TextView n=new TextView(this);n.setText(e.name);n.setTextColor(getResources().getColor(R.color.text));n.setTextSize(compact?11:12);n.setTypeface(null,Typeface.BOLD);n.setMaxLines(2);n.setEllipsize(TextUtils.TruncateAt.END);n.setPadding(dp(4),dp(4),dp(4),0);card.addView(n,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(cardH-imgH-7)));MediaRowAdapter.loadArtwork(image,e.logo,e.name,compact?250:320,compact?380:480);card.setOnClickListener(v->{if(selectedHero!=null&&selectedHero.uniqueKey().equals(e.uniqueKey()))select(e);else preview(e);});card.setOnLongClickListener(v->{actions(e);return true;});return card;}'''+s[b:]
           a=s.index("    void showDetailsDialog(MediaEntry item,MediaDetails d){")
           b=s.find("    void openWeb(String url)",a); b=b if b>=0 else len(s)
@@ -529,7 +529,7 @@ jobs:
 
           p=root/"app/src/main/java/com/robertalt/raiptv/PlayerActivity.java"
           s=p.read_text()
-          if "storage.SettingsStore" not in s:s=s.replace("import com.robertalt.raiptv.storage.CrashGuard;","import com.robertalt.raiptv.storage.CrashGuard;\\nimport com.robertalt.raiptv.storage.SettingsStore;")
+          if "storage.SettingsStore" not in s:s=s.replace("import com.robertalt.raiptv.storage.CrashGuard;","import com.robertalt.raiptv.storage.CrashGuard;\nimport com.robertalt.raiptv.storage.SettingsStore;")
           s=s.replace("wireControls();startVlc();searchExternalSubtitle();ui.post(tick);showControls();",'wireControls();if("media3".equals(SettingsStore.player(this)))startMedia3();else startVlc();searchExternalSubtitle();ui.post(tick);showControls();')
           s=s.replace("--network-caching=1800",'--network-caching="+SettingsStore.bufferMs(this)+"')
           s=s.replace('m.addOption(":network-caching=1800");','m.addOption(":network-caching="+SettingsStore.bufferMs(this));')
