@@ -1,0 +1,33 @@
+name: Export Android APK Signer
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/export-apksigner.yml
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate APK signer
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_HOME:-}"
+          JAR="$(find "$ANDROID_HOME/build-tools" -type f -path '*/lib/apksigner.jar' | sort -V | tail -n 1)"
+          test -f "$JAR"
+          cp "$JAR" ./apksigner.jar
+          ls -lh ./apksigner.jar
+          sha256sum ./apksigner.jar
+      - name: Upload APK signer
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apksigner
+          path: apksigner.jar
+          if-no-files-found: error
+          retention-days: 30
