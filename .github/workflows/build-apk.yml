@@ -60,6 +60,22 @@ jobs:
           grep -q "heroImage" source/RA_IPTV_Android_v0.1/app/src/main/res/layout/activity_main.xml
           grep -q "episodeCandidates" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/core/XtreamUrls.java
 
+      - name: Apply final v0.2.2 startup and navigation patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat patches/v0.2.2-final2/parts/p00 patches/v0.2.2-final2/parts/p01 patches/v0.2.2-final2/parts/p02 patches/v0.2.2-final2/parts/p03 patches/v0.2.2-final2/parts/p04 patches/v0.2.2-final2/parts/p05 patches/v0.2.2-final2/parts/p06 > final022.b64
+          test "$(wc -c < final022.b64)" -eq 12516
+          echo "8030ddeeb59391caf43a2785c1b318d3ff0e9c840c0d084679a960c6f18b73f9  final022.b64" | sha256sum -c -
+          base64 --decode final022.b64 > final022.zip
+          echo "93f6dc5f1ed0e2bb7e4813b5d9172f4f7d3bfd5084719c9da23b5977899667ff  final022.zip" | sha256sum -c -
+          unzip -t final022.zip
+          unzip -qo final022.zip -d source/RA_IPTV_Android_v0.1
+          grep -q "versionName '0.2.2'" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "navFavorites" source/RA_IPTV_Android_v0.1/app/src/main/res/layout/activity_main.xml
+          ! grep -q "liveButton" source/RA_IPTV_Android_v0.1/app/src/main/res/layout/activity_main.xml
+          grep -q "Klaar · kies Live tv" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -96,7 +112,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: RA-IPTV-Android-v0.2.1-debug-apk
+          name: RA-IPTV-Android-v0.2.2-debug-apk
           path: source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
