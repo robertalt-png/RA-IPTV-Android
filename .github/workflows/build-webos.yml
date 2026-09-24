@@ -32,8 +32,6 @@ jobs:
           mkdir -p .webosdeps
           npm install --prefix .webosdeps webostvjs@1.2.13
           cp .webosdeps/node_modules/webostvjs/webOSTV.js webos/app/webOSTV.js
-          cd webos/service
-          npm install --omit=dev
 
       - name: Generate Nivaro TV icons
         shell: bash
@@ -90,7 +88,7 @@ jobs:
           test -s webos/app/app.js
           test -s webos/app/styles.css
           test -s webos/app/webOSTV.js
-          test -d webos/service/node_modules/webos-service
+          test -s webos/service/service.js
 
       - name: Package webOS IPK
         shell: bash
