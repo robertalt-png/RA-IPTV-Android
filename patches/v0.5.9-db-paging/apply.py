@@ -35,7 +35,7 @@ assert old in s
 s=s.replace(old,new,1)
 
 start=s.index('    void loadCachedSection(String requested,int token,int cachedCount){')
-end=s.index('\\n    void setCategorySpinner',start)
+end=s.index('\n    void setCategorySpinner',start)
 replacement='''    void stopCachePaging(){cachePagingActive=false;cachePageLoading=false;cachePagingSection="";cachePagingOffset=0;cachePagingTotal=0;}
 
     void loadCachedSection(String requested,int token,int cachedCount){
