@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, nivaro-v0.5.0-build-20260924, nivaro-v0.5.1-recording-20260925, nivaro-v0.5.2-compact-grid-20260925, nivaro-v0.5.3-stability-20260925, nivaro-v0.5.4-anr-fix-20260925, nivaro-v0.5.5-language-20260925, nivaro-v0.5.6-language-memory-20260925, nivaro-v0.5.7-rotation-state-20260925, nivaro-v0.5.8-cache-hero-20260925, nivaro-v0.5.9-db-paging-20260925, nivaro-v0.6.0-vertical-grid-20260925, nivaro-v0.6.1-localization-20260925, nivaro-v0.6.2-language-priority-20260925 ]
+    branches: [ main, nivaro-v0.5.0-build-20260924, nivaro-v0.5.1-recording-20260925, nivaro-v0.5.2-compact-grid-20260925, nivaro-v0.5.3-stability-20260925, nivaro-v0.5.4-anr-fix-20260925, nivaro-v0.5.5-language-20260925, nivaro-v0.5.6-language-memory-20260925, nivaro-v0.5.7-rotation-state-20260925, nivaro-v0.5.8-cache-hero-20260925, nivaro-v0.5.9-db-paging-20260925, nivaro-v0.6.0-vertical-grid-20260925, nivaro-v0.6.1-localization-20260925, nivaro-v0.6.2-language-priority-20260925, nivaro-v0.6.3-priority-consistency-20260925 ]
   workflow_dispatch:
 
 permissions:
@@ -823,17 +823,29 @@ jobs:
           grep -q "ContentLanguage.rank(a,pref)" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
           echo "Nivaro v0.6.2 language priority verified"
 
-      - name: Export Nivaro v0.6.2 source
+      - name: Apply Nivaro v0.6.3 priority consistency
         shell: bash
         run: |
           set -euo pipefail
-          tar -czf Nivaro-v0.6.2-source.tar.gz -C source RA_IPTV_Android_v0.1
+          python3 patches/v0.6.3-priority-consistency/apply.py
+          grep -q "versionCode 22" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "versionName '0.6.3'" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "migrateLanguagePreferences" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/storage/SettingsStore.java
+          grep -q "DisplayText.cleanTitle" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
+          grep -q "WHEN .* THEN 0 WHEN .* THEN 1" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/ContentLanguage.java
+          echo "Nivaro v0.6.3 priority consistency verified"
+
+      - name: Export Nivaro v0.6.3 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf Nivaro-v0.6.3-source.tar.gz -C source RA_IPTV_Android_v0.1
 
       - name: Upload Nivaro source
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.6.2-source
-          path: Nivaro-v0.6.2-source.tar.gz
+          name: Nivaro-v0.6.3-source
+          path: Nivaro-v0.6.3-source.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -878,7 +890,7 @@ jobs:
       - name: Upload unsigned release and signing tool
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.6.2-unsigned-release
+          name: Nivaro-v0.6.3-unsigned-release
           path: |
             source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
             /opt/hostedtoolcache/Android_SDK/build-tools/36.0.0/lib/apksigner.jar
@@ -888,7 +900,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-IPTV-Player-v0.6.2-debug-apk
+          name: Nivaro-IPTV-Player-v0.6.3-debug-apk
           path: source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
