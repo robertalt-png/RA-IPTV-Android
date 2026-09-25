@@ -641,6 +641,21 @@ jobs:
           grep -q "vlc.record" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/PlayerActivity.java
           echo "Nivaro v0.5.1 recording overlay verified"
 
+      - name: Fix LibVLC recording API signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/PlayerActivity.java")
+          s=p.read_text()
+          s=s.replace("vlc.record(dir.getAbsolutePath(),true)", "vlc.record(dir.getAbsolutePath())")
+          s=s.replace("vlc.record(null,false)", "vlc.record(null)")
+          p.write_text(s)
+          assert "vlc.record(dir.getAbsolutePath())" in s
+          assert "vlc.record(null)" in s
+          PY
+
       - name: Export Nivaro v0.5.1 source
         shell: bash
         run: |
