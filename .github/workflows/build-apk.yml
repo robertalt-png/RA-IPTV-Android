@@ -604,17 +604,36 @@ jobs:
           print("v0.4.2 completion fixes applied")
           PY
 
-      - name: Export Nivaro v0.4.2 source
+      - name: Apply Nivaro v0.5.0 benchmark upgrade
         shell: bash
         run: |
           set -euo pipefail
-          tar -czf Nivaro-v0.4.2-source.tar.gz -C source RA_IPTV_Android_v0.1
+          cat patches/v0.5.0/p00 patches/v0.5.0/p01 patches/v0.5.0/p02 > nivaro050.b64
+          test "$(wc -c < nivaro050.b64)" -eq 43424
+          echo "4c3b8f0748ad30b604a1896f7a2824d33d788d8ace3540ad7c587e4d43943252  nivaro050.b64" | sha256sum -c -
+          base64 --decode nivaro050.b64 > nivaro050.zip
+          echo "4fb66fe0e9030823ebded267edb01b3166b15e93ce5d67c648de6587bdef117a  nivaro050.zip" | sha256sum -c -
+          unzip -t nivaro050.zip
+          unzip -qo nivaro050.zip -d source/RA_IPTV_Android_v0.1
+          grep -q "versionCode 9" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "versionName '0.5.0'" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "sortButton" source/RA_IPTV_Android_v0.1/app/src/main/res/layout/activity_main.xml
+          grep -q "channelNextButton" source/RA_IPTV_Android_v0.1/app/src/main/res/layout/activity_player.xml
+          grep -q "parental_enabled" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/storage/SettingsStore.java
+          grep -q "showSleepMenu" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/PlayerActivity.java
+          echo "Nivaro v0.5.0 overlay verified"
+
+      - name: Export Nivaro v0.5.0 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf Nivaro-v0.5.0-source.tar.gz -C source RA_IPTV_Android_v0.1
 
       - name: Upload Nivaro source
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.4.2-source
-          path: Nivaro-v0.4.2-source.tar.gz
+          name: Nivaro-v0.5.0-source
+          path: Nivaro-v0.5.0-source.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -659,7 +678,7 @@ jobs:
       - name: Upload unsigned release and signing tool
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.4.2-unsigned-release
+          name: Nivaro-v0.5.0-unsigned-release
           path: |
             source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
             /opt/hostedtoolcache/Android_SDK/build-tools/36.0.0/lib/apksigner.jar
@@ -669,7 +688,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-IPTV-Player-v0.4.2-debug-apk
+          name: Nivaro-IPTV-Player-v0.5.0-debug-apk
           path: source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
