@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, nivaro-v0.5.0-build-20260924, nivaro-v0.5.1-recording-20260925 ]
+    branches: [ main, nivaro-v0.5.0-build-20260924, nivaro-v0.5.1-recording-20260925, nivaro-v0.5.2-compact-grid-20260925 ]
   workflow_dispatch:
 
 permissions:
@@ -656,17 +656,171 @@ jobs:
           assert "vlc.record(null)" in s
           PY
 
-      - name: Export Nivaro v0.5.1 source
+      - name: Apply Nivaro v0.5.2 compact full-library grid
         shell: bash
         run: |
           set -euo pipefail
-          tar -czf Nivaro-v0.5.1-source.tar.gz -C source RA_IPTV_Android_v0.1
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path("source/RA_IPTV_Android_v0.1")
+
+          p=root/"app/build.gradle"
+          s=p.read_text().replace("versionCode 10","versionCode 11").replace("versionName '0.5.1'","versionName '0.5.2'")
+          p.write_text(s)
+
+          p=root/"app/src/main/res/layout/activity_main.xml"
+          s=p.read_text()
+          s=s.replace('android:layout_height="215dp" android:layout_marginLeft="14dp"','android:layout_height="155dp" android:layout_marginLeft="14dp"')
+          old='''    <ListView android:id="@+id/itemList" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginLeft="14dp" android:layout_marginRight="14dp" android:divider="@android:color/transparent" android:dividerHeight="6dp" android:scrollbars="none"/>
+    <ScrollView android:id="@+id/browseScroll"'''
+          new='''    <ListView android:id="@+id/itemList" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginLeft="14dp" android:layout_marginRight="14dp" android:divider="@android:color/transparent" android:dividerHeight="6dp" android:scrollbars="none"/>
+    <GridView android:id="@+id/itemGrid" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginLeft="10dp" android:layout_marginRight="10dp" android:horizontalSpacing="6dp" android:verticalSpacing="7dp" android:stretchMode="columnWidth" android:gravity="center" android:scrollbars="none" android:visibility="gone"/>
+    <ScrollView android:id="@+id/browseScroll"'''
+          if old not in s: raise SystemExit("layout grid anchor missing")
+          p.write_text(s.replace(old,new))
+
+          p=root/"app/src/main/java/com/robertalt/raiptv/MainActivity.java"
+          s=p.read_text()
+          s=s.replace('Spinner categories; ListView list; EditText search;', 'Spinner categories; ListView list; GridView grid; EditText search;')
+          s=s.replace('MediaRowAdapter adapter; EpgAdapter epgAdapter;', 'MediaRowAdapter adapter; MediaGridAdapter gridAdapter; EpgAdapter epgAdapter;')
+          s=s.replace('categories=findViewById(R.id.categorySpinner);list=findViewById(R.id.itemList);search=findViewById(R.id.searchBox);', 'categories=findViewById(R.id.categorySpinner);list=findViewById(R.id.itemList);grid=findViewById(R.id.itemGrid);search=findViewById(R.id.searchBox);')
+          s=s.replace('adapter=new MediaRowAdapter(this,library);epgAdapter=new EpgAdapter(this,epgStore);list.setAdapter(adapter);wire();', 'adapter=new MediaRowAdapter(this,library);gridAdapter=new MediaGridAdapter(this,library);epgAdapter=new EpgAdapter(this,epgStore);list.setAdapter(adapter);grid.setAdapter(gridAdapter);wire();')
+          s=s.replace('exec.execute(()->{try{provider.authenticate();runOnUiThread(()->{if(current(token)){adapter.setEpg(provider,epgStore,profileKey());epgAdapter.configure(provider,profileKey());openStart();refreshSearchIndex(false);}});}', 'exec.execute(()->{try{provider.authenticate();runOnUiThread(()->{if(current(token)){adapter.setEpg(provider,epgStore,profileKey());gridAdapter.setEpg(provider,epgStore,profileKey());epgAdapter.configure(provider,profileKey());openStart();refreshSearchIndex(false);}});}')
+
+          a='''        list.setOnItemLongClickListener((p,v,pos,id)->{MediaEntry e="epg".equals(section)?epgAdapter.getItem(pos):adapter.getItem(pos);actions(e);return true;});'''
+          b=a+'''\\n        grid.setOnItemClickListener((p,v,pos,id)->{MediaEntry e=gridAdapter.getItem(pos);if(selectedHero!=null&&selectedHero.uniqueKey().equals(e.uniqueKey()))select(e);else preview(e);});\\n        grid.setOnItemLongClickListener((p,v,pos,id)->{actions(gridAdapter.getItem(pos));return true;});'''
+          if a not in s: raise SystemExit("grid listener anchor missing")
+          s=s.replace(a,b)
+
+          s=s.replace('showMediaList();adapter.set(Collections.emptyList());status.setText("Zoeken…");', 'showMediaGrid(false);gridAdapter.set(Collections.emptyList(),false);status.setText("Zoeken…");')
+          s=s.replace('int heroHeight(){String h=SettingsStore.hero(this);return dp("small".equals(h)?180:"large".equals(h)?250:215);}', 'int heroHeight(){String h=SettingsStore.hero(this);int v="small".equals(h)?135:"large".equals(h)?205:165;if(SettingsStore.compact(this))v-=10;return dp(v);}')
+
+          old='''    void showMediaList(){browseScroll.setVisibility(View.GONE);list.setVisibility(View.VISIBLE);if(list.getAdapter()!=adapter)list.setAdapter(adapter);} void showEpgList(){browseScroll.setVisibility(View.GONE);list.setVisibility(View.VISIBLE);if(list.getAdapter()!=epgAdapter)list.setAdapter(epgAdapter);} void showBrowse(){list.setVisibility(View.GONE);browseScroll.setVisibility(View.VISIBLE);}'''
+          new='''    void showMediaList(){browseScroll.setVisibility(View.GONE);grid.setVisibility(View.GONE);list.setVisibility(View.VISIBLE);if(list.getAdapter()!=adapter)list.setAdapter(adapter);} void showEpgList(){browseScroll.setVisibility(View.GONE);grid.setVisibility(View.GONE);list.setVisibility(View.VISIBLE);if(list.getAdapter()!=epgAdapter)list.setAdapter(epgAdapter);} void showBrowse(){list.setVisibility(View.GONE);grid.setVisibility(View.GONE);browseScroll.setVisibility(View.VISIBLE);} void showMediaGrid(boolean live){browseScroll.setVisibility(View.GONE);list.setVisibility(View.GONE);grid.setVisibility(View.VISIBLE);int sw=getResources().getConfiguration().screenWidthDp;grid.setNumColumns(live?(sw>=600?4:2):(sw>=600?6:3));}'''
+          if old not in s: raise SystemExit("display-mode anchor missing")
+          s=s.replace(old,new)
+
+          s=s.replace('if("all".equals(c.id)){confirmAll();return;}currentCategoryId=c.id;currentCategoryName=c.name;', 'if("all".equals(c.id)){currentCategoryId="all";currentCategoryName="Alles";if("epg".equals(section))loadEpgChannels("all");else loadItems("all");return;}currentCategoryId=c.id;currentCategoryName=c.name;')
+
+          start=s.index('    void loadSection(String s){')
+          end=s.index('\\n    void setCategorySpinner',start)
+          method='''    void loadSection(String s){
+        final int token=nextRequest();section=s;SettingsStore.setLastSection(this,s);seriesEpisodeMode=false;latestSearchQuery="";currentCategoryId="all";currentCategoryName="Alles";if(profile!=null&&profile.type==Profile.Type.M3U&&!s.equals("live")){showLocal(Collections.emptyList(),"Alleen live tv is beschikbaar voor dit M3U-profiel");return;}
+        setHeroHeight(heroHeight());collapseSearch();search.setHint("Zoek overal");filterBar.setVisibility(View.VISIBLE);sortButton.setVisibility(View.VISIBLE);categories.setVisibility(View.VISIBLE);genreButton.setVisibility((s.equals("vod")||s.equals("series"))?View.VISIBLE:View.GONE);showMediaGrid(s.equals("live"));gridAdapter.set(Collections.emptyList(),s.equals("live"));setHeroDefault(label(s),s.equals("live")?"Alle zenders · compact en snel scrollen":s.equals("vod")?"Alle films · posters laden alleen wanneer ze in beeld komen":"Alle series · posters laden alleen wanneer ze in beeld komen");busy(true,"Categorieën laden…");
+        exec.execute(()->{try{List<Category>loaded=new ArrayList<>(provider.categories(s));List<Category>raw=visibleCategories(loaded);runOnUiThread(()->{if(!current(token)||!section.equals(s))return;currentCategories=raw;setCategorySpinner(raw,true);selectSpinner("all");loadItems("all");});}catch(Exception e){runOnUiThread(()->{if(current(token))busy(false,"Fout: "+friendly(e));});}});
+    }
+'''
+          s=s[:start]+method+s[end:]
+          s=s.replace('new Category("all","Alles (grote bibliotheek)",section)', 'new Category("all","Alles",section)')
+
+          start=s.index('    void loadItems(String cat){')
+          end=s.index('\\n    void loadShowcase',start)
+          method='''    void loadItems(String cat){
+        final String requested=section;final int token=nextRequest();busy(true,"Laden…");exec.execute(()->{try{List<MediaEntry>loaded=provider.items(requested,cat);if("all".equals(cat)){HashMap<String,String>names=new HashMap<>();for(Category c:currentCategories)names.put(c.id,c.name);for(MediaEntry e:loaded)if((e.group==null||e.group.isEmpty())&&names.containsKey(e.categoryId))e.group=names.get(e.categoryId);}final List<MediaEntry>forIndex=new ArrayList<>(loaded);indexExec.execute(()->{try{searchIndex.upsert(profileKey(),forIndex);}catch(Exception ignored){}});List<MediaEntry>x=sortItems(visibleItems(loaded));runOnUiThread(()->{if(!current(token)||!section.equals(requested))return;all=x;if(requested.equals("vod")||requested.equals("series")||requested.equals("live")){showMediaGrid(requested.equals("live"));gridAdapter.set(x,requested.equals("live"));if(!x.isEmpty())previewAuto(x.get(0));}else{showMediaList();adapter.set(x);}busy(false,x.size()+" resultaten · volledig scrollbaar"+(hiddenCount(loaded,x)>0?" · 18+ verborgen":""));});}catch(Exception e){runOnUiThread(()->{if(current(token))busy(false,"Fout: "+friendly(e));});}});
+    }
+'''
+          s=s[:start]+method+s[end:]
+
+          s=s.replace('head.setTextSize(17);head.setTypeface(null,Typeface.BOLD);head.setPadding(dp(15),dp(8),dp(10),dp(6));', 'head.setTextSize(15);head.setTypeface(null,Typeface.BOLD);head.setPadding(dp(13),dp(5),dp(8),dp(4));')
+          s=s.replace('row.setPadding(dp(11),0,dp(8),dp(7));', 'row.setPadding(dp(9),0,dp(6),dp(5));')
+          s=s.replace('View posterCard(MediaEntry e){boolean compact=SettingsStore.compact(this);int w=compact?112:142,imgH=compact?158:202,cardH=compact?207:255;', 'View posterCard(MediaEntry e){boolean compact=SettingsStore.compact(this);int w=compact?94:118,imgH=compact?124:158,cardH=compact?166:206;')
+          s=s.replace('n.setTextSize(compact?11:12);', 'n.setTextSize(compact?9.5f:10.5f);')
+          s=s.replace('MediaRowAdapter.loadArtwork(image,e.logo,e.name,compact?250:320,compact?380:480);', 'MediaRowAdapter.loadArtwork(image,e.logo,e.name,compact?190:240,compact?260:340);')
+
+          start=s.index('    void loadGenre(String genre){')
+          end=s.index('\\n    List<String> genreTerms',start)
+          method='''    void loadGenre(String genre){List<Category>matches=new ArrayList<>();List<String>terms=genreTerms(genre);for(Category c:currentCategories){String n=norm(c.name);for(String t:terms)if(n.contains(t)){matches.add(c);break;}}if(matches.isEmpty()){busy(false,"Je aanbieder heeft geen aparte categorie voor ‘"+genre+"’");return;}final int token=nextRequest();busy(true,"Genre "+genre+" laden…");exec.execute(()->{try{LinkedHashMap<String,MediaEntry>dedup=new LinkedHashMap<>();for(Category c:matches)for(MediaEntry e:provider.items(section,c.id)){if(e.group==null||e.group.isEmpty())e.group=c.name;dedup.putIfAbsent(e.uniqueKey(),e);}List<MediaEntry>rawItems=new ArrayList<>(dedup.values());indexExec.execute(()->{try{searchIndex.upsert(profileKey(),rawItems);}catch(Exception ignored){}});List<MediaEntry>x=sortItems(visibleItems(rawItems));runOnUiThread(()->{if(!current(token))return;all=x;showMediaGrid(false);gridAdapter.set(x,false);if(!x.isEmpty())previewAuto(x.get(0));busy(false,x.size()+" titels · "+genre+" · volledig scrollbaar");});}catch(Exception e){runOnUiThread(()->{if(current(token))busy(false,"Genre laden mislukt: "+friendly(e));});}});}
+'''
+          s=s[:start]+method+s[end:]
+
+          # EPG: all channels, with visible-row EPG loading kept in EpgAdapter.
+          old='''currentCategories=raw;setCategorySpinner(raw,false);if(raw.isEmpty()){busy(false,"Geen live categorieën beschikbaar");return;}Category c=chooseLiveCategory(raw);selectSpinner(c.id);currentCategoryId=c.id;currentCategoryName=c.name;loadEpgChannels(c.id);'''
+          new='''currentCategories=raw;setCategorySpinner(raw,true);selectSpinner("all");currentCategoryId="all";currentCategoryName="Alles";loadEpgChannels("all");'''
+          if old not in s: raise SystemExit("EPG all anchor missing")
+          s=s.replace(old,new)
+          s=s.replace('List<MediaEntry>x=sortItems(visibleItems(provider.items("live",cat)));runOnUiThread', 'List<MediaEntry>rawItems=provider.items("live",cat);if("all".equals(cat)){HashMap<String,String>names=new HashMap<>();for(Category c:currentCategories)names.put(c.id,c.name);for(MediaEntry e:rawItems)if((e.group==null||e.group.isEmpty())&&names.containsKey(e.categoryId))e.group=names.get(e.categoryId);}List<MediaEntry>x=sortItems(visibleItems(rawItems));runOnUiThread')
+
+          s=s.replace('showMediaList();final int token=nextRequest();final String query=z;adapter.set(Collections.emptyList());status.setText("Zoeken…");', 'showMediaGrid(false);final int token=nextRequest();final String query=z;gridAdapter.set(Collections.emptyList(),false);status.setText("Zoeken…");')
+          s=s.replace('searchIndex.search(profileKey(),query,120)', 'searchIndex.search(profileKey(),query,1000)')
+          s=s.replace('adapter.set(x);int indexed=searchIndex.count(profileKey());', 'gridAdapter.set(x,false);int indexed=searchIndex.count(profileKey());')
+          s=s.replace('else if(section.equals("live")){filterBar.setVisibility(View.VISIBLE);categories.setVisibility(View.VISIBLE);genreButton.setVisibility(View.GONE);showMediaList();adapter.set(new ArrayList<>(all));busy(false,all.size()+" resultaten");}', 'else if(section.equals("live")){filterBar.setVisibility(View.VISIBLE);categories.setVisibility(View.VISIBLE);genreButton.setVisibility(View.GONE);showMediaGrid(true);gridAdapter.set(new ArrayList<>(all),true);busy(false,all.size()+" resultaten");}')
+          s=s.replace('if(z.length()<2){adapter.set(Collections.emptyList());status.setText("Typ minimaal 2 letters");return;}', 'if(z.length()<2){gridAdapter.set(Collections.emptyList(),false);status.setText("Typ minimaal 2 letters");return;}')
+
+          s=s.replace('showMediaList();all=x;adapter.set(x);setHeroDefault(label,x.isEmpty()?"":"Tik op een titel voor een grote preview");', 'showMediaGrid(false);all=x;gridAdapter.set(x,false);setHeroDefault(label,x.isEmpty()?"":"Tik op een titel voor een grote preview");')
+          s=s.replace('else if("live".equals(section)){all=sortItems(all);adapter.set(all);busy(false,all.size()+" resultaten · "+labels[w]);}else if("vod".equals(section)||"series".equals(section)){if(!currentCategoryId.isEmpty())loadItems(currentCategoryId);else loadSection(section);}', 'else if("live".equals(section)||"vod".equals(section)||"series".equals(section)){all=sortItems(all);showMediaGrid("live".equals(section));gridAdapter.set(all,"live".equals(section));busy(false,all.size()+" resultaten · "+labels[w]);}')
+          s=s.replace('library.toggleFavorite(e);adapter.notifyDataSetChanged();', 'library.toggleFavorite(e);adapter.notifyDataSetChanged();gridAdapter.notifyDataSetChanged();')
+          s=s.replace('Nivaro/0.5.0','Nivaro/0.5.2').replace('Nivaro/0.5.1','Nivaro/0.5.2')
+          p.write_text(s)
+
+          for rel in [
+              "app/src/main/java/com/robertalt/raiptv/MediaRowAdapter.java",
+              "app/src/main/java/com/robertalt/raiptv/PlayerActivity.java",
+              "app/src/main/java/com/robertalt/raiptv/net/HttpText.java",
+              "app/src/main/java/com/robertalt/raiptv/core/XmltvGuide.java",
+          ]:
+              q=root/rel
+              t=q.read_text().replace("Nivaro/0.5.0","Nivaro/0.5.2").replace("Nivaro/0.5.1","Nivaro/0.5.2").replace("Nivaro-Android/0.5.0","Nivaro-Android/0.5.2").replace("Nivaro-Android/0.5.1","Nivaro-Android/0.5.2")
+              q.write_text(t)
+          PY
+
+          cat > source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MediaGridAdapter.java <<'JAVA'
+          package com.robertalt.raiptv;
+
+          import android.content.*;
+          import android.os.*;
+          import android.text.*;
+          import android.view.*;
+          import android.widget.*;
+          import com.robertalt.raiptv.model.*;
+          import com.robertalt.raiptv.storage.*;
+          import com.robertalt.raiptv.provider.Provider;
+          import java.util.*;
+          import java.util.concurrent.*;
+
+          /** Recycled grid for very large IPTV libraries: only visible cards own Views/images. */
+          public class MediaGridAdapter extends BaseAdapter {
+              private final Context context; private final LibraryStore store; private List<MediaEntry> items=new ArrayList<>();
+              private Provider epgProvider; private EpgStore epgStore; private String epgProfileKey="";
+              private final Map<String,List<EpgEntry>> epgCache=new ConcurrentHashMap<>(); private final Set<String> epgLoading=ConcurrentHashMap.newKeySet();
+              private static final ExecutorService epgExec=Executors.newFixedThreadPool(2); private static final Handler ui=new Handler(Looper.getMainLooper());
+              static class H { ImageView poster; TextView name,meta,fav; ProgressBar progress; }
+              public MediaGridAdapter(Context c,LibraryStore s){context=c;store=s;}
+              public void setEpg(Provider p,EpgStore s,String key){epgProvider=p;epgStore=s;epgProfileKey=key==null?"":key;epgCache.clear();epgLoading.clear();}
+              public void set(List<MediaEntry>x,boolean live){items=x==null?new ArrayList<>():x;notifyDataSetChanged();}
+              public int getCount(){return items.size();} public MediaEntry getItem(int i){return items.get(i);} public long getItemId(int i){return i;}
+              int dp(int n){return Math.round(n*context.getResources().getDisplayMetrics().density);}
+              @Override public View getView(int position,View convertView,ViewGroup parent){
+                  H h;if(convertView==null){LinearLayout card=new LinearLayout(context);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(3),dp(3),dp(3),dp(4));card.setBackgroundResource(R.drawable.bg_card);h=new H();FrameLayout art=new FrameLayout(context);h.poster=new ImageView(context);h.poster.setBackgroundColor(0xFF252A33);art.addView(h.poster,new FrameLayout.LayoutParams(-1,-1));h.fav=new TextView(context);h.fav.setTextColor(context.getResources().getColor(R.color.accent));h.fav.setTextSize(17);h.fav.setGravity(Gravity.TOP|Gravity.RIGHT);h.fav.setPadding(0,dp(2),dp(4),0);art.addView(h.fav,new FrameLayout.LayoutParams(-1,-1));card.addView(art,new LinearLayout.LayoutParams(-1,dp(126)));h.progress=new ProgressBar(context,null,android.R.attr.progressBarStyleHorizontal);h.progress.setMax(100);h.progress.setProgressTintList(android.content.res.ColorStateList.valueOf(context.getResources().getColor(R.color.accent)));h.progress.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0x553C424D));card.addView(h.progress,new LinearLayout.LayoutParams(-1,dp(3)));h.name=new TextView(context);h.name.setTextColor(context.getResources().getColor(R.color.text));h.name.setTextSize(10.5f);h.name.setTypeface(null,android.graphics.Typeface.BOLD);h.name.setMaxLines(2);h.name.setEllipsize(TextUtils.TruncateAt.END);h.name.setPadding(dp(5),dp(4),dp(5),0);card.addView(h.name,new LinearLayout.LayoutParams(-1,dp(36)));h.meta=new TextView(context);h.meta.setTextColor(context.getResources().getColor(R.color.muted));h.meta.setTextSize(8.5f);h.meta.setMaxLines(2);h.meta.setEllipsize(TextUtils.TruncateAt.END);h.meta.setPadding(dp(5),0,dp(5),dp(3));card.addView(h.meta,new LinearLayout.LayoutParams(-1,dp(28)));convertView=card;convertView.setTag(h);}else h=(H)convertView.getTag();
+                  MediaEntry e=getItem(position);boolean isLive="live".equals(e.type);LinearLayout card=(LinearLayout)convertView;View art=card.getChildAt(0);LinearLayout.LayoutParams artLp=(LinearLayout.LayoutParams)art.getLayoutParams();artLp.height=dp(isLive?78:126);art.setLayoutParams(artLp);convertView.setLayoutParams(new AbsListView.LayoutParams(-1,dp(isLive?152:201)));h.poster.setScaleType(isLive?ImageView.ScaleType.CENTER_INSIDE:ImageView.ScaleType.CENTER_CROP);h.name.setText(e.name==null?"":e.name);h.fav.setText(store.isFavorite(e)?"★":"");int pct=store.progressPercent(e);h.progress.setVisibility(!isLive&&pct>0?View.VISIBLE:View.INVISIBLE);h.progress.setProgress(pct);String meta=isLive?(e.group==null?"":e.group):e.meta();if(meta==null)meta="";h.meta.setText(meta);h.meta.setTag(e.uniqueKey());MediaRowAdapter.loadArtwork(h.poster,e.logo,e.name,isLive?220:210,isLive?130:300);if(isLive)loadLiveEpg(h.meta,e,meta);return convertView;
+              }
+              private void loadLiveEpg(TextView meta,MediaEntry e,String base){if(epgProvider==null||epgStore==null)return;String k=epgProfileKey+"|"+e.uniqueKey();List<EpgEntry>rows=epgCache.get(k);if(rows!=null){bindLive(meta,e,base,rows);return;}if(!epgLoading.add(k))return;epgExec.execute(()->{try{List<EpgEntry>r=epgStore.get(k);if(r.isEmpty()){r=epgProvider.epgEntries(e,2);if(!r.isEmpty())epgStore.put(k,r);}epgCache.put(k,r);}catch(Exception ex){epgCache.put(k,Collections.emptyList());}finally{epgLoading.remove(k);ui.post(this::notifyDataSetChanged);}});}
+              private void bindLive(TextView meta,MediaEntry e,String base,List<EpgEntry>rows){if(rows==null||rows.isEmpty())return;long n=System.currentTimeMillis()/1000L;EpgEntry cur=rows.get(0);for(EpgEntry x:rows)if(x.startEpoch>0&&x.endEpoch>0&&x.startEpoch<=n&&n<x.endEpoch){cur=x;break;}String text=(base==null||base.isEmpty()?"":base+" · ")+"Nu: "+cur.title;Object tag=meta.getTag();if(tag!=null&&tag.equals(e.uniqueKey()))meta.setText(text);}
+          }
+          JAVA
+
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          ET.parse("source/RA_IPTV_Android_v0.1/app/src/main/res/layout/activity_main.xml")
+          PY
+          grep -q "versionCode 11" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "versionName '0.5.2'" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "itemGrid" source/RA_IPTV_Android_v0.1/app/src/main/res/layout/activity_main.xml
+          grep -q "class MediaGridAdapter" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MediaGridAdapter.java
+          grep -q 'loadItems("all")' source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
+          grep -q "volledig scrollbaar" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
+          echo "Nivaro v0.5.2 compact full-library grid verified"
+
+      - name: Export Nivaro v0.5.2 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf Nivaro-v0.5.2-source.tar.gz -C source RA_IPTV_Android_v0.1
 
       - name: Upload Nivaro source
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.5.1-source
-          path: Nivaro-v0.5.1-source.tar.gz
+          name: Nivaro-v0.5.2-source
+          path: Nivaro-v0.5.2-source.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -711,7 +865,7 @@ jobs:
       - name: Upload unsigned release and signing tool
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.5.1-unsigned-release
+          name: Nivaro-v0.5.2-unsigned-release
           path: |
             source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
             /opt/hostedtoolcache/Android_SDK/build-tools/36.0.0/lib/apksigner.jar
@@ -721,7 +875,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-IPTV-Player-v0.5.1-debug-apk
+          name: Nivaro-IPTV-Player-v0.5.2-debug-apk
           path: source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
