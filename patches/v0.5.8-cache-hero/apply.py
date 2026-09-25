@@ -39,7 +39,7 @@ assert old in s
 s = s.replace(old, new, 1)
 
 old = '                final List<MediaEntry>finalList=sortItems(aggregate);'
-new = '                try{if(!aggregate.isEmpty()){searchIndex.markSection(profileKey(),requested,aggregate.size());SettingsStore.prefs(this).edit().remove(cacheCursorKey(requested)).apply();}}catch(Exception ignored){}\\n                final List<MediaEntry>finalList=sortItems(aggregate);'
+new = '                try{if(!aggregate.isEmpty()){searchIndex.markSection(profileKey(),requested,aggregate.size());SettingsStore.prefs(this).edit().remove(cacheCursorKey(requested)).apply();}}catch(Exception ignored){}\n                final List<MediaEntry>finalList=sortItems(aggregate);'
 assert old in s
 s = s.replace(old, new, 1)
 
