@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, nivaro-v0.5.0-build-20260924, nivaro-v0.5.1-recording-20260925, nivaro-v0.5.2-compact-grid-20260925, nivaro-v0.5.3-stability-20260925, nivaro-v0.5.4-anr-fix-20260925 ]
+    branches: [ main, nivaro-v0.5.0-build-20260924, nivaro-v0.5.1-recording-20260925, nivaro-v0.5.2-compact-grid-20260925, nivaro-v0.5.3-stability-20260925, nivaro-v0.5.4-anr-fix-20260925, nivaro-v0.5.5-language-20260925 ]
   workflow_dispatch:
 
 permissions:
@@ -711,17 +711,36 @@ jobs:
           grep -q "wordt toegepast zodra laden klaar is" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
           echo "Nivaro v0.5.4 ANR fix verified"
 
-      - name: Export Nivaro v0.5.4 source
+      - name: Apply Nivaro v0.5.5 language and badges
         shell: bash
         run: |
           set -euo pipefail
-          tar -czf Nivaro-v0.5.4-source.tar.gz -C source RA_IPTV_Android_v0.1
+          cat patches/v0.5.5-language/p00 patches/v0.5.5-language/p01 patches/v0.5.5-language/p02 > nivaro055.b64
+          test "$(wc -c < nivaro055.b64)" -eq 48396
+          echo "3fdf04987ac38c6d3e138f57e3531ab80837be644f45c885f86f297e492dc85d  nivaro055.b64" | sha256sum -c -
+          base64 --decode nivaro055.b64 > nivaro055.zip
+          echo "5338aac3a9752157633a90f65ab8da3b1a425ecf360a13b308bf82018f904e1d  nivaro055.zip" | sha256sum -c -
+          unzip -t nivaro055.zip
+          unzip -qo nivaro055.zip -d source/RA_IPTV_Android_v0.1
+          grep -q "versionCode 14" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "versionName '0.5.5'" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "Taal van app" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/SettingsActivity.java
+          grep -q "Voorkeur audio" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/SettingsActivity.java
+          grep -q "class DisplayText" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/DisplayText.java
+          grep -q "SettingsStore.displayLanguage" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/PlayerActivity.java
+          echo "Nivaro v0.5.5 language overlay verified"
+
+      - name: Export Nivaro v0.5.5 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf Nivaro-v0.5.5-source.tar.gz -C source RA_IPTV_Android_v0.1
 
       - name: Upload Nivaro source
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.5.4-source
-          path: Nivaro-v0.5.4-source.tar.gz
+          name: Nivaro-v0.5.5-source
+          path: Nivaro-v0.5.5-source.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -766,7 +785,7 @@ jobs:
       - name: Upload unsigned release and signing tool
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.5.4-unsigned-release
+          name: Nivaro-v0.5.5-unsigned-release
           path: |
             source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
             /opt/hostedtoolcache/Android_SDK/build-tools/36.0.0/lib/apksigner.jar
@@ -776,7 +795,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-IPTV-Player-v0.5.4-debug-apk
+          name: Nivaro-IPTV-Player-v0.5.5-debug-apk
           path: source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
