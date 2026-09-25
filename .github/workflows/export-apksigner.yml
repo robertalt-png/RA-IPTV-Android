@@ -31,3 +31,5 @@ jobs:
           path: apksigner.jar
           if-no-files-found: error
           retention-days: 30
+
+# Nivaro v0.5.0 signing export
