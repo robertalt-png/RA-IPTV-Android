@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, nivaro-v0.5.0-build-20260924 ]
   workflow_dispatch:
 
 permissions:
