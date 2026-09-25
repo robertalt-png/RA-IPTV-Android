@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, nivaro-v0.5.0-build-20260924, nivaro-v0.5.1-recording-20260925, nivaro-v0.5.2-compact-grid-20260925 ]
+    branches: [ main, nivaro-v0.5.0-build-20260924, nivaro-v0.5.1-recording-20260925, nivaro-v0.5.2-compact-grid-20260925, nivaro-v0.5.3-stability-20260925 ]
   workflow_dispatch:
 
 permissions:
@@ -675,17 +675,35 @@ jobs:
           grep -q "volledig scrollbaar" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
           echo "Nivaro v0.5.2 compact full-library grid verified"
 
-      - name: Export Nivaro v0.5.2 source
+      - name: Apply Nivaro v0.5.3 stability fix
         shell: bash
         run: |
           set -euo pipefail
-          tar -czf Nivaro-v0.5.2-source.tar.gz -C source RA_IPTV_Android_v0.1
+          cat patches/v0.5.3-stability/p00 patches/v0.5.3-stability/p01 > nivaro053.b64
+          test "$(wc -c < nivaro053.b64)" -eq 33012
+          echo "3bb6c9520865f3bae8322f93736fe33f474ef3caea232dea3f0e9befb45831b6  nivaro053.b64" | sha256sum -c -
+          base64 --decode nivaro053.b64 > nivaro053.zip
+          echo "5d81149f5df9fe06677bff532776feaf26e5795ce52bb55109d526bc2ac50271  nivaro053.zip" | sha256sum -c -
+          unzip -t nivaro053.zip
+          unzip -qo nivaro053.zip -d source/RA_IPTV_Android_v0.1
+          grep -q "versionCode 12" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "versionName '0.5.3'" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "loadAllIncremental" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
+          grep -q "waitForLibraryLoad" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
+          grep -q "public void append" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MediaGridAdapter.java
+          echo "Nivaro v0.5.3 stability overlay verified"
+
+      - name: Export Nivaro v0.5.3 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf Nivaro-v0.5.3-source.tar.gz -C source RA_IPTV_Android_v0.1
 
       - name: Upload Nivaro source
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.5.2-source
-          path: Nivaro-v0.5.2-source.tar.gz
+          name: Nivaro-v0.5.3-source
+          path: Nivaro-v0.5.3-source.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -730,7 +748,7 @@ jobs:
       - name: Upload unsigned release and signing tool
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.5.2-unsigned-release
+          name: Nivaro-v0.5.3-unsigned-release
           path: |
             source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
             /opt/hostedtoolcache/Android_SDK/build-tools/36.0.0/lib/apksigner.jar
@@ -740,7 +758,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-IPTV-Player-v0.5.2-debug-apk
+          name: Nivaro-IPTV-Player-v0.5.3-debug-apk
           path: source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
