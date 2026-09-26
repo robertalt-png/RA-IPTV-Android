@@ -133,7 +133,7 @@ rw("app/src/main/java/com/robertalt/raiptv/DisplayText.java",
 
 rw("app/build.gradle","versionCode 22","versionCode 23")
 rw("app/build.gradle","versionName '0.6.3'","versionName '0.6.4'")
-rw("app/src/main/java/com/robertalt/raiptv/SettingsActivity.java","Nivaro IPTV Player 0.6.3\\\\n","Nivaro IPTV Player 0.6.4\\\\n")
+rw("app/src/main/java/com/robertalt/raiptv/SettingsActivity.java",r"Nivaro IPTV Player 0.6.3\n",r"Nivaro IPTV Player 0.6.4\n")
 
 assert "private static final int VERSION=2" in (root/"app/src/main/java/com/robertalt/raiptv/storage/SearchIndexStore.java").read_text()
 assert "lang_scanned=0" in (root/"app/src/main/java/com/robertalt/raiptv/storage/SearchIndexStore.java").read_text()
