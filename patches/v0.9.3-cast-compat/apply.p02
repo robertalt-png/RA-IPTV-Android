@@ -1,0 +1,49 @@
+    void loadCastCandidate(long position,boolean autoplay){
+        if(!hasCastSession())return;ArrayList<String> cc=castCandidates();if(cc.isEmpty())return;if(castCandidateIndex<0||castCandidateIndex>=cc.size())castCandidateIndex=0;String original=cc.get(castCandidateIndex),u=original;castRecovering=false;
+        try{
+            if(castRelayMode){if(castRelay==null)castRelay=new CastRelayServer();u=castRelay.relayUrl(original);}
+            MediaMetadata md=new MediaMetadata(MediaMetadata.MEDIA_TYPE_GENERIC);md.putString(MediaMetadata.KEY_TITLE,DisplayText.title(entry));String sub=DisplayText.meta(entry);if(sub!=null&&!sub.trim().isEmpty())md.putString(MediaMetadata.KEY_SUBTITLE,sub);
+            MediaInfo.Builder ib=new MediaInfo.Builder(u).setStreamType("live".equals(entry.type)?MediaInfo.STREAM_TYPE_LIVE:MediaInfo.STREAM_TYPE_BUFFERED).setContentType(castMime(original)).setMetadata(md);long d=duration();if(!"live".equals(entry.type)&&d>0)ib.setStreamDuration(d);
+            MediaLoadRequestData.Builder rb=new MediaLoadRequestData.Builder().setMediaInfo(ib.build()).setAutoplay(autoplay);if(!"live".equals(entry.type)&&position>0)rb.setCurrentTime(position);
+            status.setText("TV · "+T(castRelayMode?"cast_try_relay":"cast_connecting"));castClient.load(rb.build());
+        }catch(Exception e){tryNextCastCandidate();}
+    }
+    void tryNextCastCandidate(){
+        if(castRecovering||!hasCastSession())return;castRecovering=true;ArrayList<String> cc=castCandidates();castCandidateIndex++;
+        if(castCandidateIndex<cc.size()){status.setText(T(castRelayMode?"cast_try_relay":"cast_try_alt"));ui.postDelayed(()->{castRecovering=false;if(hasCastSession())loadCastCandidate("live".equals(entry.type)?0:Math.max(0,castLocalPosition),true);},550);return;}
+        if(!castRelayMode){castRelayMode=true;castCandidateIndex=0;suspendLocalForRelay();status.setText(T("cast_try_relay"));ui.postDelayed(()->{castRecovering=false;if(hasCastSession())loadCastCandidate("live".equals(entry.type)?0:Math.max(0,castLocalPosition),true);},300);return;}
+        castRecovering=false;castRemoteConfirmed=false;closeCastRelay();updateQueueControls();status.setText(T("cast_failed_local"));Toast.makeText(this,T("cast_failed_local"),Toast.LENGTH_LONG).show();if(castLocalPausedForRemote)resumeLocalAfterCastFailure();
+    }
+    void suspendLocalForRelay(){if(castLocalPausedForRemote)return;castLocalPausedForRemote=true;castLocalPosition=currentLocalPosition();try{releasePlayers();}catch(Exception ignored){}}
+    void resumeLocalAfterCastFailure(){castLocalPausedForRemote=false;wantPlaying=castLocalWasPlaying;pendingResumeMs="live".equals(entry.type)?0:Math.max(0,castLocalPosition);try{if(castLocalWasVlc){if(vlc!=null&&castLocalWasPlaying)vlc.play();else startVlc();}else{if(exo!=null&&castLocalWasPlaying)exo.play();else startMedia3();}}catch(Exception ignored){}updatePlayIcon();}
+    void closeCastRelay(){if(castRelay!=null){try{castRelay.close();}catch(Exception ignored){}castRelay=null;}}
+'''
+if old not in s: raise SystemExit('missing cast mime/load block')
+s=s.replace(old,new)
+
+# Remote channel/episode changes should use the connected session even during reconnect/fallback.
+s=s.replace('boolean remote=isCasting();if(!remote)releasePlayers();prepareEntry(next);','boolean remote=hasCastSession();if(!remote)releasePlayers();prepareEntry(next);',2)
+s=s.replace('if(remote){castCandidateIndex=0;loadCastCandidate(0,true);}','if(remote){castRemoteConfirmed=false;castRelayMode=false;closeCastRelay();castCandidateIndex=0;loadCastCandidate(0,true);}',1)
+s=s.replace('if(remote){castCandidateIndex=0;loadCastCandidate(library.progress(next),true);}','if(remote){castRemoteConfirmed=false;castRelayMode=false;closeCastRelay();castCandidateIndex=0;loadCastCandidate(library.progress(next),true);}',1)
+
+s=s.replace('record.setVisibility("live".equals(entry.type)&&!casting?View.VISIBLE:View.GONE);','record.setVisibility("live".equals(entry.type)&&!isCasting()?View.VISIBLE:View.GONE);')
+s=s.replace('speed.setEnabled(!casting);aspect.setEnabled(!casting);audio.setEnabled(!casting);subtitle.setEnabled(!casting);','speed.setEnabled(!isCasting());aspect.setEnabled(!isCasting());audio.setEnabled(!isCasting());subtitle.setEnabled(!isCasting());')
+
+# Clean relay on final activity destruction.
+old='''    @Override protected void onDestroy(){destroyed=true;ui.removeCallbacksAndMessages(null);saveProgress();try{if(castClient!=null)castClient.unregisterCallback(castMediaCallback);}catch(Exception ignored){}if(vlc!=null&&(recording||recordingStarting))try{vlc.record(null);}catch(Exception ignored){}releasePlayers();exec.shutdownNow();super.onDestroy();}
+'''
+new='''    @Override protected void onDestroy(){destroyed=true;ui.removeCallbacksAndMessages(null);saveProgress();try{if(castClient!=null)castClient.unregisterCallback(castMediaCallback);}catch(Exception ignored){}closeCastRelay();if(vlc!=null&&(recording||recordingStarting))try{vlc.record(null);}catch(Exception ignored){}releasePlayers();exec.shutdownNow();super.onDestroy();}
+'''
+if old not in s: raise SystemExit('missing onDestroy player')
+s=s.replace(old,new)
+p.write_text(s)
+
+# Copy compatibility relay and bundled custom-receiver template.
+relay_src=Path(__file__).resolve().parent/'CastRelayServer.java'
+relay_dst=r/'app/src/main/java/com/robertalt/raiptv/cast/CastRelayServer.java';relay_dst.parent.mkdir(parents=True,exist_ok=True);relay_dst.write_text(relay_src.read_text())
+assets=r/'app/src/main/assets/nivaro-cast-receiver';assets.mkdir(parents=True,exist_ok=True)
+(assets/'index.html').write_text('''<!doctype html><html><head><meta charset="utf-8"><title>Nivaro Cast</title><script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script><style>html,body{margin:0;background:#05070b;color:white;font-family:sans-serif;height:100%}#brand{position:absolute;left:5vw;bottom:6vh;font-size:4vw;font-weight:600;opacity:.9}</style></head><body><cast-media-player></cast-media-player><div id="brand">Nivaro</div><script src="receiver.js"></script></body></html>''')
+(assets/'receiver.js').write_text('''const context=cast.framework.CastReceiverContext.getInstance();context.start();''')
+(assets/'README.txt').write_text('''Nivaro Custom Cast Receiver template. Register and host index.html + receiver.js in the Google Cast SDK Developer Console, then build the Android app with Gradle property NIVARO_CAST_RECEIVER_ID=<registered app id>. Until then Nivaro uses the Default Media Receiver plus the LAN compatibility relay fallback. The relay does not transcode unsupported codecs.''')
+
+print('v0.9.3 Cast compatibility patch applied')
