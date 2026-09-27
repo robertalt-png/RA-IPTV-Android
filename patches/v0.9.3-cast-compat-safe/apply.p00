@@ -18,7 +18,7 @@ R(Path('app/src/main/java/com/robertalt/raiptv/SettingsActivity.java'),'Nivaro I
 
 p=r/'app/build.gradle';s=p.read_text()
 if 'nivaroCastReceiverId' not in s:s=s.replace('android {',"def nivaroCastReceiverId = project.findProperty('NIVARO_CAST_RECEIVER_ID') ?: System.getenv('NIVARO_CAST_RECEIVER_ID') ?: ''\n\nandroid {")
-if 'NIVARO_CAST_RECEIVER_ID' not in s:
+if "buildConfigField 'String', 'NIVARO_CAST_RECEIVER_ID'" not in s:
     s=s.replace("versionName '0.9.3'", """versionName '0.9.3'
         buildConfigField 'String', 'NIVARO_CAST_RECEIVER_ID', '"' + nivaroCastReceiverId + '"'
 """.rstrip())
