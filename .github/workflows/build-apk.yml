@@ -1036,9 +1036,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat patches/v0.9.3-cast-compat/apply.p00 patches/v0.9.3-cast-compat/apply.p01 patches/v0.9.3-cast-compat/apply.p02 > patches/v0.9.3-cast-compat/apply.py
-          cat patches/v0.9.3-cast-compat/CastRelayServer.p00 patches/v0.9.3-cast-compat/CastRelayServer.p01 > patches/v0.9.3-cast-compat/CastRelayServer.java
-          python3 patches/v0.9.3-cast-compat/apply.py
+          cat patches/v0.9.3-cast-compat-safe/apply.p00 patches/v0.9.3-cast-compat-safe/apply.p01 > patches/v0.9.3-cast-compat-safe/apply.py
+          cat patches/v0.9.3-cast-compat/CastRelayServer.p00 patches/v0.9.3-cast-compat/CastRelayServer.p01 > patches/v0.9.3-cast-compat-safe/CastRelayServer.java
+          python3 patches/v0.9.3-cast-compat-safe/apply.py
           grep -q "versionCode 35" source/RA_IPTV_Android_v0.1/app/build.gradle
           grep -q "versionName '0.9.3'" source/RA_IPTV_Android_v0.1/app/build.gradle
           grep -q "CastRelayServer" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/PlayerActivity.java
