@@ -8,7 +8,7 @@ def R(path,old,new,label=''):
     p.write_text(s.replace(old,new))
 
 def sub(path,pattern,repl,label):
-    p=r/path;s=p.read_text();ns,n=re.subn(pattern,repl,s,flags=re.S)
+    p=r/path;s=p.read_text();ns,n=re.subn(pattern,lambda _m: repl,s,flags=re.S)
     if n!=1: raise SystemExit(f'{label}: expected 1 replacement got {n}')
     p.write_text(ns)
 
