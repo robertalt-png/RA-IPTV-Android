@@ -1,0 +1,71 @@
+old='''    void showCastChooser(){
+        try{
+            if(castContext==null)castContext=CastContext.getSharedInstance(this);
+            MediaRouteSelector selector=new MediaRouteSelector.Builder().addControlCategory(CastMediaControlIntent.categoryForCast(CastMediaControlIntent.DEFAULT_MEDIA_RECEIVER_APPLICATION_ID)).build();
+            MediaRouteChooserDialog dialog=new MediaRouteChooserDialog(this);
+            dialog.setRouteSelector(selector);dialog.show();
+        }catch(Throwable e){Toast.makeText(this,T("cast_failed"),Toast.LENGTH_SHORT).show();}
+    }
+    boolean isCasting(){return casting&&castClient!=null&&castSession!=null&&castSession.isConnected();}
+    void connectCastSession(CastSession session,boolean resumed){
+        if(session==null)return;castSession=session;castClient=session.getRemoteMediaClient();if(castClient==null)return;try{castClient.registerCallback(castMediaCallback);}catch(Exception ignored){}
+        castLocalPosition=currentLocalPosition();castLocalWasPlaying=isLocalPlaying();castLocalWasVlc=usingVlc;casting=true;updateQueueControls();
+        try{if(usingVlc&&vlc!=null)vlc.pause();else if(exo!=null)exo.pause();}catch(Exception ignored){}
+        if(resumed&&castClient.hasMediaSession()){status.setText("TV · "+T("cast_playing"));updatePlayIcon();return;}
+        castCandidateIndex=Math.max(0,Math.min(index,Math.max(0,candidates.size()-1)));loadCastCandidate(castLocalPosition,castLocalWasPlaying);
+    }
+    void disconnectCastSession(boolean resumeLocal){
+        long pos=0;boolean wasPlaying=false;try{if(castClient!=null){pos=castClient.getApproximateStreamPosition();wasPlaying=castClient.isPlaying();castClient.unregisterCallback(castMediaCallback);}}catch(Exception ignored){}
+        casting=false;castRecovering=false;castClient=null;castSession=null;updateQueueControls();
+        if(resumeLocal&&!destroyed&&entry!=null){pendingResumeMs="live".equals(entry.type)?0:(pos>0?pos:castLocalPosition);wantPlaying=wasPlaying||castLocalWasPlaying;status.setText(T("cast_disconnected"));if(castLocalWasVlc)startVlc();else startMedia3();}
+    }
+'''
+new='''    void showCastChooser(){
+        try{
+            if(castContext==null)castContext=CastContext.getSharedInstance(this);
+            CastSession current=castContext.getSessionManager().getCurrentCastSession();
+            if(current!=null&&current.isConnected()){connectCastSession(current,false);return;}
+            MediaRouteSelector selector=new MediaRouteSelector.Builder().addControlCategory(CastMediaControlIntent.categoryForCast(NivaroCastOptionsProvider.receiverApplicationId())).build();
+            MediaRouteChooserDialog dialog=new MediaRouteChooserDialog(this);dialog.setRouteSelector(selector);dialog.show();
+        }catch(Throwable e){Toast.makeText(this,T("cast_failed"),Toast.LENGTH_SHORT).show();}
+    }
+    boolean hasCastSession(){return casting&&castClient!=null&&castSession!=null&&castSession.isConnected();}
+    boolean isCasting(){return hasCastSession()&&castRemoteConfirmed;}
+    void connectCastSession(CastSession session,boolean resumed){
+        if(session==null)return;castSession=session;castClient=session.getRemoteMediaClient();if(castClient==null)return;try{castClient.registerCallback(castMediaCallback);}catch(Exception ignored){}
+        castLocalPosition=currentLocalPosition();castLocalWasPlaying=isLocalPlaying();castLocalWasVlc=usingVlc;casting=true;castRemoteConfirmed=false;castLocalPausedForRemote=false;castRelayMode=false;closeCastRelay();updateQueueControls();
+        if(resumed&&castClient.hasMediaSession()&&castClient.isPlaying()){confirmRemotePlayback();status.setText("TV · "+T("cast_playing"));updatePlayIcon();return;}
+        castCandidateIndex=0;loadCastCandidate(castLocalPosition,castLocalWasPlaying);
+    }
+    void confirmRemotePlayback(){
+        if(castRemoteConfirmed)return;castRemoteConfirmed=true;castLocalPausedForRemote=true;
+        try{releasePlayers();}catch(Exception ignored){}
+        updateQueueControls();updatePlayIcon();
+    }
+    void disconnectCastSession(boolean resumeLocal){
+        long pos=0;boolean wasPlaying=false;try{if(castClient!=null){pos=castClient.getApproximateStreamPosition();wasPlaying=castClient.isPlaying();castClient.unregisterCallback(castMediaCallback);}}catch(Exception ignored){}
+        boolean hadRemote=castRemoteConfirmed;casting=false;castRemoteConfirmed=false;castRecovering=false;castRelayMode=false;castClient=null;castSession=null;closeCastRelay();updateQueueControls();
+        if(resumeLocal&&hadRemote&&!destroyed&&entry!=null){pendingResumeMs="live".equals(entry.type)?0:(pos>0?pos:castLocalPosition);wantPlaying=wasPlaying||castLocalWasPlaying;status.setText(T("cast_disconnected"));if(castLocalWasVlc)startVlc();else startMedia3();}
+    }
+'''
+if old not in s: raise SystemExit('missing cast chooser/session block')
+s=s.replace(old,new)
+
+old='''    String castMime(String u){String x=u==null?"":u.toLowerCase(Locale.ROOT);if(x.contains(".m3u8"))return "application/x-mpegURL";if(x.contains(".mpd"))return "application/dash+xml";if(x.matches(".*\\.(?:mp4|m4v)(?:[?&#].*)?$"))return "video/mp4";if(x.matches(".*\\.(?:ts|mts|m2ts)(?:[?&#].*)?$"))return "video/mp2t";if(x.matches(".*\\.mkv(?:[?&#].*)?$"))return "video/x-matroska";return "application/x-mpegURL";}
+    void loadCastCandidate(long position,boolean autoplay){
+        if(!isCasting()||candidates.isEmpty())return;if(castCandidateIndex<0||castCandidateIndex>=candidates.size())castCandidateIndex=0;String u=candidates.get(castCandidateIndex);castRecovering=false;
+        try{MediaMetadata md=new MediaMetadata(MediaMetadata.MEDIA_TYPE_GENERIC);md.putString(MediaMetadata.KEY_TITLE,DisplayText.title(entry));String sub=DisplayText.meta(entry);if(sub!=null&&!sub.trim().isEmpty())md.putString(MediaMetadata.KEY_SUBTITLE,sub);MediaInfo.Builder ib=new MediaInfo.Builder(u).setStreamType("live".equals(entry.type)?MediaInfo.STREAM_TYPE_LIVE:MediaInfo.STREAM_TYPE_BUFFERED).setContentType(castMime(u)).setMetadata(md);long d=duration();if(!"live".equals(entry.type)&&d>0)ib.setStreamDuration(d);MediaLoadRequestData.Builder rb=new MediaLoadRequestData.Builder().setMediaInfo(ib.build()).setAutoplay(autoplay);if(!"live".equals(entry.type)&&position>0)rb.setCurrentTime(position);status.setText("TV · "+T("cast_connecting"));castClient.load(rb.build());}catch(Exception e){tryNextCastCandidate();}
+    }
+    void tryNextCastCandidate(){if(castRecovering||!isCasting())return;castRecovering=true;castCandidateIndex++;if(castCandidateIndex<candidates.size()){status.setText(T("cast_try_alt"));ui.postDelayed(()->{castRecovering=false;if(isCasting())loadCastCandidate("live".equals(entry.type)?0:Math.max(0,currentPosition()),true);},700);}else{castRecovering=false;status.setText(T("cast_failed"));}}
+'''
+new='''    String castMime(String u){String x=u==null?"":u.toLowerCase(Locale.ROOT);if(x.contains(".m3u8"))return "application/vnd.apple.mpegurl";if(x.contains(".mpd"))return "application/dash+xml";if(x.matches(".*\\\\.(?:mp4|m4v)(?:[?&#].*)?$"))return "video/mp4";if(x.matches(".*\\\\.(?:ts|mts|m2ts)(?:[?&#].*)?$"))return "video/mp2t";if(x.matches(".*\\\\.mkv(?:[?&#].*)?$"))return "video/x-matroska";return "application/octet-stream";}
+    ArrayList<String> castCandidates(){
+        LinkedHashSet<String> urls=new LinkedHashSet<>();addCastUrls(urls,entry);
+        if(entry!=null&&"live".equals(entry.type)){ArrayList<MediaEntry>alts=new ArrayList<>();for(MediaEntry z:liveQueue)if(z!=null&&z!=entry&&sameCastChannel(entry,z))alts.add(z);alts.sort((a,b)->Integer.compare(castVariantRank(a),castVariantRank(b)));for(MediaEntry z:alts)addCastUrls(urls,z);}
+        return new ArrayList<>(urls);
+    }
+    void addCastUrls(LinkedHashSet<String> out,MediaEntry e){if(e==null)return;ArrayList<String>x=new ArrayList<>(e.candidates);if(x.isEmpty()&&e.url!=null&&!e.url.isEmpty())x.add(e.url);x.sort((a,b)->Integer.compare(castPreference(a),castPreference(b)));out.addAll(x);}
+    boolean sameCastChannel(MediaEntry a,MediaEntry b){String x=castChannelKey(a),y=castChannelKey(b);return !x.isEmpty()&&x.equals(y);}
+    String castChannelKey(MediaEntry e){String x=e==null||e.name==null?"":e.name.toLowerCase(Locale.ROOT);return x.replaceAll("\\\\b(?:4k|uhd|fhd|full ?hd|hd|sd|hevc|h265|h264)\\\\b"," ").replaceAll("[^a-z0-9]+"," ").trim();}
+    int castVariantRank(MediaEntry e){String x=((e==null?"":e.name)+" "+(e==null?"":e.group)).toLowerCase(Locale.ROOT);if(x.matches(".*\\\\bhd\\\\b.*")&&!x.contains("fhd"))return 0;if(x.contains("fhd")||x.contains("full hd"))return 1;if(x.matches(".*\\\\bsd\\\\b.*"))return 2;if(x.contains("4k")||x.contains("uhd"))return 4;return 3;}
+    int castPreference(String u){String x=u==null?"":u.toLowerCase(Locale.ROOT);if(x.contains(".m3u8"))return 0;if(x.contains(".mp4")||x.contains(".m4v"))return 1;if(x.contains(".ts")||x.contains(".m2ts"))return 2;if(x.contains(".mkv"))return 4;return 3;}
