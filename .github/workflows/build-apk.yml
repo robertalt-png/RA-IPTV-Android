@@ -991,6 +991,15 @@ jobs:
           gzip -dc nivaro090.py.gz > nivaro090.py
           echo "7adab4c6c4f6d4af8d13eb92cdf04b5632ae883018dd9bb5a12742d65f23ea23  nivaro090.py" | sha256sum -c -
           python3 nivaro090.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/PlayerActivity.java")
+          x=p.read_text()
+          x=x.replace('x.matches(".*\\.(?:mp4|m4v)(?:[?&#].*)?$")','x.matches(".*\\\\.(?:mp4|m4v)(?:[?&#].*)?$")')
+          x=x.replace('x.matches(".*\\.(?:ts|mts|m2ts)(?:[?&#].*)?$")','x.matches(".*\\\\.(?:ts|mts|m2ts)(?:[?&#].*)?$")')
+          x=x.replace('x.matches(".*\\.mkv(?:[?&#].*)?$")','x.matches(".*\\\\.mkv(?:[?&#].*)?$")')
+          p.write_text(x)
+          PY
           grep -q "versionCode 32" source/RA_IPTV_Android_v0.1/app/build.gradle
           grep -q "versionName '0.9.0'" source/RA_IPTV_Android_v0.1/app/build.gradle
           grep -q "play-services-cast-framework" source/RA_IPTV_Android_v0.1/app/build.gradle
