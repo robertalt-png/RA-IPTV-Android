@@ -3,7 +3,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, nivaro-v0.5.0-build-20260924, nivaro-v0.5.1-recording-20260925, nivaro-v0.5.2-compact-grid-20260925, nivaro-v0.5.3-stability-20260925, nivaro-v0.5.4-anr-fix-20260925, nivaro-v0.5.5-language-20260925, nivaro-v0.5.6-language-memory-20260925, nivaro-v0.5.7-rotation-state-20260925, nivaro-v0.5.8-cache-hero-20260925, nivaro-v0.5.9-db-paging-20260925, nivaro-v0.6.0-vertical-grid-20260925, nivaro-v0.6.1-localization-20260925, nivaro-v0.6.2-language-priority-20260925, nivaro-v0.6.3-priority-consistency-20260925, nivaro-v0.6.4-db-language-priority-20260926, nivaro-v0.6.5, nivaro-v0.6.6, nivaro-v0.7.0, nivaro-v0.7.2, nivaro-v0.8.0, nivaro-v0.8.1, nivaro-v0.8.2, nivaro-v0.9.0, nivaro-v0.9.1, nivaro-v0.9.2, nivaro-v0.9.3, nivaro-v0.9.4 ]
+    branches: [ main, nivaro-v0.5.0-build-20260924, nivaro-v0.5.1-recording-20260925, nivaro-v0.5.2-compact-grid-20260925, nivaro-v0.5.3-stability-20260925, nivaro-v0.5.4-anr-fix-20260925, nivaro-v0.5.5-language-20260925, nivaro-v0.5.6-language-memory-20260925, nivaro-v0.5.7-rotation-state-20260925, nivaro-v0.5.8-cache-hero-20260925, nivaro-v0.5.9-db-paging-20260925, nivaro-v0.6.0-vertical-grid-20260925, nivaro-v0.6.1-localization-20260925, nivaro-v0.6.2-language-priority-20260925, nivaro-v0.6.3-priority-consistency-20260925, nivaro-v0.6.4-db-language-priority-20260926, nivaro-v0.6.5, nivaro-v0.6.6, nivaro-v0.7.0, nivaro-v0.7.2, nivaro-v0.8.0, nivaro-v0.8.1, nivaro-v0.8.2, nivaro-v0.9.0, nivaro-v0.9.1, nivaro-v0.9.2, nivaro-v0.9.3, nivaro-v0.9.4, nivaro-v0.9.5 ]
   workflow_dispatch:
 
 permissions:
@@ -1119,17 +1119,159 @@ jobs:
           grep -q "ACTION_CAST_SETTINGS" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
           echo "Nivaro v0.9.4 TV/share controls verified"
 
-      - name: Export Nivaro v0.9.4 source
+      - name: Apply Nivaro v0.9.5 branding and splash
         shell: bash
         run: |
           set -euo pipefail
-          tar -czf Nivaro-v0.9.4-source.tar.gz -C source RA_IPTV_Android_v0.1
+          python3 - <<'PY'
+          from pathlib import Path
+          r=Path("source/RA_IPTV_Android_v0.1")
+          def rep(path,old,new):
+              p=r/path; t=p.read_text()
+              if old not in t: raise SystemExit("missing "+str(path))
+              p.write_text(t.replace(old,new))
+          rep(Path("app/build.gradle"),"versionCode 36","versionCode 37")
+          rep(Path("app/build.gradle"),"versionName '0.9.4'","versionName '0.9.5'")
+          rep(Path("app/src/main/java/com/robertalt/raiptv/SettingsActivity.java"),"Nivaro IPTV Player 0.9.4","Nivaro IPTV Player 0.9.5")
+
+          # Brand mark used inside the app (transparent background)
+          mark=r/"app/src/main/res/drawable/ic_nivaro_mark.xml"
+          mark.write_text('''<?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#FFD400"
+                  android:pathData="M20,86 L20,22 L38,22 L73,64 L73,22 L88,22 L88,86 L72,86 L37,44 L37,86 Z"/>
+              <path android:fillColor="#FFB800"
+                  android:pathData="M37,44 L72,86 L88,86 L88,72 L53,30 Z"/>
+              <path android:fillColor="#FFD400"
+                  android:pathData="M73,22 L97,36 L73,50 Z"/>
+          </vector>''')
+
+          # Splash screen
+          layout=r/"app/src/main/res/layout/activity_splash.xml"
+          layout.write_text('''<?xml version="1.0" encoding="utf-8"?>
+          <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:background="#07090D">
+              <LinearLayout
+                  android:layout_width="match_parent"
+                  android:layout_height="match_parent"
+                  android:orientation="vertical"
+                  android:gravity="center"
+                  android:padding="32dp">
+                  <ImageView
+                      android:layout_width="150dp"
+                      android:layout_height="150dp"
+                      android:src="@drawable/ic_nivaro_mark"
+                      android:contentDescription="Nivaro"/>
+                  <TextView
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="14dp"
+                      android:text="NIVARO"
+                      android:textColor="#FFD400"
+                      android:textSize="34sp"
+                      android:textStyle="bold"
+                      android:letterSpacing="0.12"/>
+                  <TextView
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="7dp"
+                      android:text="IPTV PLAYER"
+                      android:textColor="#A7AFBC"
+                      android:textSize="12sp"
+                      android:letterSpacing="0.18"/>
+                  <ProgressBar
+                      android:layout_width="28dp"
+                      android:layout_height="28dp"
+                      android:layout_marginTop="28dp"
+                      android:indeterminateTint="#FFD400"/>
+              </LinearLayout>
+          </FrameLayout>''')
+
+          splash=r/"app/src/main/java/com/robertalt/raiptv/SplashActivity.java"
+          splash.write_text('''package com.robertalt.raiptv;
+          import android.app.Activity;
+          import android.content.Intent;
+          import android.os.Bundle;
+          import android.os.Handler;
+          import android.os.Looper;
+          public class SplashActivity extends Activity {
+              @Override public void onCreate(Bundle b){
+                  super.onCreate(b);
+                  setContentView(R.layout.activity_splash);
+                  new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                      startActivity(new Intent(this, MainActivity.class));
+                      finish();
+                  }, 1100);
+              }
+          }''')
+
+          # Add visible logo to app header while retaining existing title TextView id
+          p=r/"app/src/main/res/layout/activity_main.xml"; t=p.read_text()
+          old='''    <TextView android:id="@+id/title" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="NIVARO" android:textColor="@color/text" android:textSize="22sp" android:letterSpacing="0.08"/>'''
+          new='''    <LinearLayout android:layout_width="0dp" android:layout_height="44dp" android:layout_weight="1" android:gravity="center_vertical" android:orientation="horizontal">
+      <ImageView android:layout_width="38dp" android:layout_height="38dp" android:src="@drawable/ic_nivaro_mark" android:contentDescription="Nivaro"/>
+      <TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="7dp" android:text="NIVARO" android:textColor="#FFD400" android:textSize="21sp" android:textStyle="bold" android:letterSpacing="0.08"/>
+    </LinearLayout>'''
+          if old not in t: raise SystemExit("header title marker missing")
+          p.write_text(t.replace(old,new))
+
+          # Make the header title retain the yellow wordmark styling after language refresh
+          p=r/"app/src/main/java/com/robertalt/raiptv/MainActivity.java"; t=p.read_text()
+          old='title.setText("NIVARO");title.setTextSize(22);title.setLetterSpacing(0.08f);title.setTypeface(null,Typeface.NORMAL);'
+          new='title.setText("NIVARO");title.setTextSize(21);title.setLetterSpacing(0.08f);title.setTextColor(0xFFFFD400);title.setTypeface(null,Typeface.BOLD);'
+          if old not in t: raise SystemExit("title styling marker missing")
+          p.write_text(t.replace(old,new))
+
+          # Launcher now opens splash; Main remains an internal activity
+          p=r/"app/src/main/AndroidManifest.xml"; t=p.read_text()
+          old='''        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>'''
+          new='''        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
+            android:exported="false" />
+        <activity
+            android:name=".SplashActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>'''
+          if old not in t: raise SystemExit("manifest launcher marker missing")
+          p.write_text(t.replace(old,new))
+          print("v0.9.5 branding/splash patch applied")
+          PY
+          grep -q "versionCode 37" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "versionName '0.9.5'" source/RA_IPTV_Android_v0.1/app/build.gradle
+          test -f source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/SplashActivity.java
+          test -f source/RA_IPTV_Android_v0.1/app/src/main/res/drawable/ic_nivaro_mark.xml
+          grep -q "SplashActivity" source/RA_IPTV_Android_v0.1/app/src/main/AndroidManifest.xml
+          echo "Nivaro v0.9.5 branding verified"
+
+      - name: Export Nivaro v0.9.5 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf Nivaro-v0.9.5-source.tar.gz -C source RA_IPTV_Android_v0.1
 
       - name: Upload Nivaro source
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.9.4-source
-          path: Nivaro-v0.9.4-source.tar.gz
+          name: Nivaro-v0.9.5-source
+          path: Nivaro-v0.9.5-source.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -1181,7 +1323,7 @@ jobs:
       - name: Upload unsigned release and signing tool
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.9.4-unsigned-release
+          name: Nivaro-v0.9.5-unsigned-release
           path: |
             source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
             apksigner.jar
@@ -1191,7 +1333,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-IPTV-Player-v0.9.4-debug-apk
+          name: Nivaro-IPTV-Player-v0.9.5-debug-apk
           path: source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
