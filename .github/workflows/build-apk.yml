@@ -938,13 +938,20 @@ jobs:
           sha256sum source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
           test -f "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar"
 
+      - name: Stage signing tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" ./apksigner.jar
+          test -s ./apksigner.jar
+
       - name: Upload unsigned release and signing tool
         uses: actions/upload-artifact@v4
         with:
           name: Nivaro-v0.7.0-unsigned-release
           path: |
             source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
-            /opt/hostedtoolcache/Android_SDK/build-tools/36.0.0/lib/apksigner.jar
+            apksigner.jar
           if-no-files-found: error
           retention-days: 30
 
