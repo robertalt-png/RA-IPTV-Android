@@ -1,0 +1,102 @@
+from pathlib import Path
+r=Path('source/RA_IPTV_Android_v0.1')
+
+def R(path,old,new,label=''):
+    p=r/path;s=p.read_text()
+    if old not in s: raise SystemExit('missing '+(label or str(path)))
+    p.write_text(s.replace(old,new))
+
+R(Path('app/build.gradle'),'versionCode 34','versionCode 35')
+R(Path('app/build.gradle'),"versionName '0.9.2'","versionName '0.9.3'")
+R(Path('app/src/main/java/com/robertalt/raiptv/SettingsActivity.java'),'Nivaro IPTV Player 0.9.2','Nivaro IPTV Player 0.9.3')
+
+# Custom Cast Receiver id is injected at build time once a Google Cast receiver is registered.
+p=r/'app/build.gradle';s=p.read_text()
+old='''android {
+    namespace 'com.robertalt.raiptv'
+    compileSdk 36
+'''
+new='''def nivaroCastReceiverId = project.findProperty('NIVARO_CAST_RECEIVER_ID') ?: System.getenv('NIVARO_CAST_RECEIVER_ID') ?: ''
+
+android {
+    namespace 'com.robertalt.raiptv'
+    compileSdk 36
+'''
+if old not in s: raise SystemExit('missing gradle android head')
+s=s.replace(old,new)
+old="""        versionName '0.9.3'
+    }
+"""
+new="""        versionName '0.9.3'
+        buildConfigField 'String', 'NIVARO_CAST_RECEIVER_ID', '\"' + nivaroCastReceiverId + '\"'
+    }
+"""
+if old not in s: raise SystemExit('missing default config tail')
+p.write_text(s.replace(old,new))
+
+p=r/'app/src/main/java/com/robertalt/raiptv/NivaroCastOptionsProvider.java';s=p.read_text()
+s=s.replace('''public final class NivaroCastOptionsProvider implements OptionsProvider {
+    @Override public CastOptions getCastOptions(Context context){
+        return new CastOptions.Builder()
+            .setReceiverApplicationId(CastMediaControlIntent.DEFAULT_MEDIA_RECEIVER_APPLICATION_ID)
+''','''public final class NivaroCastOptionsProvider implements OptionsProvider {
+    public static String receiverApplicationId(){String id=BuildConfig.NIVARO_CAST_RECEIVER_ID;return id==null||id.trim().isEmpty()?CastMediaControlIntent.DEFAULT_MEDIA_RECEIVER_APPLICATION_ID:id.trim();}
+    @Override public CastOptions getCastOptions(Context context){
+        return new CastOptions.Builder()
+            .setReceiverApplicationId(receiverApplicationId())
+''')
+p.write_text(s)
+
+# Ui strings (other languages fall back to English automatically).
+p=r/'app/src/main/java/com/robertalt/raiptv/UiText.java';s=p.read_text()
+s=s.replace('''        {"cast_try_alt","TV rejected stream · trying another version…"},
+        {"cast_tracks_tv","Audio and subtitle tracks are controlled by the TV while casting"},
+''','''        {"cast_try_alt","TV rejected stream · trying another version…"},
+        {"cast_try_relay","Direct TV playback failed · trying Nivaro compatibility mode…"},
+        {"cast_relay_playing","Playing on TV via Nivaro compatibility mode"},
+        {"cast_failed_local","TV could not play this stream · continuing on phone"},
+        {"cast_tracks_tv","Audio and subtitle tracks are controlled by the TV while casting"},
+''',1)
+s=s.replace('''        {"cast_try_alt","Tv weigert stream · andere versie proberen…"},
+        {"cast_tracks_tv","Audio en ondertiteling regel je tijdens casten via de tv"},
+''','''        {"cast_try_alt","Tv weigert stream · andere versie proberen…"},
+        {"cast_try_relay","Direct afspelen mislukt · Nivaro-compatibiliteitsmodus proberen…"},
+        {"cast_relay_playing","Afspelen op tv via Nivaro-compatibiliteitsmodus"},
+        {"cast_failed_local","Tv kon deze stream niet afspelen · verder op telefoon"},
+        {"cast_tracks_tv","Audio en ondertiteling regel je tijdens casten via de tv"},
+''',1)
+p.write_text(s)
+
+p=r/'app/src/main/java/com/robertalt/raiptv/PlayerActivity.java';s=p.read_text()
+s=s.replace('import com.robertalt.raiptv.storage.PlaybackQueueStore;','import com.robertalt.raiptv.storage.PlaybackQueueStore;\nimport com.robertalt.raiptv.cast.CastRelayServer;')
+s=s.replace('''    CastContext castContext; CastSession castSession; RemoteMediaClient castClient;
+    boolean casting=false,castRecovering=false,castLocalWasVlc=false,castLocalWasPlaying=false;
+    int castCandidateIndex=0; long castLocalPosition=0L;
+''','''    CastContext castContext; CastSession castSession; RemoteMediaClient castClient;
+    CastRelayServer castRelay;
+    boolean casting=false,castRemoteConfirmed=false,castRecovering=false,castRelayMode=false,castLocalPausedForRemote=false,castLocalWasVlc=false,castLocalWasPlaying=false;
+    int castCandidateIndex=0; long castLocalPosition=0L;
+''')
+
+old='''    final RemoteMediaClient.Callback castMediaCallback=new RemoteMediaClient.Callback(){
+        @Override public void onStatusUpdated(){
+            if(!casting||castClient==null)return;updatePlayIcon();
+            try{MediaStatus ms=castClient.getMediaStatus();if(ms==null)return;if(ms.getPlayerState()==MediaStatus.PLAYER_STATE_IDLE&&ms.getIdleReason()==MediaStatus.IDLE_REASON_ERROR){tryNextCastCandidate();return;}if(ms.getPlayerState()==MediaStatus.PLAYER_STATE_IDLE&&ms.getIdleReason()==MediaStatus.IDLE_REASON_FINISHED)onMediaEnded();else if(castClient.isPlaying())status.setText("TV · "+T("cast_playing"));}catch(Exception ignored){}
+        }
+    };
+'''
+new='''    final RemoteMediaClient.Callback castMediaCallback=new RemoteMediaClient.Callback(){
+        @Override public void onStatusUpdated(){
+            if(!hasCastSession()||castClient==null)return;
+            try{
+                MediaStatus ms=castClient.getMediaStatus();if(ms==null)return;
+                if(ms.getPlayerState()==MediaStatus.PLAYER_STATE_IDLE&&ms.getIdleReason()==MediaStatus.IDLE_REASON_ERROR){tryNextCastCandidate();return;}
+                if(ms.getPlayerState()==MediaStatus.PLAYER_STATE_IDLE&&ms.getIdleReason()==MediaStatus.IDLE_REASON_FINISHED){if(castRemoteConfirmed)onMediaEnded();return;}
+                if(ms.getPlayerState()==MediaStatus.PLAYER_STATE_PLAYING){confirmRemotePlayback();status.setText("TV · "+T(castRelayMode?"cast_relay_playing":"cast_playing"));}
+                updatePlayIcon();
+            }catch(Exception ignored){}
+        }
+    };
+'''
+if old not in s: raise SystemExit('missing cast callback')
+s=s.replace(old,new)
