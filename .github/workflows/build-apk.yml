@@ -936,6 +936,14 @@ jobs:
           x=p.read_text()
           x=x.replace("MediaEntry first=page.get(0);if(selectedHero==null||selectedHero.uniqueKey().equals(indexAutoHeroKey)){previewAuto(first);indexAutoHeroKey=first.uniqueKey();}",
                       "MediaEntry first=shown.get(0);if(selectedHero==null||selectedHero.uniqueKey().equals(indexAutoHeroKey)){previewAuto(first);indexAutoHeroKey=first.uniqueKey();}")
+          x=x.replace("searchIndex.languagePage(key,type,0,Math.min(CACHE_PAGE_SIZE,Math.max(1,n)),sort)",
+                      "searchIndex.languagePage(key,type,SettingsStore.primaryLanguage(this),0,Math.min(CACHE_PAGE_SIZE,Math.max(1,n)),sort)")
+          p.write_text(x)
+          p=Path("app/src/main/java/com/robertalt/raiptv/SettingsActivity.java")
+          x=p.read_text().replace("SettingsStore.setPrimaryLanguage(this,next);recreate();","SettingsStore.setPrimaryLanguage(SettingsActivity.this,next);recreate();")
+          p.write_text(x)
+          p=Path("app/src/main/java/com/robertalt/raiptv/ProfileActivity.java")
+          x=p.read_text().replace("SettingsStore.primaryLanguage(this)","com.robertalt.raiptv.storage.SettingsStore.primaryLanguage(this)")
           p.write_text(x)
           PY
           grep -q "versionCode 29" app/build.gradle
