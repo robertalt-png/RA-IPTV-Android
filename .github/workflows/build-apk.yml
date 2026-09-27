@@ -1050,7 +1050,68 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 patches/v0.9.4-tv-share/apply.py
+          python3 - <<'PY'
+          from pathlib import Path
+          r=Path("source/RA_IPTV_Android_v0.1")
+          def R(path,old,new):
+              p=r/path; s=p.read_text()
+              if old not in s: raise SystemExit("missing "+str(path))
+              p.write_text(s.replace(old,new))
+          R(Path("app/build.gradle"),"versionCode 35","versionCode 36")
+          R(Path("app/build.gradle"),"versionName '0.9.3'","versionName '0.9.4'")
+          R(Path("app/src/main/java/com/robertalt/raiptv/SettingsActivity.java"),"Nivaro IPTV Player 0.9.3","Nivaro IPTV Player 0.9.4")
+          p=r/"app/src/main/res/layout/activity_main.xml"; s=p.read_text()
+          old='''    <Button android:id="@+id/settingsButton" android:layout_width="44dp" android:layout_height="42dp" android:layout_marginLeft="5dp" android:text="⚙" android:textSize="18sp" android:textAllCaps="false" android:textColor="@color/text" android:backgroundTint="@color/panel2"/>
+              <Button android:id="@+id/profileButton"'''
+          new='''    <Button android:id="@+id/settingsButton" android:layout_width="44dp" android:layout_height="42dp" android:layout_marginLeft="5dp" android:text="⚙" android:textSize="18sp" android:textAllCaps="false" android:textColor="@color/text" android:backgroundTint="@color/panel2"/>
+              <Button android:id="@+id/tvShareButton" android:layout_width="44dp" android:layout_height="42dp" android:layout_marginLeft="5dp" android:text="TV" android:textSize="11sp" android:textStyle="bold" android:textAllCaps="false" android:textColor="@color/text" android:backgroundTint="@color/panel2" android:contentDescription="TV / Delen"/>
+              <Button android:id="@+id/profileButton"'''
+          if old not in s: raise SystemExit("missing header buttons")
+          p.write_text(s.replace(old,new))
+          p=r/"app/src/main/java/com/robertalt/raiptv/MainActivity.java"; s=p.read_text()
+          s=s.replace("import android.widget.*;\n","import android.widget.*;\nimport androidx.mediarouter.app.MediaRouteChooserDialog;\nimport androidx.mediarouter.media.MediaRouteSelector;\nimport com.google.android.gms.cast.CastMediaControlIntent;\n")
+          s=s.replace("Button heroAction,heroInfo,genreButton,sortButton,searchToggle,settingsButton,epgGridButton,epgListButton;","Button heroAction,heroInfo,genreButton,sortButton,searchToggle,settingsButton,tvShareButton,epgGridButton,epgListButton;")
+          s=s.replace("searchToggle=findViewById(R.id.searchToggle);settingsButton=findViewById(R.id.settingsButton);status=","searchToggle=findViewById(R.id.searchToggle);settingsButton=findViewById(R.id.settingsButton);tvShareButton=findViewById(R.id.tvShareButton);status=")
+          s=s.replace("settingsButton.setOnClickListener(v->startActivity(new Intent(this,SettingsActivity.class)));\n        searchToggle.setOnClickListener(v->toggleSearch());","settingsButton.setOnClickListener(v->startActivity(new Intent(this,SettingsActivity.class)));\n        tvShareButton.setOnClickListener(v->showTvShareMenu());\n        searchToggle.setOnClickListener(v->toggleSearch());")
+          needle='''    void toggleSearch(){if(search.getVisibility()==View.VISIBLE){if(search.getText().length()>0)search.setText("");search.clearFocus();search.setVisibility(View.GONE);searchToggle.setText("⌕");((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(search.getWindowToken(),0);}else{search.setVisibility(View.VISIBLE);searchToggle.setText("✕");search.requestFocus();((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(search,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);}}
+          '''
+          add=needle+'''    void showTvShareMenu(){
+                  final String[] options={T("screen_share"),T("google_cast")};
+                  new AlertDialog.Builder(this).setTitle(T("tv_share")).setItems(options,(d,which)->{if(which==0)openSystemScreenShare();else showMainCastChooser();}).setNegativeButton(T("cancel"),null).show();
+              }
+              void openSystemScreenShare(){
+                  Toast.makeText(this,T("screen_share_hint"),Toast.LENGTH_LONG).show();
+                  try{startActivity(new Intent(android.provider.Settings.ACTION_CAST_SETTINGS));return;}catch(Exception ignored){}
+                  try{startActivity(new Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS));return;}catch(Exception ignored){}
+                  try{startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS));}catch(Exception e){Toast.makeText(this,T("screen_share_unavailable"),Toast.LENGTH_LONG).show();}
+              }
+              void showMainCastChooser(){
+                  try{MediaRouteSelector selector=new MediaRouteSelector.Builder().addControlCategory(CastMediaControlIntent.categoryForCast(NivaroCastOptionsProvider.receiverApplicationId())).build();MediaRouteChooserDialog dialog=new MediaRouteChooserDialog(this);dialog.setRouteSelector(selector);dialog.show();}
+                  catch(Throwable e){Toast.makeText(this,T("cast_failed"),Toast.LENGTH_SHORT).show();}
+              }
+          '''
+          if needle not in s: raise SystemExit("missing toggleSearch")
+          p.write_text(s.replace(needle,add))
+          p=r/"app/src/main/java/com/robertalt/raiptv/UiText.java"; s=p.read_text()
+          en='''        {"profile","Profile"},
+          '''
+          s=s.replace(en,en+'''        {"tv_share","TV / Share"},
+                  {"screen_share","Share screen"},
+                  {"google_cast","Google Cast"},
+                  {"screen_share_hint","Choose your TV in Android / Smart View. Nivaro keeps playing locally while the screen is mirrored."},
+                  {"screen_share_unavailable","Screen sharing settings could not be opened"},
+          ''',1)
+          nl='''        {"profile","Profiel"},
+          '''
+          s=s.replace(nl,nl+'''        {"tv_share","TV / Delen"},
+                  {"screen_share","Scherm delen"},
+                  {"google_cast","Google Cast"},
+                  {"screen_share_hint","Kies uw tv in Android / Smart View. Nivaro blijft lokaal afspelen terwijl het scherm wordt gespiegeld."},
+                  {"screen_share_unavailable","Scherm delen kon niet worden geopend"},
+          ''',1)
+          p.write_text(s)
+          print("v0.9.4 TV/share patch applied")
+          PY
           grep -q "versionCode 36" source/RA_IPTV_Android_v0.1/app/build.gradle
           grep -q "versionName '0.9.4'" source/RA_IPTV_Android_v0.1/app/build.gradle
           grep -q "tvShareButton" source/RA_IPTV_Android_v0.1/app/src/main/res/layout/activity_main.xml
