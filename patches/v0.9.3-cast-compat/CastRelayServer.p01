@@ -1,0 +1,26 @@
+            if(!t.isEmpty()&&!t.startsWith("#")){try{x=relayUrl(new URL(base,t).toString());}catch(Exception ignored){}}
+            out.append(x).append('\n');
+        }
+        return out.toString();
+    }
+
+    private static boolean isPlaylist(String url,String ct){String x=(url+" "+(ct==null?"":ct)).toLowerCase(Locale.ROOT);return x.contains(".m3u8")||x.contains("mpegurl")||x.contains("vnd.apple");}
+    private static String guessType(String u){String x=u.toLowerCase(Locale.ROOT);if(x.contains(".m3u8"))return "application/vnd.apple.mpegurl";if(x.contains(".ts"))return "video/mp2t";if(x.contains(".mp4")||x.contains(".m4v"))return "video/mp4";if(x.contains(".aac"))return "audio/aac";return "application/octet-stream";}
+    private static String cleanContentType(String s){if(s==null)return "";int i=s.indexOf(';');return (i>=0?s.substring(0,i):s).trim();}
+
+    private void writeSimple(OutputStream out,int code,String type,byte[] body)throws IOException{writeHeaders(out,code,type,(long)body.length,null,true);out.write(body);out.flush();}
+    private void writeHeaders(OutputStream out,int code,String type,Long length,String contentRange,boolean cors)throws IOException{
+        String reason=code==200?"OK":code==204?"No Content":code==206?"Partial Content":code==400?"Bad Request":code==404?"Not Found":"Error";
+        StringBuilder h=new StringBuilder("HTTP/1.1 ").append(code).append(' ').append(reason).append("\r\n");
+        h.append("Content-Type: ").append(type==null||type.isEmpty()?"application/octet-stream":type).append("\r\n");
+        if(length!=null)h.append("Content-Length: ").append(length).append("\r\n");
+        if(contentRange!=null&&!contentRange.isEmpty())h.append("Content-Range: ").append(contentRange).append("\r\n");
+        h.append("Accept-Ranges: bytes\r\nCache-Control: no-cache\r\nConnection: close\r\n");
+        if(cors)h.append("Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: Range, Content-Type, Accept, Origin\r\nAccess-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges\r\n");
+        h.append("\r\n");out.write(h.toString().getBytes(StandardCharsets.ISO_8859_1));out.flush();
+    }
+    private static byte[] readLimited(InputStream in,int max)throws IOException{if(in==null)return new byte[0];ByteArrayOutputStream b=new ByteArrayOutputStream();byte[] buf=new byte[8192];int n;while((n=in.read(buf))>=0){b.write(buf,0,n);if(b.size()>max)throw new IOException("playlist_too_large");}return b.toByteArray();}
+    private static String readLine(InputStream in)throws IOException{ByteArrayOutputStream b=new ByteArrayOutputStream();int c;boolean any=false;while((c=in.read())!=-1){any=true;if(c=='\n')break;if(c!='\r')b.write(c);if(b.size()>16384)throw new IOException("header_too_large");}return !any&&b.size()==0?null:b.toString(StandardCharsets.ISO_8859_1.name());}
+    private static String findLanIpv4()throws SocketException{Enumeration<NetworkInterface> ns=NetworkInterface.getNetworkInterfaces();while(ns.hasMoreElements()){NetworkInterface n=ns.nextElement();if(!n.isUp()||n.isLoopback())continue;Enumeration<InetAddress> as=n.getInetAddresses();while(as.hasMoreElements()){InetAddress a=as.nextElement();if(a instanceof Inet4Address&&!a.isLoopbackAddress()&&a.isSiteLocalAddress())return a.getHostAddress();}}return null;}
+    @Override public void close(){closed=true;try{server.close();}catch(Exception ignored){}workers.shutdownNow();}
+}
