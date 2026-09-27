@@ -886,17 +886,29 @@ jobs:
           grep -q "epgModeBar" app/src/main/res/layout/activity_main.xml
           echo "Nivaro v0.7.0 overlay verified"
 
-      - name: Export Nivaro v0.7.0 source
+      - name: Apply Nivaro v0.7.1 language groups
         shell: bash
         run: |
           set -euo pipefail
-          tar -czf Nivaro-v0.7.0-source.tar.gz -C source RA_IPTV_Android_v0.1
+          python3 patches/v0.7.1-language-groups/apply.py
+          grep -q "versionCode 27" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "versionName '0.7.1'" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "SEARCH_INDEX_GENERATION=6" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
+          grep -q "languageTags" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/storage/SearchIndexStore.java
+          grep -q "availableLanguageTags" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
+          echo "Nivaro v0.7.1 language groups verified"
+
+      - name: Export Nivaro v0.7.1 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf Nivaro-v0.7.1-source.tar.gz -C source RA_IPTV_Android_v0.1
 
       - name: Upload Nivaro source
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.7.0-source
-          path: Nivaro-v0.7.0-source.tar.gz
+          name: Nivaro-v0.7.1-source
+          path: Nivaro-v0.7.1-source.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -948,7 +960,7 @@ jobs:
       - name: Upload unsigned release and signing tool
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.7.0-unsigned-release
+          name: Nivaro-v0.7.1-unsigned-release
           path: |
             source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
             apksigner.jar
@@ -958,7 +970,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-IPTV-Player-v0.7.0-debug-apk
+          name: Nivaro-IPTV-Player-v0.7.1-debug-apk
           path: source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
