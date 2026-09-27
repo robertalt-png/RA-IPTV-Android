@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, nivaro-v0.5.0-build-20260924, nivaro-v0.5.1-recording-20260925, nivaro-v0.5.2-compact-grid-20260925, nivaro-v0.5.3-stability-20260925, nivaro-v0.5.4-anr-fix-20260925, nivaro-v0.5.5-language-20260925, nivaro-v0.5.6-language-memory-20260925, nivaro-v0.5.7-rotation-state-20260925, nivaro-v0.5.8-cache-hero-20260925, nivaro-v0.5.9-db-paging-20260925, nivaro-v0.6.0-vertical-grid-20260925, nivaro-v0.6.1-localization-20260925, nivaro-v0.6.2-language-priority-20260925, nivaro-v0.6.3-priority-consistency-20260925, nivaro-v0.6.4-db-language-priority-20260926, nivaro-v0.6.5, nivaro-v0.6.6, nivaro-v0.7.0 ]
+    branches: [ main, nivaro-v0.5.0-build-20260924, nivaro-v0.5.1-recording-20260925, nivaro-v0.5.2-compact-grid-20260925, nivaro-v0.5.3-stability-20260925, nivaro-v0.5.4-anr-fix-20260925, nivaro-v0.5.5-language-20260925, nivaro-v0.5.6-language-memory-20260925, nivaro-v0.5.7-rotation-state-20260925, nivaro-v0.5.8-cache-hero-20260925, nivaro-v0.5.9-db-paging-20260925, nivaro-v0.6.0-vertical-grid-20260925, nivaro-v0.6.1-localization-20260925, nivaro-v0.6.2-language-priority-20260925, nivaro-v0.6.3-priority-consistency-20260925, nivaro-v0.6.4-db-language-priority-20260926, nivaro-v0.6.5, nivaro-v0.6.6, nivaro-v0.7.0, nivaro-v0.7.2 ]
   workflow_dispatch:
 
 permissions:
@@ -898,17 +898,37 @@ jobs:
           grep -q "availableLanguageTags" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
           echo "Nivaro v0.7.1 language groups verified"
 
-      - name: Export Nivaro v0.7.1 source
+      - name: Apply Nivaro v0.7.2 optimizations
         shell: bash
         run: |
           set -euo pipefail
-          tar -czf Nivaro-v0.7.1-source.tar.gz -C source RA_IPTV_Android_v0.1
+          cat patches/v0.7.2-optimizations/p00 patches/v0.7.2-optimizations/p01 patches/v0.7.2-optimizations/p02 > nivaro072.patch.gz.b64
+          test "$(wc -c < nivaro072.patch.gz.b64)" -eq 22020
+          echo "0a2e632fa830a3106c903fc45e76fca7da28cb8cd513716018daf5806664ee60  nivaro072.patch.gz.b64" | sha256sum -c -
+          base64 --decode nivaro072.patch.gz.b64 > nivaro072.patch.gz
+          gzip -dc nivaro072.patch.gz > nivaro072.patch
+          echo "34b91b2654deabbbd7d89e20044fb6a1e5559de7ee53a48e192c5b15dc849b69  nivaro072.patch" | sha256sum -c -
+          cd source/RA_IPTV_Android_v0.1
+          patch --batch --forward -p1 < ../../nivaro072.patch
+          grep -q "versionCode 28" app/build.gradle
+          grep -q "versionName '0.7.2'" app/build.gradle
+          grep -q "SEARCH_INDEX_GENERATION=7" app/src/main/java/com/robertalt/raiptv/MainActivity.java
+          grep -q "countOther" app/src/main/java/com/robertalt/raiptv/storage/SearchIndexStore.java
+          grep -q "epgTimelineWidth" app/src/main/java/com/robertalt/raiptv/MainActivity.java
+          grep -q 'alias("sq".*"al"' app/src/main/java/com/robertalt/raiptv/ContentLanguage.java
+          echo "Nivaro v0.7.2 optimizations verified"
+
+      - name: Export Nivaro v0.7.2 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf Nivaro-v0.7.2-source.tar.gz -C source RA_IPTV_Android_v0.1
 
       - name: Upload Nivaro source
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.7.1-source
-          path: Nivaro-v0.7.1-source.tar.gz
+          name: Nivaro-v0.7.2-source
+          path: Nivaro-v0.7.2-source.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -960,7 +980,7 @@ jobs:
       - name: Upload unsigned release and signing tool
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.7.1-unsigned-release
+          name: Nivaro-v0.7.2-unsigned-release
           path: |
             source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
             apksigner.jar
@@ -970,7 +990,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-IPTV-Player-v0.7.1-debug-apk
+          name: Nivaro-IPTV-Player-v0.7.2-debug-apk
           path: source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
