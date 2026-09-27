@@ -135,15 +135,8 @@ jobs:
 
           p=r/"app/src/main/AndroidManifest.xml"
           s=p.read_text()
-          old='''        <activity
-              android:name=".MainActivity"
-              android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
-              android:exported="true">
-              <intent-filter>
-                  <action android:name="android.intent.action.MAIN" />
-                  <category android:name="android.intent.category.LAUNCHER" />
-              </intent-filter>
-          </activity>'''
+          import re
+          pat=r'''(?s)        <activity\s+android:name="\.MainActivity"\s+android:configChanges="orientation\|screenSize\|smallestScreenSize\|screenLayout\|keyboardHidden"\s+android:exported="true">\s+<intent-filter>\s+<action android:name="android\.intent\.action\.MAIN"\s*/>\s+<category android:name="android\.intent\.category\.LAUNCHER"\s*/>\s+</intent-filter>\s+</activity>'''
           new='''        <activity
               android:name=".MainActivity"
               android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
@@ -156,8 +149,9 @@ jobs:
                   <category android:name="android.intent.category.LAUNCHER" />
               </intent-filter>
           </activity>'''
-          if old not in s: raise SystemExit("launcher marker missing")
-          p.write_text(s.replace(old,new))
+          s2,n=re.subn(pat,new,s,count=1)
+          if n!=1: raise SystemExit("launcher marker missing")
+          p.write_text(s2)
           PY
           grep -q "versionCode 37" base/RA_IPTV_Android_v0.1/app/build.gradle
           grep -q "versionName '0.9.5'" base/RA_IPTV_Android_v0.1/app/build.gradle
