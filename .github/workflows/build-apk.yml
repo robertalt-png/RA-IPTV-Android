@@ -877,6 +877,7 @@ jobs:
           set -euo pipefail
           cd source/RA_IPTV_Android_v0.1
           patch --batch --forward -p1 < ../../patches/v0.7.0/nivaro-v0.7.0.patch
+          find app/src/main/res -type f -name '*.orig' -delete
           grep -q "versionCode 26" app/build.gradle
           grep -q "versionName '0.7.0'" app/build.gradle
           grep -q "SEARCH_INDEX_GENERATION=5" app/src/main/java/com/robertalt/raiptv/MainActivity.java
