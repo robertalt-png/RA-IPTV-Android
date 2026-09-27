@@ -1,0 +1,61 @@
+from pathlib import Path
+import re
+r=Path('source/RA_IPTV_Android_v0.1')
+
+def R(path,old,new,label=''):
+    p=r/path;s=p.read_text()
+    if old not in s: raise SystemExit('missing '+(label or str(path)))
+    p.write_text(s.replace(old,new))
+
+def sub(path,pattern,repl,label):
+    p=r/path;s=p.read_text();ns,n=re.subn(pattern,repl,s,flags=re.S)
+    if n!=1: raise SystemExit(f'{label}: expected 1 replacement got {n}')
+    p.write_text(ns)
+
+R(Path('app/build.gradle'),'versionCode 34','versionCode 35')
+R(Path('app/build.gradle'),"versionName '0.9.2'","versionName '0.9.3'")
+R(Path('app/src/main/java/com/robertalt/raiptv/SettingsActivity.java'),'Nivaro IPTV Player 0.9.2','Nivaro IPTV Player 0.9.3')
+
+p=r/'app/build.gradle';s=p.read_text()
+if 'nivaroCastReceiverId' not in s:s=s.replace('android {',"def nivaroCastReceiverId = project.findProperty('NIVARO_CAST_RECEIVER_ID') ?: System.getenv('NIVARO_CAST_RECEIVER_ID') ?: ''\n\nandroid {")
+if 'NIVARO_CAST_RECEIVER_ID' not in s:s=s.replace("versionName '0.9.3'","versionName '0.9.3'\n        buildConfigField 'String', 'NIVARO_CAST_RECEIVER_ID', '\\"' + nivaroCastReceiverId + '\\"'")
+p.write_text(s)
+
+p=r/'app/src/main/java/com/robertalt/raiptv/NivaroCastOptionsProvider.java';s=p.read_text()
+if 'receiverApplicationId()' not in s:s=s.replace('public final class NivaroCastOptionsProvider implements OptionsProvider {','public final class NivaroCastOptionsProvider implements OptionsProvider {\n    public static String receiverApplicationId(){String id=BuildConfig.NIVARO_CAST_RECEIVER_ID;return id==null||id.trim().isEmpty()?CastMediaControlIntent.DEFAULT_MEDIA_RECEIVER_APPLICATION_ID:id.trim();}')
+s=s.replace('setReceiverApplicationId(CastMediaControlIntent.DEFAULT_MEDIA_RECEIVER_APPLICATION_ID)','setReceiverApplicationId(receiverApplicationId())')
+p.write_text(s)
+
+p=r/'app/src/main/java/com/robertalt/raiptv/UiText.java';s=p.read_text()
+if 'cast_try_relay' not in s:
+    s=s.replace('{"cast_try_alt","TV rejected stream · trying another version…"},','{"cast_try_alt","TV rejected stream · trying another version…"},\n        {"cast_try_relay","Direct TV playback failed · trying Nivaro compatibility mode…"},\n        {"cast_relay_playing","Playing on TV via Nivaro compatibility mode"},\n        {"cast_failed_local","TV could not play this stream · continuing on phone"},',1)
+    s=s.replace('{"cast_try_alt","Tv weigert stream · andere versie proberen…"},','{"cast_try_alt","Tv weigert stream · andere versie proberen…"},\n        {"cast_try_relay","Direct afspelen mislukt · Nivaro-compatibiliteitsmodus proberen…"},\n        {"cast_relay_playing","Afspelen op tv via Nivaro-compatibiliteitsmodus"},\n        {"cast_failed_local","Tv kon deze stream niet afspelen · verder op telefoon"},',1)
+p.write_text(s)
+
+p=r/'app/src/main/java/com/robertalt/raiptv/PlayerActivity.java';s=p.read_text()
+if 'com.robertalt.raiptv.cast.CastRelayServer' not in s:s=s.replace('import com.robertalt.raiptv.storage.PlaybackQueueStore;','import com.robertalt.raiptv.storage.PlaybackQueueStore;\nimport com.robertalt.raiptv.cast.CastRelayServer;')
+s=s.replace('CastContext castContext; CastSession castSession; RemoteMediaClient castClient;\n    boolean casting=false,castRecovering=false,castLocalWasVlc=false,castLocalWasPlaying=false;\n    int castCandidateIndex=0; long castLocalPosition=0L;',
+'''CastContext castContext; CastSession castSession; RemoteMediaClient castClient;\n    CastRelayServer castRelay;\n    boolean casting=false,castRemoteConfirmed=false,castRecovering=false,castRelayMode=false,castLocalPausedForRemote=false,castLocalWasVlc=false,castLocalWasPlaying=false;\n    int castCandidateIndex=0; long castLocalPosition=0L;''')
+p.write_text(s)
+
+sub(Path('app/src/main/java/com/robertalt/raiptv/PlayerActivity.java'),r'    final RemoteMediaClient\.Callback castMediaCallback=.*?\n    };\n    final SessionManagerListener',r'''    final RemoteMediaClient.Callback castMediaCallback=new RemoteMediaClient.Callback(){
+        @Override public void onStatusUpdated(){
+            if(!hasCastSession()||castClient==null)return;
+            try{MediaStatus ms=castClient.getMediaStatus();if(ms==null)return;if(ms.getPlayerState()==MediaStatus.PLAYER_STATE_IDLE&&ms.getIdleReason()==MediaStatus.IDLE_REASON_ERROR){tryNextCastCandidate();return;}if(ms.getPlayerState()==MediaStatus.PLAYER_STATE_IDLE&&ms.getIdleReason()==MediaStatus.IDLE_REASON_FINISHED){if(castRemoteConfirmed)onMediaEnded();return;}if(ms.getPlayerState()==MediaStatus.PLAYER_STATE_PLAYING){confirmRemotePlayback();status.setText("TV · "+T(castRelayMode?"cast_relay_playing":"cast_playing"));}updatePlayIcon();}catch(Exception ignored){}
+        }
+    };
+    final SessionManagerListener''','cast callback')
+
+sub(Path('app/src/main/java/com/robertalt/raiptv/PlayerActivity.java'),r'    void showCastChooser\(\)\{.*?\n    long currentLocalPosition\(\)',r'''    void showCastChooser(){
+        try{if(castContext==null)castContext=CastContext.getSharedInstance(this);CastSession current=castContext.getSessionManager().getCurrentCastSession();if(current!=null&&current.isConnected()){connectCastSession(current,false);return;}MediaRouteSelector selector=new MediaRouteSelector.Builder().addControlCategory(CastMediaControlIntent.categoryForCast(NivaroCastOptionsProvider.receiverApplicationId())).build();MediaRouteChooserDialog dialog=new MediaRouteChooserDialog(this);dialog.setRouteSelector(selector);dialog.show();}catch(Throwable e){Toast.makeText(this,T("cast_failed"),Toast.LENGTH_SHORT).show();}
+    }
+    boolean hasCastSession(){return casting&&castClient!=null&&castSession!=null&&castSession.isConnected();}
+    boolean isCasting(){return hasCastSession()&&castRemoteConfirmed;}
+    void connectCastSession(CastSession session,boolean resumed){
+        if(session==null)return;castSession=session;castClient=session.getRemoteMediaClient();if(castClient==null)return;try{castClient.registerCallback(castMediaCallback);}catch(Exception ignored){}
+        castLocalPosition=currentLocalPosition();castLocalWasPlaying=isLocalPlaying();castLocalWasVlc=usingVlc;casting=true;castRemoteConfirmed=false;castLocalPausedForRemote=false;castRelayMode=false;closeCastRelay();updateQueueControls();
+        if(resumed&&castClient.hasMediaSession()&&castClient.isPlaying()){confirmRemotePlayback();status.setText("TV · "+T("cast_playing"));updatePlayIcon();return;}castCandidateIndex=0;loadCastCandidate(castLocalPosition,castLocalWasPlaying);
+    }
+    void confirmRemotePlayback(){if(castRemoteConfirmed)return;castRemoteConfirmed=true;castLocalPausedForRemote=true;try{releasePlayers();}catch(Exception ignored){}updateQueueControls();updatePlayIcon();}
+    void disconnectCastSession(boolean resumeLocal){long pos=0;boolean wasPlaying=false;try{if(castClient!=null){pos=castClient.getApproximateStreamPosition();wasPlaying=castClient.isPlaying();castClient.unregisterCallback(castMediaCallback);}}catch(Exception ignored){}boolean hadRemote=castRemoteConfirmed;casting=false;castRemoteConfirmed=false;castRecovering=false;castRelayMode=false;castClient=null;castSession=null;closeCastRelay();updateQueueControls();if(resumeLocal&&hadRemote&&!destroyed&&entry!=null){pendingResumeMs="live".equals(entry.type)?0:(pos>0?pos:castLocalPosition);wantPlaying=wasPlaying||castLocalWasPlaying;status.setText(T("cast_disconnected"));if(castLocalWasVlc)startVlc();else startMedia3();}}
+    long currentLocalPosition()''','cast session block')
