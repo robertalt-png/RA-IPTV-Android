@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, nivaro-v0.5.0-build-20260924, nivaro-v0.5.1-recording-20260925, nivaro-v0.5.2-compact-grid-20260925, nivaro-v0.5.3-stability-20260925, nivaro-v0.5.4-anr-fix-20260925, nivaro-v0.5.5-language-20260925, nivaro-v0.5.6-language-memory-20260925, nivaro-v0.5.7-rotation-state-20260925, nivaro-v0.5.8-cache-hero-20260925, nivaro-v0.5.9-db-paging-20260925, nivaro-v0.6.0-vertical-grid-20260925, nivaro-v0.6.1-localization-20260925, nivaro-v0.6.2-language-priority-20260925, nivaro-v0.6.3-priority-consistency-20260925, nivaro-v0.6.4-db-language-priority-20260926, nivaro-v0.6.5, nivaro-v0.6.6, nivaro-v0.7.0, nivaro-v0.7.2, nivaro-v0.8.0, nivaro-v0.8.1, nivaro-v0.8.2, nivaro-v0.9.0 ]
+    branches: [ main, nivaro-v0.5.0-build-20260924, nivaro-v0.5.1-recording-20260925, nivaro-v0.5.2-compact-grid-20260925, nivaro-v0.5.3-stability-20260925, nivaro-v0.5.4-anr-fix-20260925, nivaro-v0.5.5-language-20260925, nivaro-v0.5.6-language-memory-20260925, nivaro-v0.5.7-rotation-state-20260925, nivaro-v0.5.8-cache-hero-20260925, nivaro-v0.5.9-db-paging-20260925, nivaro-v0.6.0-vertical-grid-20260925, nivaro-v0.6.1-localization-20260925, nivaro-v0.6.2-language-priority-20260925, nivaro-v0.6.3-priority-consistency-20260925, nivaro-v0.6.4-db-language-priority-20260926, nivaro-v0.6.5, nivaro-v0.6.6, nivaro-v0.7.0, nivaro-v0.7.2, nivaro-v0.8.0, nivaro-v0.8.1, nivaro-v0.8.2, nivaro-v0.9.0, nivaro-v0.9.1 ]
   workflow_dispatch:
 
 permissions:
@@ -1008,17 +1008,29 @@ jobs:
           grep -q "RemoteMediaClient" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/PlayerActivity.java
           echo "Nivaro v0.9.0 Cast & TV verified"
 
-      - name: Export Nivaro v0.9.0 source
+      - name: Apply Nivaro v0.9.1 playback stability and faster indexing
         shell: bash
         run: |
           set -euo pipefail
-          tar -czf Nivaro-v0.9.0-source.tar.gz -C source RA_IPTV_Android_v0.1
+          python3 patches/v0.9.1-stability-speed/apply.py
+          grep -q "versionCode 33" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "versionName '0.9.1'" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "PlaybackQueueStore" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/MainActivity.java
+          grep -q "showCastChooser" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/PlayerActivity.java
+          grep -q 'Connection", "keep-alive' source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/net/HttpText.java
+          echo "Nivaro v0.9.1 playback/index fixes verified"
+
+      - name: Export Nivaro v0.9.1 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf Nivaro-v0.9.1-source.tar.gz -C source RA_IPTV_Android_v0.1
 
       - name: Upload Nivaro source
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.9.0-source
-          path: Nivaro-v0.9.0-source.tar.gz
+          name: Nivaro-v0.9.1-source
+          path: Nivaro-v0.9.1-source.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -1070,7 +1082,7 @@ jobs:
       - name: Upload unsigned release and signing tool
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.9.0-unsigned-release
+          name: Nivaro-v0.9.1-unsigned-release
           path: |
             source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
             apksigner.jar
@@ -1080,7 +1092,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-IPTV-Player-v0.9.0-debug-apk
+          name: Nivaro-IPTV-Player-v0.9.1-debug-apk
           path: source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
