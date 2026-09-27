@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, nivaro-v0.5.0-build-20260924, nivaro-v0.5.1-recording-20260925, nivaro-v0.5.2-compact-grid-20260925, nivaro-v0.5.3-stability-20260925, nivaro-v0.5.4-anr-fix-20260925, nivaro-v0.5.5-language-20260925, nivaro-v0.5.6-language-memory-20260925, nivaro-v0.5.7-rotation-state-20260925, nivaro-v0.5.8-cache-hero-20260925, nivaro-v0.5.9-db-paging-20260925, nivaro-v0.6.0-vertical-grid-20260925, nivaro-v0.6.1-localization-20260925, nivaro-v0.6.2-language-priority-20260925, nivaro-v0.6.3-priority-consistency-20260925, nivaro-v0.6.4-db-language-priority-20260926, nivaro-v0.6.5, nivaro-v0.6.6, nivaro-v0.7.0, nivaro-v0.7.2, nivaro-v0.8.0, nivaro-v0.8.1, nivaro-v0.8.2, nivaro-v0.9.0, nivaro-v0.9.1, nivaro-v0.9.2 ]
+    branches: [ main, nivaro-v0.5.0-build-20260924, nivaro-v0.5.1-recording-20260925, nivaro-v0.5.2-compact-grid-20260925, nivaro-v0.5.3-stability-20260925, nivaro-v0.5.4-anr-fix-20260925, nivaro-v0.5.5-language-20260925, nivaro-v0.5.6-language-memory-20260925, nivaro-v0.5.7-rotation-state-20260925, nivaro-v0.5.8-cache-hero-20260925, nivaro-v0.5.9-db-paging-20260925, nivaro-v0.6.0-vertical-grid-20260925, nivaro-v0.6.1-localization-20260925, nivaro-v0.6.2-language-priority-20260925, nivaro-v0.6.3-priority-consistency-20260925, nivaro-v0.6.4-db-language-priority-20260926, nivaro-v0.6.5, nivaro-v0.6.6, nivaro-v0.7.0, nivaro-v0.7.2, nivaro-v0.8.0, nivaro-v0.8.1, nivaro-v0.8.2, nivaro-v0.9.0, nivaro-v0.9.1, nivaro-v0.9.2, nivaro-v0.9.3 ]
   workflow_dispatch:
 
 permissions:
@@ -1032,17 +1032,30 @@ jobs:
           grep -q "clearTransientItemCache" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/provider/XtreamProvider.java
           echo "Nivaro v0.9.2 playback/index isolation verified"
 
-      - name: Export Nivaro v0.9.2 source
+      - name: Apply Nivaro v0.9.3 Cast compatibility
         shell: bash
         run: |
           set -euo pipefail
-          tar -czf Nivaro-v0.9.2-source.tar.gz -C source RA_IPTV_Android_v0.1
+          cat patches/v0.9.3-cast-compat/apply.p00 patches/v0.9.3-cast-compat/apply.p01 patches/v0.9.3-cast-compat/apply.p02 > patches/v0.9.3-cast-compat/apply.py
+          cat patches/v0.9.3-cast-compat/CastRelayServer.p00 patches/v0.9.3-cast-compat/CastRelayServer.p01 > patches/v0.9.3-cast-compat/CastRelayServer.java
+          python3 patches/v0.9.3-cast-compat/apply.py
+          grep -q "versionCode 35" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "versionName '0.9.3'" source/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "CastRelayServer" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/PlayerActivity.java
+          grep -q "cast_try_relay" source/RA_IPTV_Android_v0.1/app/src/main/java/com/robertalt/raiptv/UiText.java
+          echo "Nivaro v0.9.3 Cast compatibility verified"
+
+      - name: Export Nivaro v0.9.3 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf Nivaro-v0.9.3-source.tar.gz -C source RA_IPTV_Android_v0.1
 
       - name: Upload Nivaro source
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.9.2-source
-          path: Nivaro-v0.9.2-source.tar.gz
+          name: Nivaro-v0.9.3-source
+          path: Nivaro-v0.9.3-source.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -1094,7 +1107,7 @@ jobs:
       - name: Upload unsigned release and signing tool
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.9.2-unsigned-release
+          name: Nivaro-v0.9.3-unsigned-release
           path: |
             source/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk
             apksigner.jar
@@ -1104,7 +1117,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-IPTV-Player-v0.9.2-debug-apk
+          name: Nivaro-IPTV-Player-v0.9.3-debug-apk
           path: source/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
