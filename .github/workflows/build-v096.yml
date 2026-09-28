@@ -1,8 +1,8 @@
-name: Build Nivaro v0.9.6
+name: Build NenoTV v0.9.7
 
 on:
   push:
-    branches: [ nivaro-v0.9.6 ]
+    branches: [ nenotv-v0.9.7 ]
   workflow_dispatch:
 
 permissions:
@@ -10,7 +10,7 @@ permissions:
   actions: read
 
 jobs:
-  build-v096:
+  build-nenotv-v097:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -21,13 +21,13 @@ jobs:
           set -euo pipefail
           mkdir -p base
           cd base
-          gh run download 36349587668 --repo robertalt-png/RA-IPTV-Android --name Nivaro-v0.9.5-build
-          test -f Nivaro-v0.9.5-source.tar.gz
-          tar -xzf Nivaro-v0.9.5-source.tar.gz
+          gh run download 36349587668 --repo robertalt-png/RA-IPTV-Android --name NenoTV-v0.9.5-build
+          test -f NenoTV-v0.9.5-source.tar.gz
+          tar -xzf NenoTV-v0.9.5-source.tar.gz
           test -f RA_IPTV_Android_v0.1/app/build.gradle
           grep -q "versionName '0.9.5'" RA_IPTV_Android_v0.1/app/build.gradle
 
-      - name: Apply v0.9.6 compact Nivaro branding
+      - name: Apply NenoTV v0.9.7 branding
         shell: bash
         run: |
           set -euo pipefail
@@ -41,11 +41,11 @@ jobs:
                   raise SystemExit("missing marker in "+str(path))
               p.write_text(s.replace(old,new))
 
-          rep(Path("app/build.gradle"),"versionCode 37","versionCode 38")
-          rep(Path("app/build.gradle"),"versionName '0.9.5'","versionName '0.9.6'")
-          rep(Path("app/src/main/java/com/robertalt/raiptv/SettingsActivity.java"),"Nivaro IPTV Player 0.9.5","Nivaro IPTV Player 0.9.6")
+          rep(Path("app/build.gradle"),"versionCode 37","versionCode 39")
+          rep(Path("app/build.gradle"),"versionName '0.9.5'","versionName '0.9.7'")
+          rep(Path("app/src/main/java/com/robertalt/raiptv/SettingsActivity.java"),"NenoTV IPTV Player 0.9.5","NenoTV Player 0.9.7")
 
-          # In-app brand icon based on the upper yellow/black Nivaro logo:
+          # In-app brand icon based on the upper yellow/black NenoTV logo:
           # circular TV/play symbol with cast waves.
           mark=r/"app/src/main/res/drawable/ic_nivaro_mark.xml"
           mark.write_text("""<?xml version="1.0" encoding="utf-8"?>
@@ -87,12 +87,12 @@ jobs:
           p=r/"app/src/main/res/layout/activity_main.xml"
           s=p.read_text()
           old='''    <LinearLayout android:layout_width="0dp" android:layout_height="44dp" android:layout_weight="1" android:gravity="center_vertical" android:orientation="horizontal">
-              <ImageView android:layout_width="38dp" android:layout_height="38dp" android:src="@drawable/ic_nivaro_mark" android:contentDescription="Nivaro"/>
-              <TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="7dp" android:text="NIVARO" android:textColor="#FFD400" android:textSize="21sp" android:textStyle="bold" android:letterSpacing="0.08"/>
+              <ImageView android:layout_width="38dp" android:layout_height="38dp" android:src="@drawable/ic_nivaro_mark" android:contentDescription="NenoTV"/>
+              <TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="7dp" android:text="NenoTV" android:textColor="#FFD400" android:textSize="21sp" android:textStyle="bold" android:letterSpacing="0.08"/>
           </LinearLayout>'''
           new='''    <LinearLayout android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:gravity="center_vertical" android:orientation="horizontal" android:paddingRight="3dp">
-              <ImageView android:layout_width="28dp" android:layout_height="28dp" android:src="@drawable/ic_nivaro_mark" android:scaleType="fitCenter" android:contentDescription="Nivaro"/>
-              <TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="4dp" android:text="NIVARO" android:textColor="#FFD400" android:textSize="13sp" android:textStyle="bold" android:letterSpacing="0.04" android:singleLine="true" android:maxLines="1" android:includeFontPadding="false"/>
+              <ImageView android:layout_width="28dp" android:layout_height="28dp" android:src="@drawable/ic_nivaro_mark" android:scaleType="fitCenter" android:contentDescription="NenoTV"/>
+              <TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="4dp" android:text="NenoTV" android:textColor="#FFD400" android:textSize="13sp" android:textStyle="bold" android:letterSpacing="0.04" android:singleLine="true" android:maxLines="1" android:includeFontPadding="false"/>
           </LinearLayout>'''
           if old not in s:
               raise SystemExit("v0.9.5 header marker missing")
@@ -108,22 +108,22 @@ jobs:
           # Keep code-driven title styling compatible with the compact header.
           p=r/"app/src/main/java/com/robertalt/raiptv/MainActivity.java"
           s=p.read_text()
-          old='title.setText("NIVARO");title.setTextSize(21);title.setLetterSpacing(0.08f);title.setTextColor(0xFFFFD400);title.setTypeface(null,Typeface.BOLD);'
-          new='title.setText("NIVARO");title.setTextSize(13);title.setLetterSpacing(0.04f);title.setTextColor(0xFFFFD400);title.setSingleLine(true);title.setTypeface(null,Typeface.BOLD);'
+          old='title.setText("NenoTV");title.setTextSize(21);title.setLetterSpacing(0.08f);title.setTextColor(0xFFFFD400);title.setTypeface(null,Typeface.BOLD);'
+          new='title.setText("NenoTV");title.setTextSize(13);title.setLetterSpacing(0.04f);title.setTextColor(0xFFFFD400);title.setSingleLine(true);title.setTypeface(null,Typeface.BOLD);'
           if old not in s:
               raise SystemExit("v0.9.5 title styling marker missing")
           p.write_text(s.replace(old,new))
 
-          print("v0.9.6 compact Nivaro branding applied")
+          print("v0.9.7 compact NenoTV branding applied")
           PY
 
-          grep -q "versionCode 38" base/RA_IPTV_Android_v0.1/app/build.gradle
-          grep -q "versionName '0.9.6'" base/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "versionCode 39" base/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "versionName '0.9.7'" base/RA_IPTV_Android_v0.1/app/build.gradle
           grep -q 'android:textSize="13sp"' base/RA_IPTV_Android_v0.1/app/src/main/res/layout/activity_main.xml
           grep -q 'strokeColor="#FFD400"' base/RA_IPTV_Android_v0.1/app/src/main/res/drawable/ic_nivaro_mark.xml
 
-      - name: Export v0.9.6 source
-        run: tar -czf Nivaro-v0.9.6-source.tar.gz -C base RA_IPTV_Android_v0.1
+      - name: Export v0.9.7 source
+        run: tar -czf NenoTV-v0.9.7-source.tar.gz -C base RA_IPTV_Android_v0.1
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -151,19 +151,19 @@ jobs:
       - name: Stage artifacts
         run: |
           set -euo pipefail
-          cp base/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk Nivaro-IPTV-Player-v0.9.6-debug.apk
-          cp base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk Nivaro-IPTV-Player-v0.9.6-unsigned.apk
+          cp base/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk NenoTV-v0.9.7-debug.apk
+          cp base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk NenoTV-v0.9.7-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
-          sha256sum Nivaro-IPTV-Player-v0.9.6-debug.apk Nivaro-IPTV-Player-v0.9.6-unsigned.apk
+          sha256sum NenoTV-v0.9.7-debug.apk NenoTV-v0.9.7-unsigned.apk
 
-      - name: Upload v0.9.6 build
+      - name: Upload v0.9.7 build
         uses: actions/upload-artifact@v4
         with:
-          name: Nivaro-v0.9.6-build
+          name: NenoTV-v0.9.7-build
           path: |
-            Nivaro-IPTV-Player-v0.9.6-debug.apk
-            Nivaro-IPTV-Player-v0.9.6-unsigned.apk
-            Nivaro-v0.9.6-source.tar.gz
+            NenoTV-v0.9.7-debug.apk
+            NenoTV-v0.9.7-unsigned.apk
+            NenoTV-v0.9.7-source.tar.gz
             apksigner.jar
           if-no-files-found: error
           retention-days: 30
