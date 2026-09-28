@@ -36,6 +36,7 @@ jobs:
           cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/ProGate.java" app/src/main/java/com/robertalt/raiptv/
           cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/EntitlementClient.java" app/src/main/java/com/robertalt/raiptv/entitlement/
           cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/EntitlementStore.java" app/src/main/java/com/robertalt/raiptv/storage/
+          sed -i 's/BuildConfig.NENOTV_API_BASE.trim()/"https:\/\/nenotv.com"/' app/src/main/java/com/robertalt/raiptv/entitlement/EntitlementClient.java
 
       - uses: actions/setup-java@v4
         with:
