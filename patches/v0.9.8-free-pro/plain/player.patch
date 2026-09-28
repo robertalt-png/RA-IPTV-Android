@@ -1,0 +1,13 @@
+diff --git a/app/src/main/java/com/robertalt/raiptv/PlayerActivity.java b/app/src/main/java/com/robertalt/raiptv/PlayerActivity.java
+index 09be4b3..d99d3ef 100644
+--- a/app/src/main/java/com/robertalt/raiptv/PlayerActivity.java
++++ b/app/src/main/java/com/robertalt/raiptv/PlayerActivity.java
+@@ -157 +157,2 @@ public class PlayerActivity extends FragmentActivity {
+-        castButton.setOnClickListener(v->showCastChooser());
++        castButton.setText(ProGate.allowed(this)?"TV":"PRO TV");
++        castButton.setOnClickListener(v->{if(ProGate.require(this,T("casting")))showCastChooser();});
+@@ -323,0 +325 @@ public class PlayerActivity extends FragmentActivity {
++        if(!ProGate.require(this,T("recording")))return;
+@@ -379 +381 @@ public class PlayerActivity extends FragmentActivity {
+-    void enterPip(){if(!SettingsStore.pip(this))return;if(Build.VERSION.SDK_INT>=26&&!isInPictureInPictureMode())try{enterPictureInPictureMode(new PictureInPictureParams.Builder().build());}catch(Exception ignored){}}
++    void enterPip(){if(!ProGate.require(this,T("picture_in_picture")))return;if(!SettingsStore.pip(this))return;if(Build.VERSION.SDK_INT>=26&&!isInPictureInPictureMode())try{enterPictureInPictureMode(new PictureInPictureParams.Builder().build());}catch(Exception ignored){}}
