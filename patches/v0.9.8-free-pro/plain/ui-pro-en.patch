@@ -1,0 +1,10 @@
+diff --git a/app/src/main/java/com/robertalt/raiptv/UiText.java b/app/src/main/java/com/robertalt/raiptv/UiText.java
+--- a/app/src/main/java/com/robertalt/raiptv/UiText.java
++++ b/app/src/main/java/com/robertalt/raiptv/UiText.java
+@@
+     private static final Map<String,String> EN=map(new String[][]{
++        {"account_and_pro","Account & NenoTV Pro"},{"nenotv_free","NenoTV Free"},{"nenotv_pro_trial","NenoTV Pro · Trial"},{"nenotv_pro","NenoTV Pro"},
++        {"activate_restore","Activate or restore purchase"},{"email_address","Email address"},{"order_id_optional","Order ID (optional)"},{"activate_pro","Activate / restore Pro"},{"request_trial","Request free trial"},{"refresh_status","Refresh account status"},
++        {"this_device","This device"},{"device_code","Device code"},{"trial_remaining","Trial remaining"},{"days","days"},{"pro_active","Pro is active"},{"devices","devices"},
++        {"free_description","Live TV, movies, series, basic TV guide, search and favorites are available in Free."},{"checking_status","Checking NenoTV account…"},{"status_updated","Account status updated"},{"activation_success","NenoTV Pro activated"},{"activation_failed","Activation failed"},{"server_unavailable","NenoTV account service is not available yet"},{"email_required","Enter your email address"},
++        {"pro_required","NenoTV Pro"},{"pro_unlock_message","is available with NenoTV Pro or during your Pro trial."},{"view_pro","View NenoTV Pro"},{"not_now","Not now"},{"this_feature","This feature"},{"advanced_epg","Advanced TV guide"},{"recording","Recording"},{"casting","Casting and TV sharing"},{"parental_controls","Parental controls"},{"advanced_subtitles","External subtitle bridge"},{"manage_source","Manage TV source"},
