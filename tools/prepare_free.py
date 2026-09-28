@@ -11,8 +11,8 @@ app=root/"app"
 gradle=app/"build.gradle"
 s=gradle.read_text()
 s=s.replace("applicationId 'com.robertalt.raiptv.light'","applicationId 'com.robertalt.raiptv'")
-s=re.sub(r"versionCode\s+\d+","versionCode 50",s,1)
-s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.1'",s,1)
+s=re.sub(r"versionCode\s+\d+","versionCode 51",s,1)
+s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.2'",s,1)
 s=s.replace("    dynamicFeatures = [':proextras']\n","")
 s=s.replace("    implementation 'com.google.android.play:feature-delivery:2.1.0'\n","")
 gradle.write_text(s)
@@ -264,5 +264,176 @@ sx=re.sub(r'if\(on&&!ProGate\.require\(this,T\("parental_controls"\)\)\)\{v\.set
 sx=re.sub(r'TextView proHint=t\("🔒 PRO · "\+T\("picture_in_picture"\)\+" · "\+T\("advanced_subtitles"\),12\);proHint\.setTextColor\(0xFFFFD400\);box\.addView\(proHint\);','',sx)
 settingsFile.write_text(sx)
 
+
+# v0.12.2 final pass: resilient full sync, clean localized Free labels, subtle Pro discovery.
+def replace_java_method(src, start_sig, next_sig, body):
+    a=src.find(start_sig)
+    if a<0: return src
+    b=src.find(next_sig,a)
+    if b<0: return src
+    return src[:a]+body+src[b:]
+
+# Local labels used by the Free shell. Never expose internal translation keys.
+free_ui = r'''    String freeUi(String key){
+        String l=SettingsStore.language(this);if(l==null)l="en";l=l.toLowerCase(Locale.ROOT);
+        java.util.HashMap<String,String> m=new java.util.HashMap<>();
+        if("nl".equals(l)){m.put("library","Bibliotheek");m.put("search","Zoeken");m.put("source","TV-bron beheren");m.put("settings","Instellingen");m.put("close","Sluiten");}
+        else if("de".equals(l)){m.put("library","Bibliothek");m.put("search","Suchen");m.put("source","TV-Quelle verwalten");m.put("settings","Einstellungen");m.put("close","Schließen");}
+        else if("fr".equals(l)){m.put("library","Bibliothèque");m.put("search","Rechercher");m.put("source","Gérer la source TV");m.put("settings","Paramètres");m.put("close","Fermer");}
+        else if("es".equals(l)){m.put("library","Biblioteca");m.put("search","Buscar");m.put("source","Gestionar fuente de TV");m.put("settings","Ajustes");m.put("close","Cerrar");}
+        else if("it".equals(l)){m.put("library","Libreria");m.put("search","Cerca");m.put("source","Gestisci sorgente TV");m.put("settings","Impostazioni");m.put("close","Chiudi");}
+        else if("pt".equals(l)){m.put("library","Biblioteca");m.put("search","Pesquisar");m.put("source","Gerir fonte de TV");m.put("settings","Definições");m.put("close","Fechar");}
+        else if("tr".equals(l)){m.put("library","Kütüphane");m.put("search","Ara");m.put("source","TV kaynağını yönet");m.put("settings","Ayarlar");m.put("close","Kapat");}
+        else if("pl".equals(l)){m.put("library","Biblioteka");m.put("search","Szukaj");m.put("source","Zarządzaj źródłem TV");m.put("settings","Ustawienia");m.put("close","Zamknij");}
+        else if("ar".equals(l)){m.put("library","المكتبة");m.put("search","بحث");m.put("source","إدارة مصدر التلفاز");m.put("settings","الإعدادات");m.put("close","إغلاق");}
+        else {m.put("library","Library");m.put("search","Search");m.put("source","Manage TV source");m.put("settings","Settings");m.put("close","Close");}
+        String v=m.get(key);return v==null?key:v;
+    }
+
+'''
+if 'String freeUi(String key)' not in s:
+    pos=s.find('    void openProfile(){')
+    if pos<0: pos=s.find('    void loadHome(){')
+    if pos>=0:s=s[:pos]+free_ui+s[pos:]
+
+# Full sync: each provider category is independent. One bad category can never stop the rest.
+sync_method = r'''    void refreshSearchIndex(boolean force){
+        if(provider==null||profile==null||indexRefreshRunning)return;
+        final String key=profileKey();final android.content.SharedPreferences sp=SettingsStore.prefs(this);
+        final String completeKey="free_full_sync_done_v122_"+key;
+        if(!force&&sp.getBoolean(completeKey,false)){hideIndexBanner("");return;}
+        indexRefreshRunning=true;
+        indexFuture=indexExec.submit(()->{
+            boolean allOk=false;
+            try{
+                final String[] types={"live","vod","series"};
+                LinkedHashMap<String,List<Category>> catMap=new LinkedHashMap<>();
+                int total=0;
+                for(String type:types){List<Category> cats=new ArrayList<>(provider.categories(type));catMap.put(type,cats);total+=cats.size();}
+                final int grand=Math.max(1,total);
+                int liveCount=sp.getInt("free_sync_live_"+key,0),filmCount=sp.getInt("free_sync_vod_"+key,0),seriesCount=sp.getInt("free_sync_series_"+key,0);
+                int done=0;
+                for(String type:types){
+                    java.util.Set<String> saved=sp.getStringSet("free_sync_donecats_"+type+"_"+key,java.util.Collections.emptySet());
+                    java.util.HashSet<String> completed=new java.util.HashSet<>(saved);
+                    for(Category c:catMap.get(type))if(completed.contains(safe(c.id)))done++;
+                }
+                final int startDone=done,sl=liveCount,sf=filmCount,ss=seriesCount;
+                runOnUiThread(()->showFreeSyncProgress(startDone,grand,sl,sf,ss));
+                for(String type:types){
+                    java.util.Set<String> saved=sp.getStringSet("free_sync_donecats_"+type+"_"+key,java.util.Collections.emptySet());
+                    java.util.HashSet<String> completed=new java.util.HashSet<>(saved);
+                    for(Category cat:catMap.get(type)){
+                        if(Thread.currentThread().isInterrupted())return;
+                        String cid=safe(cat.id);if(completed.contains(cid))continue;
+                        List<MediaEntry> items=null;Throwable last=null;
+                        for(int attempt=0;attempt<2&&items==null;attempt++){
+                            try{items=provider.items(type,cat.id);}catch(Throwable ex){last=ex;try{Thread.sleep(250L*(attempt+1));}catch(InterruptedException ie){Thread.currentThread().interrupt();return;}}
+                        }
+                        if(items==null)continue;
+                        try{
+                            for(MediaEntry e:items)if(e!=null&&(e.group==null||e.group.trim().isEmpty()))e.group=cat.name;
+                            searchIndex.upsert(key,items);
+                            completed.add(cid);
+                            sp.edit().putStringSet("free_sync_donecats_"+type+"_"+key,new java.util.HashSet<>(completed)).apply();
+                            if("live".equals(type))liveCount+=items.size();else if("vod".equals(type))filmCount+=items.size();else seriesCount+=items.size();
+                            sp.edit().putInt("free_sync_live_"+key,liveCount).putInt("free_sync_vod_"+key,filmCount).putInt("free_sync_series_"+key,seriesCount).apply();
+                            done++;final int pd=done,pl=liveCount,pf=filmCount,ps=seriesCount;
+                            runOnUiThread(()->showFreeSyncProgress(pd,grand,pl,pf,ps));
+                        }catch(Throwable ignored){}
+                        try{Thread.sleep(35);}catch(InterruptedException ie){Thread.currentThread().interrupt();return;}
+                    }
+                    int sectionCount=searchIndex.countSection(key,type);if(sectionCount>0)searchIndex.markSection(key,type,sectionCount);
+                }
+                int finalDone=0;
+                for(String type:types){
+                    java.util.Set<String> saved=sp.getStringSet("free_sync_donecats_"+type+"_"+key,java.util.Collections.emptySet());
+                    for(Category c:catMap.get(type))if(saved.contains(safe(c.id)))finalDone++;
+                }
+                allOk=finalDone>=grand;
+                if(allOk)sp.edit().putBoolean(completeKey,true).apply();
+            }catch(Throwable ignored){}finally{
+                indexRefreshRunning=false;indexFuture=null;final boolean ok=allOk;
+                runOnUiThread(()->{
+                    if(ok)hideIndexBanner("");
+                    else{restoreFirstSyncBanner();ui.postDelayed(()->scheduleBackgroundIndex(),4000);}
+                });
+            }
+        });
+    }
+'''
+s=replace_java_method(s,'    void refreshSearchIndex(boolean force){','\n    void waitWhilePaused()',sync_method)
+
+# Navigation never cancels the full Free sync.
+pause_body=r'''    void pauseBackgroundIndexForUi(){ restoreFirstSyncBanner(); }
+'''
+a=s.find('    void pauseBackgroundIndexForUi(){')
+if a>=0:
+    b=s.find('\n    void ',a+10)
+    if b>0:s=s[:a]+pause_body+s[b:]
+if 'void scheduleBackgroundIndex()' not in s:
+    pos=s.find('    void openProfile(){')
+    if pos<0:pos=s.find('    void loadHome(){')
+    s=s[:pos]+r'''    void scheduleBackgroundIndex(){if(provider!=null&&profile!=null&&!indexRefreshRunning)refreshSearchIndex(false);}
+'''+s[pos:]
+s=s.replace('scheduleBackgroundIndex();scheduleBackgroundIndex();','scheduleBackgroundIndex();')
+
+# Progress text in selected app language.
+s=s.replace('String msg=T("library")+" · "+pct+"%  ·  "+T("live")+" "+live+"  ·  "+T("movies")+" "+films+"  ·  "+T("series")+" "+series;',
+            'String msg=freeUi("library")+" · "+pct+"%  ·  "+T("live")+" "+live+"  ·  "+T("movies")+" "+films+"  ·  "+T("series")+" "+series;')
+s=s.replace('"free_full_sync_done_v121_"+key','"free_full_sync_done_v122_"+key')
+
+# Header: keep a subtle yellow PRO discovery button next to language.
+layout=app/"src/main/res/layout/activity_main.xml"
+lx=layout.read_text()
+if 'android:id="@+id/proHintButton"' not in lx:
+    needle='<Button android:id="@+id/languageBadge"'
+    p=lx.find(needle)
+    if p>=0:
+        e=lx.find('/>',p)
+        if e>=0:
+            e+=2
+            pro='''\n            <Button android:id="@+id/proHintButton" android:layout_width="48dp" android:layout_height="36dp" android:layout_marginLeft="5dp" android:text="PRO" android:textAllCaps="false" android:textStyle="bold" android:textColor="#FF0A0A0A" android:textSize="10sp" android:backgroundTint="#FFFFD400" android:contentDescription="NenoTV Pro"/>'''
+            lx=lx[:e]+pro+lx[e:]
+layout.write_text(lx)
+
+# MainActivity field + binding for PRO hint.
+s=s.replace('languageBadge,planBadge; ProgressBar','languageBadge,planBadge,proHintButton; ProgressBar')
+s=s.replace('languageBadge=findViewById(R.id.languageBadge);','languageBadge=findViewById(R.id.languageBadge);proHintButton=findViewById(R.id.proHintButton);')
+wire='    void wire(){\n'
+if 'proHintButton.setOnClickListener' not in s:
+    s=s.replace(wire,wire+'        if(proHintButton!=null)proHintButton.setOnClickListener(v->openNenoWebsite("https://nenotv.com"));\n',1)
+
+# Free menu: clean localized labels, website and Pro; no raw keys/account/casting rows.
+ma=s.find('    void showNenoMenu(){')
+me=s.find('    void showTvShareMenu(){',ma)
+if ma>=0 and me>ma:
+    menu=r'''    void showNenoMenu(){
+        final Dialog d=new Dialog(this);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(14),dp(18),dp(22));
+        android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();bg.setColor(0xFF10141A);bg.setCornerRadii(new float[]{dp(22),dp(22),dp(22),dp(22),0,0,0,0});box.setBackground(bg);
+        TextView head=new TextView(this);head.setText("NenoTV");head.setTextColor(0xFFFFD400);head.setTextSize(22);head.setTypeface(null,Typeface.BOLD);head.setPadding(0,0,0,dp(10));box.addView(head);
+        addNenoMenuItem(d,box,freeUi("search"),()->toggleSearch());
+        addNenoMenuItem(d,box,freeUi("source"),()->startActivityForResult(new Intent(this,ProfileActivity.class),10));
+        addNenoMenuItem(d,box,freeUi("settings"),()->startActivity(new Intent(this,SettingsActivity.class)));
+        addNenoMenuItem(d,box,"🌐 NenoTV.com",()->openNenoWebsite("https://nenotv.com"));
+        addNenoMenuItem(d,box,"★ NenoTV Pro",()->openNenoWebsite("https://nenotv.com"));
+        addNenoMenuItem(d,box,freeUi("close"),()->{});
+        d.setContentView(box);Window w=d.getWindow();if(w!=null){w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));w.setGravity(Gravity.BOTTOM);w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);w.setDimAmount(0.45f);}d.show();if(w!=null)w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT);
+    }
+    void addNenoMenuItem(Dialog d,LinearLayout box,String label,Runnable action){
+        Button b=new Button(this);b.setText(label);b.setAllCaps(false);b.setTextColor(0xFFF7F8FA);b.setTextSize(15);b.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL);b.setPadding(dp(14),0,dp(14),0);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(50));lp.bottomMargin=dp(7);box.addView(b,lp);b.setOnClickListener(v->{d.dismiss();action.run();});
+    }
+    void openNenoWebsite(String url){try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url)));}catch(Exception ignored){}}
+
+'''
+    s=s[:ma]+menu+s[me:]
+
+# TV guide: one subtle yellow PRO entry for the advanced guide, not the old red lock button.
+s=s.replace('epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null)epgGridButton.setVisibility(View.GONE);',
+            'epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null){epgGridButton.setVisibility(View.VISIBLE);epgGridButton.setText("PRO");epgGridButton.setTextColor(0xFF0A0A0A);epgGridButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));epgGridButton.setOnClickListener(v->openNenoWebsite("https://nenotv.com"));}')
+
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.1: provider-order + full background sync")
+print("Prepared NenoTV Free v0.12.2: resilient full sync + clean language")
+main.write_text(s)
+print("Prepared NenoTV Free v0.12.2: provider-order + full background sync")
