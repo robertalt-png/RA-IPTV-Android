@@ -55,20 +55,16 @@ jobs:
 
       - name: Build
         working-directory: base/RA_IPTV_Android_v0.1
-        run: gradle --no-daemon assembleDebug assembleRelease
+        run: gradle --no-daemon assembleRelease
 
       - name: Package
         run: |
-          cp base/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk NenoTV-v0.9.8-debug.apk
           cp base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk NenoTV-v0.9.8-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
-          tar -czf NenoTV-Android-v0.9.8-source.tar.gz -C base RA_IPTV_Android_v0.1
 
       - uses: actions/upload-artifact@v4
         with:
           name: NenoTV-v0.9.8-build
           path: |
-            NenoTV-v0.9.8-debug.apk
             NenoTV-v0.9.8-unsigned.apk
-            NenoTV-Android-v0.9.8-source.tar.gz
             apksigner.jar
