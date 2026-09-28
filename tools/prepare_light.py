@@ -7,8 +7,8 @@ app=root/'app'
 gradle=app/'build.gradle'
 s=gradle.read_text()
 s=s.replace("applicationId 'com.robertalt.raiptv'","applicationId 'com.robertalt.raiptv.light'")
-s=s.replace("versionCode 47","versionCode 1")
-s=s.replace("versionName '0.10.5'","versionName '0.11.0-light'")
+s=re.sub(r"versionCode\\s+\\d+","versionCode 1",s,1)
+s=re.sub(r"versionName\\s+'[^']+'","versionName '0.11.0-light'",s,1)
 s=s.replace("    buildFeatures { buildConfig true }","    buildFeatures { buildConfig true }\n    dynamicFeatures = [':proextras']")
 s=s.replace("        buildConfigField 'String', 'NIVARO_CAST_RECEIVER_ID', '\"' + nivaroCastReceiverId + '\"'","        buildConfigField 'String', 'NIVARO_CAST_RECEIVER_ID', '\"' + nivaroCastReceiverId + '\"'\n        buildConfigField 'boolean', 'LIGHT_BUILD', 'true'")
 s=s.replace("    implementation 'org.videolan.android:libvlc-all:3.7.6'\n","")
