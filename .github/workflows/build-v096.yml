@@ -1,8 +1,8 @@
-name: Build NenoTV v0.9.8
+name: Build NenoTV v0.9.9
 
 on:
   push:
-    branches: [ nenotv-v0.9.8-free-pro ]
+    branches: [ nenotv-v0.9.9-mobile-ui ]
   workflow_dispatch:
 
 permissions:
@@ -45,7 +45,7 @@ jobs:
               if not p.is_file() or p.suffix.lower() not in {".java",".xml",".html",".txt",".js"}: continue
               try: s=p.read_text()
               except UnicodeDecodeError: continue
-              s=s.replace("Nivaro IPTV Player 0.9.5","NenoTV Player 0.9.8")
+              s=s.replace("Nivaro IPTV Player 0.9.5","NenoTV Player 0.9.9")
               s=s.replace("Nivaro IPTV Player","NenoTV")
               s=s.replace("About Nivaro","About NenoTV")
               s=s.replace("Over Nivaro","Over NenoTV")
@@ -59,9 +59,76 @@ jobs:
               s=s.replace('android:text="Nivaro"','android:text="NenoTV"')
               p.write_text(s)
           PY
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          layout=Path("app/src/main/res/layout/activity_main.xml")
+          s=layout.read_text()
+          start=s.index('  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical"')
+          end=s.index('  <LinearLayout android:id="@+id/indexBanner"')
+          header='''  <LinearLayout android:id="@+id/topBar" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:paddingLeft="14dp" android:paddingRight="14dp" android:paddingTop="8dp" android:paddingBottom="6dp">
+            <LinearLayout android:id="@+id/brandButton" android:layout_width="wrap_content" android:layout_height="44dp" android:gravity="center_vertical" android:orientation="horizontal" android:clickable="true" android:focusable="true" android:contentDescription="NenoTV menu">
+              <ImageView android:layout_width="30dp" android:layout_height="30dp" android:src="@drawable/ic_nivaro_mark" android:scaleType="fitCenter" android:contentDescription="NenoTV"/>
+              <TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="7dp" android:text="NenoTV" android:textColor="#FFD400" android:textSize="17sp" android:textStyle="bold" android:letterSpacing="0.02" android:singleLine="true" android:maxLines="1" android:includeFontPadding="false"/>
+            </LinearLayout>
+            <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
+            <Button android:id="@+id/searchToggle" android:layout_width="1dp" android:layout_height="1dp" android:text="⌕" android:visibility="gone"/>
+            <Button android:id="@+id/settingsButton" android:layout_width="1dp" android:layout_height="1dp" android:text="⚙" android:visibility="gone"/>
+            <Button android:id="@+id/tvShareButton" android:layout_width="1dp" android:layout_height="1dp" android:text="TV" android:visibility="gone"/>
+            <Button android:id="@+id/profileButton" android:layout_width="1dp" android:layout_height="1dp" android:text="FREE" android:visibility="gone"/>
+          </LinearLayout>
+          '''
+          layout.write_text(s[:start]+header+s[end:])
+
+          main=Path("app/src/main/java/com/robertalt/raiptv/MainActivity.java")
+          s=main.read_text()
+          s=s.replace(
+              'title.setText("NenoTV");title.setTextSize(13);title.setLetterSpacing(0.04f);title.setTextColor(0xFFFFD400);title.setSingleLine(true);title.setTypeface(null,Typeface.BOLD);',
+              'title.setText("NenoTV");title.setTextSize(17);title.setLetterSpacing(0.02f);title.setTextColor(0xFFFFD400);title.setSingleLine(true);title.setTypeface(null,Typeface.BOLD);'
+          )
+          anchor='        View bottomNav=findViewById(R.id.bottomNav);'
+          inset='''        View topBar=findViewById(R.id.topBar);if(topBar!=null){final int baseTop=dp(8);topBar.setOnApplyWindowInsetsListener((v,insets)->{int top=insets.getSystemWindowInsetTop();v.setPadding(v.getPaddingLeft(),baseTop+top,v.getPaddingRight(),v.getPaddingBottom());return insets;});topBar.requestApplyInsets();}
+          '''
+          if inset.strip() not in s:
+              s=s.replace(anchor,inset+anchor,1)
+          wire='    void wire(){\n'
+          if 'R.id.brandButton' not in s:
+              s=s.replace(wire,wire+'        findViewById(R.id.brandButton).setOnClickListener(v->showNenoMenu());\n',1)
+          s=s.replace('int heroHeight(){String h=SettingsStore.hero(this);int v="small".equals(h)?165:"large".equals(h)?215:185;return dp(v);}',
+                      'int heroHeight(){String h=SettingsStore.hero(this);int v="small".equals(h)?150:"large".equals(h)?195:165;return dp(v);}')
+          s=re.sub(r'String lastCrash=CrashGuard\.consumeLastType\(this\);busy\(false,!lastCrash\.isEmpty\(\)\?T\("stability"\)\+" · "\+T\("previous_error"\)\+": "\+lastCrash:\(local\.isEmpty\(\)\?T\("watch_without_search"\):T\("continue"\)\+" · "\+T\("recent_live"\)\+" · "\+T\("favorites"\)\)\);warmCategories\(\);',
+                   'String lastCrash=CrashGuard.consumeLastType(this);busy(false,!lastCrash.isEmpty()?T("stability")+" · "+T("previous_error")+": "+lastCrash:(local.isEmpty()?T("watch_without_search"):""));warmCategories();',s)
+          menu='''    void showNenoMenu(){
+              final Dialog d=new Dialog(this);
+              final boolean nl="nl".equals(SettingsStore.language(this));
+              LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(14),dp(18),dp(22));
+              android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();bg.setColor(0xFF10141A);bg.setCornerRadii(new float[]{dp(22),dp(22),dp(22),dp(22),0,0,0,0});box.setBackground(bg);
+              TextView head=new TextView(this);head.setText("NenoTV");head.setTextColor(0xFFFFD400);head.setTextSize(22);head.setTypeface(null,Typeface.BOLD);box.addView(head);
+              EntitlementStore ent=new EntitlementStore(this);TextView plan=new TextView(this);plan.setText(ent.statusLabel(this));plan.setTextColor(0xFFA7AFBC);plan.setTextSize(13);plan.setPadding(0,0,0,dp(10));box.addView(plan);
+              addNenoMenuItem(d,box,nl?"Zoeken":"Search",()->{toggleSearch();});
+              addNenoMenuItem(d,box,nl?"Account & Pro":"Account & Pro",()->startActivity(new Intent(this,AccountActivity.class)));
+              addNenoMenuItem(d,box,nl?"TV-bron beheren":"Manage TV source",()->startActivityForResult(new Intent(this,ProfileActivity.class),10));
+              addNenoMenuItem(d,box,nl?"Cast / TV":"Cast / TV",()->{if(ProGate.require(this,T("casting")))showTvShareMenu();});
+              addNenoMenuItem(d,box,nl?"Instellingen":"Settings",()->startActivity(new Intent(this,SettingsActivity.class)));
+              addNenoMenuItem(d,box,nl?"Sluiten":"Close",()->{});
+              d.setContentView(box);
+              Window w=d.getWindow();if(w!=null){w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));w.setGravity(Gravity.BOTTOM);w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);w.setDimAmount(0.45f);}
+              d.show();if(w!=null)w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT);
+          }
+          void addNenoMenuItem(Dialog d,LinearLayout box,String label,Runnable action){
+              Button b=new Button(this);b.setText(label);b.setAllCaps(false);b.setTextColor(0xFFF7F8FA);b.setTextSize(15);b.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL);b.setPadding(dp(14),0,dp(14),0);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));
+              LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(50));lp.bottomMargin=dp(7);box.addView(b,lp);b.setOnClickListener(v->{d.dismiss();action.run();});
+          }
+
+          '''
+          if 'void showNenoMenu()' not in s:
+              s=s.replace('    void showTvShareMenu(){',menu+'    void showTvShareMenu(){',1)
+          main.write_text(s)
+          PY
           sed -i 's/BuildConfig.NENOTV_API_BASE.trim()/"https:\/\/nenotv.com"/' app/src/main/java/com/robertalt/raiptv/entitlement/EntitlementClient.java
-          sed -i "s/versionCode 37/versionCode 40/" app/build.gradle
-          sed -i "s/versionName '0.9.5'/versionName '0.9.8'/" app/build.gradle
+          sed -i "s/versionCode 37/versionCode 41/" app/build.gradle
+          sed -i "s/versionName '0.9.5'/versionName '0.9.9'/" app/build.gradle
 
       - uses: actions/setup-java@v4
         with:
@@ -97,14 +164,14 @@ jobs:
           ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
           IN="base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk"
           "$AAPT" dump badging "$IN" | tee apk-badging.txt
-          grep -q "package: name='com.robertalt.raiptv' versionCode='40' versionName='0.9.8'" apk-badging.txt
-          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-v0.9.8-aligned-unsigned.apk
-          "$ZIPALIGN" -c -p 4 NenoTV-v0.9.8-aligned-unsigned.apk
+          grep -q "package: name='com.robertalt.raiptv' versionCode='41' versionName='0.9.9'" apk-badging.txt
+          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-v0.9.9-aligned-unsigned.apk
+          "$ZIPALIGN" -c -p 4 NenoTV-v0.9.9-aligned-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-v0.9.8-build
+          name: NenoTV-v0.9.9-build
           path: |
-            NenoTV-v0.9.8-aligned-unsigned.apk
+            NenoTV-v0.9.9-aligned-unsigned.apk
             apksigner.jar
