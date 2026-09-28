@@ -1,8 +1,8 @@
-name: Build NenoTV v0.9.9
+name: Build NenoTV v0.10.0
 
 on:
   push:
-    branches: [ nenotv-v0.9.9-mobile-ui ]
+    branches: [ nenotv-v0.10.0-branding-menu ]
   workflow_dispatch:
 
 permissions:
@@ -45,7 +45,7 @@ jobs:
               if not p.is_file() or p.suffix.lower() not in {".java",".xml",".html",".txt",".js"}: continue
               try: s=p.read_text()
               except UnicodeDecodeError: continue
-              s=s.replace("Nivaro IPTV Player 0.9.5","NenoTV Player 0.9.9")
+              s=s.replace("Nivaro IPTV Player 0.9.5","NenoTV Player 0.10.0")
               s=s.replace("Nivaro IPTV Player","NenoTV")
               s=s.replace("About Nivaro","About NenoTV")
               s=s.replace("Over Nivaro","Over NenoTV")
@@ -68,11 +68,12 @@ jobs:
           start=s.index('  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical"')
           end=s.index('  <LinearLayout android:id="@+id/indexBanner"')
           header='''  <LinearLayout android:id="@+id/topBar" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:paddingLeft="14dp" android:paddingRight="14dp" android:paddingTop="8dp" android:paddingBottom="6dp">
-            <LinearLayout android:id="@+id/brandButton" android:layout_width="wrap_content" android:layout_height="44dp" android:gravity="center_vertical" android:orientation="horizontal" android:clickable="true" android:focusable="true" android:contentDescription="NenoTV menu">
+            <LinearLayout android:id="@+id/brandButton" android:layout_width="wrap_content" android:layout_height="44dp" android:gravity="center_vertical" android:orientation="horizontal" android:clickable="false" android:focusable="false" android:contentDescription="NenoTV">
               <ImageView android:layout_width="30dp" android:layout_height="30dp" android:src="@drawable/ic_nivaro_mark" android:scaleType="fitCenter" android:contentDescription="NenoTV"/>
               <TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="7dp" android:text="NenoTV" android:textColor="#FFD400" android:textSize="17sp" android:textStyle="bold" android:letterSpacing="0.02" android:singleLine="true" android:maxLines="1" android:includeFontPadding="false"/>
             </LinearLayout>
             <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
+            <Button android:id="@+id/menuButton" android:layout_width="48dp" android:layout_height="44dp" android:text="☰" android:textSize="24sp" android:textColor="#FFFFFF" android:backgroundTint="#151A21" android:contentDescription="Menu"/>
             <Button android:id="@+id/searchToggle" android:layout_width="1dp" android:layout_height="1dp" android:text="⌕" android:visibility="gone"/>
             <Button android:id="@+id/settingsButton" android:layout_width="1dp" android:layout_height="1dp" android:text="⚙" android:visibility="gone"/>
             <Button android:id="@+id/tvShareButton" android:layout_width="1dp" android:layout_height="1dp" android:text="TV" android:visibility="gone"/>
@@ -93,8 +94,8 @@ jobs:
           if inset.strip() not in s:
               s=s.replace(anchor,inset+anchor,1)
           wire='    void wire(){\n'
-          if 'R.id.brandButton' not in s:
-              s=s.replace(wire,wire+'        findViewById(R.id.brandButton).setOnClickListener(v->showNenoMenu());\n',1)
+          if 'R.id.menuButton' not in s:
+              s=s.replace(wire,wire+'        findViewById(R.id.menuButton).setOnClickListener(v->showNenoMenu());\n',1)
           s=s.replace('int heroHeight(){String h=SettingsStore.hero(this);int v="small".equals(h)?165:"large".equals(h)?215:185;return dp(v);}',
                       'int heroHeight(){String h=SettingsStore.hero(this);int v="small".equals(h)?150:"large".equals(h)?195:165;return dp(v);}')
           s=re.sub(r'String lastCrash=CrashGuard\.consumeLastType\(this\);busy\(false,!lastCrash\.isEmpty\(\)\?T\("stability"\)\+" · "\+T\("previous_error"\)\+": "\+lastCrash:\(local\.isEmpty\(\)\?T\("watch_without_search"\):T\("continue"\)\+" · "\+T\("recent_live"\)\+" · "\+T\("favorites"\)\)\);warmCategories\(\);',
@@ -127,8 +128,8 @@ jobs:
           main.write_text(s)
           PY
           sed -i 's/BuildConfig.NENOTV_API_BASE.trim()/"https:\/\/nenotv.com"/' app/src/main/java/com/robertalt/raiptv/entitlement/EntitlementClient.java
-          sed -i "s/versionCode 37/versionCode 41/" app/build.gradle
-          sed -i "s/versionName '0.9.5'/versionName '0.9.9'/" app/build.gradle
+          sed -i "s/versionCode 37/versionCode 42/" app/build.gradle
+          sed -i "s/versionName '0.9.5'/versionName '0.10.0'/" app/build.gradle
 
       - uses: actions/setup-java@v4
         with:
@@ -164,14 +165,14 @@ jobs:
           ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
           IN="base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk"
           "$AAPT" dump badging "$IN" | tee apk-badging.txt
-          grep -q "package: name='com.robertalt.raiptv' versionCode='41' versionName='0.9.9'" apk-badging.txt
-          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-v0.9.9-aligned-unsigned.apk
-          "$ZIPALIGN" -c -p 4 NenoTV-v0.9.9-aligned-unsigned.apk
+          grep -q "package: name='com.robertalt.raiptv' versionCode='42' versionName='0.10.0'" apk-badging.txt
+          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-v0.10.0-aligned-unsigned.apk
+          "$ZIPALIGN" -c -p 4 NenoTV-v0.10.0-aligned-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-v0.9.9-build
+          name: NenoTV-v0.10.0-build
           path: |
-            NenoTV-v0.9.9-aligned-unsigned.apk
+            NenoTV-v0.10.0-aligned-unsigned.apk
             apksigner.jar
