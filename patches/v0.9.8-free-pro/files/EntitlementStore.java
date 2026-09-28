@@ -3,7 +3,6 @@ package com.robertalt.raiptv.storage;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Base64;
-import com.robertalt.raiptv.UiText;
 import org.json.JSONObject;
 import java.security.SecureRandom;
 import java.util.Locale;
@@ -62,10 +61,7 @@ public final class EntitlementStore {
         return Math.max(1,(left+86399999L)/86400000L);
     }
     public String shortBadge(){Level v=level();return v==Level.PRO?"PRO":v==Level.PRO_TRIAL?"TRIAL":"FREE";}
-    public String statusLabel(Context c){
-        Level v=level();
-        return v==Level.PRO?UiText.t(c,"nenotv_pro"):v==Level.PRO_TRIAL?UiText.t(c,"nenotv_pro_trial"):UiText.t(c,"nenotv_free");
-    }
+    public String statusLabel(Context c){Level v=level();return v==Level.PRO?"NenoTV Pro":v==Level.PRO_TRIAL?"NenoTV Pro Trial":"NenoTV Free";}
 
     public void applyServer(JSONObject o){
         if(o==null)return;
