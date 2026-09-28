@@ -428,7 +428,7 @@ jobs:
           x=layout.read_text()
           # Header language and plan badges
           x=x.replace('<Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>',
-'''<Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
+          '''<Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
             <Button android:id="@+id/languageBadge" android:layout_width="48dp" android:layout_height="36dp" android:text="NL" android:textAllCaps="false" android:textColor="#FFF7F8FA" android:textSize="11sp" android:backgroundTint="#151A21" android:contentDescription="Language"/>
             <Button android:id="@+id/planBadge" android:layout_width="58dp" android:layout_height="36dp" android:layout_marginLeft="5dp" android:text="FREE" android:textAllCaps="false" android:textStyle="bold" android:textColor="#FF0A0A0A" android:textSize="10sp" android:backgroundTint="#FFD400" android:contentDescription="Plan"/>''',1)
 
@@ -454,8 +454,8 @@ jobs:
           # wire header badges
           wire='    void wire(){\n'
           extra='''        if(languageBadge!=null)languageBadge.setOnClickListener(v->showLanguageQuickMenu());
-        if(planBadge!=null)planBadge.setOnClickListener(v->startActivity(new Intent(this,AccountActivity.class)));
-'''
+                  if(planBadge!=null)planBadge.setOnClickListener(v->startActivity(new Intent(this,AccountActivity.class)));
+          '''
           if 'showLanguageQuickMenu()' not in s:
               s=s.replace(wire,wire+extra,1)
 
@@ -464,17 +464,17 @@ jobs:
           b=s.find('\n    void hideIndexBanner(',a)
           if a>=0 and b>0:
               method='''    void showIndexBanner(String type,int done,int cats,int titles){
-        if(indexBanner==null||indexBannerText==null)return;
-        android.content.SharedPreferences sp=SettingsStore.prefs(this);
-        String key="first_sync_done_"+profileKey();
-        if(sp.getBoolean(key,false)){indexBanner.setVisibility(View.GONE);return;}
-        int pct=cats<=0?0:Math.max(0,Math.min(100,(done*100)/Math.max(1,cats)));
-        String target="vod".equals(type)?T("movies"):("series".equals(type)?T("series"):T("live_tv"));
-        indexBannerText.setText(T("first_sync_wait")+" · "+target+" "+done+"/"+Math.max(1,cats)+" · "+titles+" "+T("titles"));
-        if(indexBannerProgress!=null){indexBannerProgress.setIndeterminate(false);indexBannerProgress.setProgress(pct);}
-        indexBanner.setTag(type);indexBanner.setVisibility(View.VISIBLE);
-    }
-'''
+                  if(indexBanner==null||indexBannerText==null)return;
+                  android.content.SharedPreferences sp=SettingsStore.prefs(this);
+                  String key="first_sync_done_"+profileKey();
+                  if(sp.getBoolean(key,false)){indexBanner.setVisibility(View.GONE);return;}
+                  int pct=cats<=0?0:Math.max(0,Math.min(100,(done*100)/Math.max(1,cats)));
+                  String target="vod".equals(type)?T("movies"):("series".equals(type)?T("series"):T("live_tv"));
+                  indexBannerText.setText(T("first_sync_wait")+" · "+target+" "+done+"/"+Math.max(1,cats)+" · "+titles+" "+T("titles"));
+                  if(indexBannerProgress!=null){indexBannerProgress.setIndeterminate(false);indexBannerProgress.setProgress(pct);}
+                  indexBanner.setTag(type);indexBanner.setVisibility(View.VISIBLE);
+              }
+          '''
               s=s[:a]+method+s[b:]
 
           # mark full sync once all main sections are complete
@@ -487,16 +487,16 @@ jobs:
                       '@Override protected void onResume(){super.onResume();activityPaused=false;updateHeaderBadges();')
 
           helpers='''    void updateHeaderBadges(){
-        if(languageBadge!=null)languageBadge.setText(SettingsStore.primaryLanguage(this).toUpperCase(Locale.ROOT));
-        if(planBadge!=null){EntitlementStore e=new EntitlementStore(this);String b=e.shortBadge();if(e.isTrial())b="TRIAL · "+e.trialDaysRemaining()+"d";planBadge.setText(b);planBadge.setTextColor(0xFF0A0A0A);planBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));}
-    }
-    void showLanguageQuickMenu(){
-        final String[] codes={"nl","en","de","fr","es","it","pt","tr","pl","ar"};
-        String[] labels=new String[codes.length];for(int i=0;i<codes.length;i++)labels[i]=SettingsStore.displayLanguage(this,codes[i]);
-        new AlertDialog.Builder(this).setTitle(T("language")).setItems(labels,(d,w)->{SettingsStore.setPrimaryLanguage(this,codes[w]);recreate();}).show();
-    }
+                  if(languageBadge!=null)languageBadge.setText(SettingsStore.primaryLanguage(this).toUpperCase(Locale.ROOT));
+                  if(planBadge!=null){EntitlementStore e=new EntitlementStore(this);String b=e.shortBadge();if(e.isTrial())b="TRIAL · "+e.trialDaysRemaining()+"d";planBadge.setText(b);planBadge.setTextColor(0xFF0A0A0A);planBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));}
+              }
+              void showLanguageQuickMenu(){
+                  final String[] codes={"nl","en","de","fr","es","it","pt","tr","pl","ar"};
+                  String[] labels=new String[codes.length];for(int i=0;i<codes.length;i++)labels[i]=SettingsStore.displayLanguage(this,codes[i]);
+                  new AlertDialog.Builder(this).setTitle(T("language")).setItems(labels,(d,w)->{SettingsStore.setPrimaryLanguage(this,codes[w]);recreate();}).show();
+              }
 
-'''
+          '''
           if 'void updateHeaderBadges()' not in s:
               s=s.replace('    void openProfile(){',helpers+'    void openProfile(){',1)
 
