@@ -605,27 +605,27 @@ jobs:
           b=s.find('\n    void hideIndexBanner(',a)
           if a>=0 and b>0:
               method='''    void showIndexBanner(String type,int done,int cats,int titles){
-        if(indexBanner==null||indexBannerText==null)return;
-        android.content.SharedPreferences sp=SettingsStore.prefs(this);
-        String key=profileKey();
-        if(sp.getBoolean("first_sync_done_"+key,false)){indexBanner.setVisibility(View.GONE);return;}
-        int total=Math.max(1,cats),finished=Math.max(0,Math.min(done,total));
-        int pct=Math.max(0,Math.min(100,(finished*100)/total));
-        sp.edit().putInt("first_sync_done_count_"+key,finished).putInt("first_sync_total_count_"+key,total).putInt("first_sync_titles_"+key,Math.max(0,titles)).apply();
-        indexBannerText.setText(T("first_sync_wait")+" · "+pct+"% · "+finished+"/"+total+" "+T("categories")+" · "+Math.max(0,titles)+" "+T("titles"));
-        if(indexBannerProgress!=null){indexBannerProgress.setIndeterminate(false);indexBannerProgress.setMax(100);indexBannerProgress.setProgress(pct);}
-        indexBanner.setVisibility(View.VISIBLE);
-    }
-    void restoreFirstSyncBanner(){
-        if(indexBanner==null||profile==null)return;
-        android.content.SharedPreferences sp=SettingsStore.prefs(this);String key=profileKey();
-        if(sp.getBoolean("first_sync_done_"+key,false)){indexBanner.setVisibility(View.GONE);return;}
-        int total=sp.getInt("first_sync_total_count_"+key,0);
-        int done=sp.getInt("first_sync_done_count_"+key,0);
-        int titles=sp.getInt("first_sync_titles_"+key,0);
-        if(total>0)showIndexBanner("",done,total,titles);
-    }
-'''
+                  if(indexBanner==null||indexBannerText==null)return;
+                  android.content.SharedPreferences sp=SettingsStore.prefs(this);
+                  String key=profileKey();
+                  if(sp.getBoolean("first_sync_done_"+key,false)){indexBanner.setVisibility(View.GONE);return;}
+                  int total=Math.max(1,cats),finished=Math.max(0,Math.min(done,total));
+                  int pct=Math.max(0,Math.min(100,(finished*100)/total));
+                  sp.edit().putInt("first_sync_done_count_"+key,finished).putInt("first_sync_total_count_"+key,total).putInt("first_sync_titles_"+key,Math.max(0,titles)).apply();
+                  indexBannerText.setText(T("first_sync_wait")+" · "+pct+"% · "+finished+"/"+total+" "+T("categories")+" · "+Math.max(0,titles)+" "+T("titles"));
+                  if(indexBannerProgress!=null){indexBannerProgress.setIndeterminate(false);indexBannerProgress.setMax(100);indexBannerProgress.setProgress(pct);}
+                  indexBanner.setVisibility(View.VISIBLE);
+              }
+              void restoreFirstSyncBanner(){
+                  if(indexBanner==null||profile==null)return;
+                  android.content.SharedPreferences sp=SettingsStore.prefs(this);String key=profileKey();
+                  if(sp.getBoolean("first_sync_done_"+key,false)){indexBanner.setVisibility(View.GONE);return;}
+                  int total=sp.getInt("first_sync_total_count_"+key,0);
+                  int done=sp.getInt("first_sync_done_count_"+key,0);
+                  int titles=sp.getInt("first_sync_titles_"+key,0);
+                  if(total>0)showIndexBanner("",done,total,titles);
+              }
+          '''
               s=s[:a]+method+s[b:]
 
           # Replace background indexer with global category progress and one-time v0.10.4 rebuild.
@@ -633,9 +633,9 @@ jobs:
           b=s.find('\n    void waitWhilePaused()',a)
           if a>=0 and b>0:
               refresh='''    void refreshSearchIndex(boolean force){
-        if(provider==null||profile==null||indexRefreshRunning)return;
-        indexRefreshRunning=true;final String key=profileKey();final boolean requestedForce=force;
-        indexFuture=indexExec.submit(()->{
+                  if(provider==null||profile==null||indexRefreshRunning)return;
+                  indexRefreshRunning=true;final String key=profileKey();final boolean requestedForce=force;
+                  indexFuture=indexExec.submit(()->{
             boolean allComplete=false;
             try{
                 android.content.SharedPreferences sp=SettingsStore.prefs(this);
@@ -708,9 +708,9 @@ jobs:
                 indexCategoryBusy=false;indexRefreshRunning=false;indexFuture=null;final boolean done=allComplete;
                 runOnUiThread(()->{if(!isUiAlive())return;if(done)hideIndexBanner("");else restoreFirstSyncBanner();});
             }
-        });
-    }
-'''
+                  });
+              }
+          '''
               s=s[:a]+refresh+s[b:]
 
           # Don't claim "no results" while selected language is still being built.
