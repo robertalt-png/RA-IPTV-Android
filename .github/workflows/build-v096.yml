@@ -249,12 +249,12 @@ jobs:
           x=x.replace('s.append("★ ").append(rating);','s.append("★ ").append(formatRating(rating));')
           if 'String formatRating(String value)' not in x:
               x=x.replace('    public String meta(){',
-('    public static String formatRating(String value){\\n'
- '        if(value==null)return "";\\n'
- '        String v=value.trim();if(v.isEmpty())return "";\\n'
- '        try{double d=Double.parseDouble(v.replace(\\',\\',\\'.\\'));return new java.text.DecimalFormat("0.#").format(d);}catch(Exception ignored){return v;}\\n'
- '    }\\n'
- '    public String meta(){')
+          ('    public static String formatRating(String value){\\n'
+           '        if(value==null)return "";\\n'
+           '        String v=value.trim();if(v.isEmpty())return "";\\n'
+           '        try{double d=Double.parseDouble(v.replace(\\',\\',\\'.\\'));return new java.text.DecimalFormat("0.#").format(d);}catch(Exception ignored){return v;}\\n'
+           '    }\\n'
+           '    public String meta(){')
           entry.write_text(x)
 
           # Faster visible poster loading + branded placeholder for missing artwork.
