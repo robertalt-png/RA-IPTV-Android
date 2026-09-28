@@ -906,10 +906,17 @@ jobs:
           p=Path("app/src/main/java/com/robertalt/raiptv/MediaGridAdapter.java")
           x=p.read_text()
           x=x.replace('private static final ExecutorService epgExec=Executors.newFixedThreadPool(2);','private static final ExecutorService epgExec=Executors.newSingleThreadExecutor();')
-          a=x.find('final String key=e.uniqueKey();InfoTranslator.translate(cur.title')
-          if a>=0:
-              b=x.find(';}',a)
-              if b>=0:x=x[:a]+x[b+1:]
+          a=x.index('    private void bindLive(TextView meta,MediaEntry e,String base,List<EpgEntry>rows){')
+          b=x.index('\n}',a)
+          bind='''    private void bindLive(TextView meta,MediaEntry e,String base,List<EpgEntry>rows){
+              if(rows==null||rows.isEmpty())return;
+              long n=System.currentTimeMillis()/1000L;EpgEntry cur=rows.get(0);
+              for(EpgEntry q:rows)if(q.startEpoch>0&&q.endEpoch>0&&q.startEpoch<=n&&n<q.endEpoch){cur=q;break;}
+              String prefix=(base==null||base.isEmpty()?"":base+" · ")+UiText.t(context,"live")+": ";
+              Object tag=meta.getTag();if(tag!=null&&tag.equals(e.uniqueKey()))meta.setText(prefix+cur.title);
+          }
+          '''
+          x=x[:a]+bind+x[b:]
           p.write_text(x)
           PY
           sed -i 's/BuildConfig.NENOTV_API_BASE.trim()/"https:\/\/nenotv.com"/' app/src/main/java/com/robertalt/raiptv/entitlement/EntitlementClient.java
