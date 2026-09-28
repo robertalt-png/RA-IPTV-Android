@@ -20,64 +20,7 @@ public class AccountActivity extends Activity {
     EntitlementStore ent;
 
     int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
-    String T(String k){
-        boolean nl="nl".equals(com.robertalt.raiptv.storage.SettingsStore.language(this));
-        if(nl){
-            switch(k){
-                case "close": return "Sluiten";
-                case "account_and_pro": return "Account & NenoTV Pro";
-                case "activate_restore": return "Activeren of aankoop herstellen";
-                case "email_address": return "E-mailadres";
-                case "order_id_optional": return "Order ID (optioneel)";
-                case "activate_pro": return "Pro activeren / herstellen";
-                case "request_trial": return "Gratis proefperiode aanvragen";
-                case "view_pro": return "Bekijk NenoTV Pro";
-                case "refresh_status": return "Accountstatus vernieuwen";
-                case "this_device": return "Dit apparaat";
-                case "device_code": return "Apparaatcode";
-                case "trial_remaining": return "Proefperiode resterend";
-                case "days": return "dagen";
-                case "pro_active": return "Pro is actief";
-                case "devices": return "apparaten";
-                case "free_description": return "Live TV, Films, Series, basis-TV-gids, zoeken en favorieten zijn beschikbaar in Free.";
-                case "checking_status": return "NenoTV-account controleren…";
-                case "status_updated": return "Accountstatus bijgewerkt";
-                case "activation_success": return "NenoTV Pro geactiveerd";
-                case "activation_failed": return "Activeren mislukt";
-                case "server_unavailable": return "De NenoTV-accountservice is nog niet beschikbaar";
-                case "email_required": return "Vul je e-mailadres in";
-                case "unknown_error": return "Onbekende fout";
-            }
-        } else {
-            switch(k){
-                case "close": return "Close";
-                case "account_and_pro": return "Account & NenoTV Pro";
-                case "activate_restore": return "Activate or restore purchase";
-                case "email_address": return "Email address";
-                case "order_id_optional": return "Order ID (optional)";
-                case "activate_pro": return "Activate / restore Pro";
-                case "request_trial": return "Request free trial";
-                case "view_pro": return "View NenoTV Pro";
-                case "refresh_status": return "Refresh account status";
-                case "this_device": return "This device";
-                case "device_code": return "Device code";
-                case "trial_remaining": return "Trial remaining";
-                case "days": return "days";
-                case "pro_active": return "Pro is active";
-                case "devices": return "devices";
-                case "free_description": return "Live TV, movies, series, basic TV guide, search and favorites are available in Free.";
-                case "checking_status": return "Checking NenoTV account…";
-                case "status_updated": return "Account status updated";
-                case "activation_success": return "NenoTV Pro activated";
-                case "activation_failed": return "Activation failed";
-                case "server_unavailable": return "NenoTV account service is not available yet";
-                case "email_required": return "Enter your email address";
-                case "unknown_error": return "Unknown error";
-            }
-        }
-        return UiText.t(this,k);
-    }
-    TextView t(String s,int z){TextView v=new TextView(this);v.setText(s);v.setTextColor(0xFFF7F8FA);v.setTextSize(z);return v;}
+    String T(String k){return UiText.t(this,k);}\n    TextView t(String s,int z){TextView v=new TextView(this);v.setText(s);v.setTextColor(0xFFF7F8FA);v.setTextSize(z);return v;}
     Button b(String s){Button v=new Button(this);v.setText(s);v.setAllCaps(false);v.setTextColor(0xFFF7F8FA);v.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));return v;}
 
     @Override public void onCreate(Bundle x){
