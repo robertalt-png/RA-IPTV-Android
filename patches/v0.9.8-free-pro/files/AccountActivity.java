@@ -20,7 +20,8 @@ public class AccountActivity extends Activity {
     EntitlementStore ent;
 
     int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
-    String T(String k){return UiText.t(this,k);}\n    TextView t(String s,int z){TextView v=new TextView(this);v.setText(s);v.setTextColor(0xFFF7F8FA);v.setTextSize(z);return v;}
+    String T(String k){return UiText.t(this,k);}
+    TextView t(String s,int z){TextView v=new TextView(this);v.setText(s);v.setTextColor(0xFFF7F8FA);v.setTextSize(z);return v;}
     Button b(String s){Button v=new Button(this);v.setText(s);v.setAllCaps(false);v.setTextColor(0xFFF7F8FA);v.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));return v;}
 
     @Override public void onCreate(Bundle x){
