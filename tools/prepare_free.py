@@ -209,6 +209,21 @@ s=s.replace('warmCategories();','warmCategories();scheduleBackgroundIndex();')
 # Free TV-share/cast control stays locked for Pro instead of launching Cast.
 s=s.replace('tvShareButton.setOnClickListener(v->showTvShareMenu());','tvShareButton.setOnClickListener(v->ProGate.require(this,T("casting")));')
 
+# Final safety pass: Free sync helpers must exist after all upstream source rewrites.
+if 'void scheduleBackgroundIndex()' not in s:
+    ins='''    void scheduleBackgroundIndex(){ if(provider!=null&&profile!=null&&!indexRefreshRunning)refreshSearchIndex(false); }
+'''
+    pos=s.find('    void openProfile(){')
+    if pos<0: pos=s.find('    void loadHome(){')
+    s=s[:pos]+ins+s[pos:]
+if 'void pauseBackgroundIndexForUi()' not in s:
+    ins='''    void pauseBackgroundIndexForUi(){ restoreFirstSyncBanner(); }
+'''
+    pos=s.find('    void scheduleBackgroundIndex(){')
+    s=s[:pos]+ins+s[pos:]
+s=s.replace('scheduleBackgroundIndex();scheduleBackgroundIndex();','scheduleBackgroundIndex();')
+s=s.replace(';planBadge=findViewById(R.id.planBadge)','')
+
 # Free UI: no plan badge and no scattered PRO controls. Keep one clear website/Pro route in the menu.
 layout=app/"src/main/res/layout/activity_main.xml"
 x=layout.read_text()
