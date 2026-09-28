@@ -1,8 +1,8 @@
-name: Build NenoTV v0.10.3
+name: Build NenoTV v0.10.4
 
 on:
   push:
-    branches: [ nenotv-v0.10.3-first-sync-pro-header ]
+    branches: [ nenotv-v0.10.4-language-index-fix ]
   workflow_dispatch:
 
 permissions:
@@ -45,7 +45,7 @@ jobs:
               if not p.is_file() or p.suffix.lower() not in {".java",".xml",".html",".txt",".js"}: continue
               try: s=p.read_text()
               except UnicodeDecodeError: continue
-              s=s.replace("Nivaro IPTV Player 0.9.5","NenoTV Player 0.10.3")
+              s=s.replace("Nivaro IPTV Player 0.9.5","NenoTV Player 0.10.4")
               s=s.replace("Nivaro IPTV Player","NenoTV")
               s=s.replace("About Nivaro","About NenoTV")
               s=s.replace("Over Nivaro","Over NenoTV")
@@ -550,9 +550,189 @@ jobs:
               if lines:x=x[:pos]+'\n'.join(lines)+'\n'+x[pos:]
           ui.write_text(x)
           PY
+          # v0.10.4: robust language indexing + reliable first-sync progress
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # Provider category language recognition: support "PL - ...", "ES | ...", country names, etc.
+          lang=Path("app/src/main/java/com/robertalt/raiptv/ContentLanguage.java")
+          x=lang.read_text()
+          x=x.replace('alias("de","de","deu","ger","german","deutsch","deutschsprachig");',
+                      'alias("de","de","deu","ger","german","deutsch","deutschsprachig","deutschland","germany");')
+          x=x.replace('alias("fr","fr","fra","fre","french","francais","français");',
+                      'alias("fr","fr","fra","fre","french","francais","français","france");')
+          x=x.replace('alias("es","es","spa","spanish","espanol","español");',
+                      'alias("es","es","spa","spanish","espanol","español","espana","españa","spain");')
+          x=x.replace('alias("it","it","ita","italian","italiano");',
+                      'alias("it","it","ita","italian","italiano","italia","italy");')
+          x=x.replace('alias("pt","pt","por","portuguese","portugues","português");',
+                      'alias("pt","pt","por","portuguese","portugues","português","portugal");')
+          x=x.replace('alias("tr","tr","tur","turkish","turkce","türkçe");',
+                      'alias("tr","tr","tur","turkish","turkce","türkçe","turkiye","türkiye","turkey");')
+          x=x.replace('alias("pl","pl","pol","polish","polski");',
+                      'alias("pl","pl","pol","polish","polski","polska","poland");')
+          old='''        else {int j=s.indexOf(':');if(j>0&&j<=12)x=s.substring(0,j);}
+                  return normToken(x);'''
+          new='''        else {
+                      int best=-1;
+                      for(char sep:new char[]{':','-','·','|','/'}){int j=s.indexOf(sep);if(j>0&&j<=16&&(best<0||j<best))best=j;}
+                      if(best>0)x=s.substring(0,best);
+                  }
+                  return normToken(x);'''
+          x=x.replace(old,new)
+          old2='''        if(raw!=null){String s=raw.trim(),head="";if(s.startsWith("|")){int j=s.indexOf('|',1);if(j>1)head=s.substring(1,j);}else if(s.startsWith("[")){int j=s.indexOf(']');if(j>1)head=s.substring(1,j);}else if(s.startsWith("(")){int j=s.indexOf(')');if(j>1)head=s.substring(1,j);}else{int j=s.indexOf(':');if(j>0&&j<=16)head=s.substring(0,j);}'''
+          new2='''        if(raw!=null){String s=raw.trim(),head="";if(s.startsWith("|")){int j=s.indexOf('|',1);if(j>1)head=s.substring(1,j);}else if(s.startsWith("[")){int j=s.indexOf(']');if(j>1)head=s.substring(1,j);}else if(s.startsWith("(")){int j=s.indexOf(')');if(j>1)head=s.substring(1,j);}else{int best=-1;for(char sep:new char[]{':','-','·','|','/'}){int j=s.indexOf(sep);if(j>0&&j<=16&&(best<0||j<best))best=j;}if(best>0)head=s.substring(0,best);}'''
+          x=x.replace(old2,new2)
+          lang.write_text(x)
+
+          main=Path("app/src/main/java/com/robertalt/raiptv/MainActivity.java")
+          s=main.read_text()
+
+          # Category is authoritative for language classification during provider indexing.
+          s=s.replace('for(MediaEntry e:x)if(e!=null&&(e.group==null||e.group.trim().isEmpty()))e.group=c.name;',
+                      'for(MediaEntry e:x)if(e!=null)e.group=c.name;')
+          s=s.replace('for(MediaEntry e:batch)if(e!=null&&(e.group==null||e.group.trim().isEmpty()))e.group=c.name;',
+                      'for(MediaEntry e:batch)if(e!=null)e.group=c.name;')
+          s=s.replace('for(MediaEntry e:x)if(e!=null&&(e.group==null||e.group.trim().isEmpty()))e.group=first.name;',
+                      'for(MediaEntry e:x)if(e!=null)e.group=first.name;')
+
+          # Foreground use may pause indexing, but the first-sync progress must remain visible.
+          s=s.replace('Future<?> f=indexFuture;if(f!=null&&!f.isDone())f.cancel(true);\n              hideIndexBanner("");',
+                      'Future<?> f=indexFuture;if(f!=null&&!f.isDone())f.cancel(true);\n              restoreFirstSyncBanner();')
+
+          # Reliable global first-sync banner; persisted so it survives tab switches/recreates.
+          a=s.find('    void showIndexBanner(String type,int done,int cats,int titles){')
+          b=s.find('\n    void hideIndexBanner(',a)
+          if a>=0 and b>0:
+              method='''    void showIndexBanner(String type,int done,int cats,int titles){
+        if(indexBanner==null||indexBannerText==null)return;
+        android.content.SharedPreferences sp=SettingsStore.prefs(this);
+        String key=profileKey();
+        if(sp.getBoolean("first_sync_done_"+key,false)){indexBanner.setVisibility(View.GONE);return;}
+        int total=Math.max(1,cats),finished=Math.max(0,Math.min(done,total));
+        int pct=Math.max(0,Math.min(100,(finished*100)/total));
+        sp.edit().putInt("first_sync_done_count_"+key,finished).putInt("first_sync_total_count_"+key,total).putInt("first_sync_titles_"+key,Math.max(0,titles)).apply();
+        indexBannerText.setText(T("first_sync_wait")+" · "+pct+"% · "+finished+"/"+total+" "+T("categories")+" · "+Math.max(0,titles)+" "+T("titles"));
+        if(indexBannerProgress!=null){indexBannerProgress.setIndeterminate(false);indexBannerProgress.setMax(100);indexBannerProgress.setProgress(pct);}
+        indexBanner.setVisibility(View.VISIBLE);
+    }
+    void restoreFirstSyncBanner(){
+        if(indexBanner==null||profile==null)return;
+        android.content.SharedPreferences sp=SettingsStore.prefs(this);String key=profileKey();
+        if(sp.getBoolean("first_sync_done_"+key,false)){indexBanner.setVisibility(View.GONE);return;}
+        int total=sp.getInt("first_sync_total_count_"+key,0);
+        int done=sp.getInt("first_sync_done_count_"+key,0);
+        int titles=sp.getInt("first_sync_titles_"+key,0);
+        if(total>0)showIndexBanner("",done,total,titles);
+    }
+'''
+              s=s[:a]+method+s[b:]
+
+          # Replace background indexer with global category progress and one-time v0.10.4 rebuild.
+          a=s.find('    void refreshSearchIndex(boolean force){')
+          b=s.find('\n    void waitWhilePaused()',a)
+          if a>=0 and b>0:
+              refresh='''    void refreshSearchIndex(boolean force){
+        if(provider==null||profile==null||indexRefreshRunning)return;
+        indexRefreshRunning=true;final String key=profileKey();final boolean requestedForce=force;
+        indexFuture=indexExec.submit(()->{
+            boolean allComplete=false;
+            try{
+                android.content.SharedPreferences sp=SettingsStore.prefs(this);
+                final int schema=4;
+                boolean migration=sp.getInt("language_index_version_"+key,0)<schema;
+                if(migration&&!sp.getBoolean("language_index_rebuild_started_"+key,false)){
+                    try{searchIndex.clearAll();}catch(Exception ignored){}
+                    sp.edit().putBoolean("language_index_rebuild_started_"+key,true).putBoolean("first_sync_done_"+key,false)
+                      .remove(cacheCursorKey("vod")).remove(cacheCursorKey("series")).remove(cacheCursorKey("live"))
+                      .putInt("first_sync_done_count_"+key,0).putInt("first_sync_total_count_"+key,0).putInt("first_sync_titles_"+key,0).apply();
+                }
+                if(profile.type==Profile.Type.M3U){
+                    List<MediaEntry>x=provider.items("live","all");searchIndex.replaceSection(key,"live",x);
+                    allComplete=true;
+                }else{
+                    final String[] baseTypes={"vod","series","live"};
+                    LinkedHashMap<String,List<Category>> catMap=new LinkedHashMap<>();
+                    int globalTotal=0;
+                    final String preferred=SettingsStore.contentLanguage(this);
+                    for(String type:baseTypes){
+                        List<Category> cats=new ArrayList<>(provider.categories(type));
+                        cats.sort((ca,cb)->{int z=Integer.compare(ContentLanguage.rankText(ca.name,preferred),ContentLanguage.rankText(cb.name,preferred));return z!=0?z:safe(ca.name).compareToIgnoreCase(safe(cb.name));});
+                        catMap.put(type,cats);globalTotal+=cats.size();
+                    }
+                    ArrayList<String> order=new ArrayList<>();if(section.equals("live")||section.equals("vod")||section.equals("series"))order.add(section);for(String t:baseTypes)if(!order.contains(t))order.add(t);
+                    int globalDone=0;
+                    for(String type:baseTypes){
+                        List<Category> cats=catMap.get(type);
+                        if(!migration&&!requestedForce&&searchIndex.isFresh(key,type,SEARCH_INDEX_TTL_MS)){globalDone+=cats.size();continue;}
+                        String cursor=SettingsStore.prefs(this).getString(cacheCursorKey(type),"");
+                        int startAt=0;if(cursor!=null&&!cursor.isEmpty()){for(int ci=0;ci<cats.size();ci++)if(cursor.equals(cats.get(ci).id)){startAt=ci+1;break;}if(startAt>=cats.size())startAt=0;}
+                        globalDone+=startAt;
+                    }
+                    final int initialDone=globalDone,grandTotal=Math.max(1,globalTotal),initialTitles=searchIndex.count(key);
+                    if(isUiAlive())runOnUiThread(()->showIndexBanner("",initialDone,grandTotal,initialTitles));
+                    for(String type:order){
+                        if(Thread.currentThread().isInterrupted())break;
+                        List<Category> cats=catMap.get(type);
+                        if(!migration&&!requestedForce&&searchIndex.isFresh(key,type,SEARCH_INDEX_TTL_MS))continue;
+                        int startAt=0;String cursor=requestedForce?"":SettingsStore.prefs(this).getString(cacheCursorKey(type),"");
+                        if(cursor!=null&&!cursor.isEmpty()){for(int ci=0;ci<cats.size();ci++)if(cursor.equals(cats.get(ci).id)){startAt=ci+1;break;}if(startAt>=cats.size())startAt=0;}
+                        for(int ci=startAt;ci<cats.size();ci++){
+                            Category cat=cats.get(ci);if(Thread.currentThread().isInterrupted())break;
+                            waitWhilePaused();waitForLibraryLoad();if(activityPaused||Thread.currentThread().isInterrupted())break;
+                            boolean indexed=false;List<MediaEntry>items=Collections.emptyList();indexCategoryBusy=true;
+                            try{
+                                items=provider.items(type,cat.id);if(activityPaused||Thread.currentThread().isInterrupted())break;
+                                for(MediaEntry e:items)if(e!=null)e.group=cat.name;
+                                searchIndex.upsert(key,items);if(Thread.currentThread().isInterrupted())break;
+                                indexed=true;publishIndexedTop(type);
+                            }catch(Exception ignored){}finally{indexCategoryBusy=false;}
+                            if(!indexed){if(activityPaused||Thread.currentThread().isInterrupted())break;continue;}
+                            try{SettingsStore.prefs(this).edit().putString(cacheCursorKey(type),safe(cat.id)).apply();}catch(Exception ignored){}
+                            globalDone++;final int gd=globalDone,gt=grandTotal,ti=searchIndex.count(key);
+                            if(isUiAlive())runOnUiThread(()->showIndexBanner("",gd,gt,ti));
+                            String q=latestSearchQuery;if(q!=null&&!q.isEmpty()&&isUiAlive())runOnUiThread(()->{if(isUiAlive())searchEverywhere(q);});
+                        }
+                        if(!Thread.currentThread().isInterrupted()){
+                            int count=searchIndex.countSection(key,type);
+                            if(count>0){searchIndex.markSection(key,type,count);SettingsStore.prefs(this).edit().remove(cacheCursorKey(type)).apply();reloadIndexedSectionWhenReady(type);}
+                        }
+                    }
+                    allComplete=searchIndex.isComplete(key,"vod")&&searchIndex.isComplete(key,"series")&&searchIndex.isComplete(key,"live");
+                    if(allComplete){
+                        sp.edit().putInt("language_index_version_"+key,schema).putBoolean("language_index_rebuild_started_"+key,false)
+                          .putBoolean("first_sync_done_"+key,true).putInt("first_sync_done_count_"+key,grandTotal).putInt("first_sync_total_count_"+key,grandTotal).apply();
+                    }
+                }
+            }catch(Exception ignored){}finally{
+                indexCategoryBusy=false;indexRefreshRunning=false;indexFuture=null;final boolean done=allComplete;
+                runOnUiThread(()->{if(!isUiAlive())return;if(done)hideIndexBanner("");else restoreFirstSyncBanner();});
+            }
+        });
+    }
+'''
+              s=s[:a]+refresh+s[b:]
+
+          # Don't claim "no results" while selected language is still being built.
+          s=s.replace('if(!complete){busy(true,currentCategoryName+" · "+T("index_building"));if(!indexRefreshRunning)refreshSearchIndex(false);}else busy(false,T("no_results"));',
+                      'if(!complete||!SettingsStore.prefs(this).getBoolean("first_sync_done_"+profileKey(),false)){busy(true,T("first_sync_wait"));restoreFirstSyncBanner();if(!indexRefreshRunning)scheduleBackgroundIndex();}else busy(false,T("no_results"));')
+
+          # Restore first-sync bar after recreation / language switch.
+          s=s.replace('appliedLanguage=SettingsStore.language(this);appliedContentLanguage=SettingsStore.contentLanguage(this);applyStaticLanguage();wire();updateHeaderBadges();',
+                      'appliedLanguage=SettingsStore.language(this);appliedContentLanguage=SettingsStore.contentLanguage(this);applyStaticLanguage();wire();updateHeaderBadges();restoreFirstSyncBanner();')
+          s=s.replace('@Override protected void onResume(){super.onResume();activityPaused=false;updateHeaderBadges();',
+                      '@Override protected void onResume(){super.onResume();activityPaused=false;updateHeaderBadges();restoreFirstSyncBanner();')
+
+          # FREE is intentionally subdued; TRIAL/PRO remain yellow.
+          old='if(planBadge!=null){EntitlementStore e=new EntitlementStore(this);String b=e.shortBadge();if(e.isTrial())b="TRIAL · "+e.trialDaysRemaining()+"d";planBadge.setText(b);planBadge.setTextColor(0xFF0A0A0A);planBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));}'
+          new='if(planBadge!=null){EntitlementStore e=new EntitlementStore(this);String b=e.shortBadge();if(e.isTrial())b="TRIAL · "+e.trialDaysRemaining()+"d";planBadge.setText(b);boolean premium=e.isPro();planBadge.setTextColor(premium?0xFF0A0A0A:0xFFA7AFBC);planBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(premium?0xFFFFD400:0xFF1B2028));}'
+          s=s.replace(old,new)
+
+          main.write_text(s)
+          PY
           sed -i 's/BuildConfig.NENOTV_API_BASE.trim()/"https:\/\/nenotv.com"/' app/src/main/java/com/robertalt/raiptv/entitlement/EntitlementClient.java
-          sed -i "s/versionCode 37/versionCode 45/" app/build.gradle
-          sed -i "s/versionName '0.9.5'/versionName '0.10.3'/" app/build.gradle
+          sed -i "s/versionCode 37/versionCode 46/" app/build.gradle
+          sed -i "s/versionName '0.9.5'/versionName '0.10.4'/" app/build.gradle
 
       - uses: actions/setup-java@v4
         with:
@@ -588,14 +768,14 @@ jobs:
           ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
           IN="base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk"
           "$AAPT" dump badging "$IN" | tee apk-badging.txt
-          grep -q "package: name='com.robertalt.raiptv' versionCode='45' versionName='0.10.3'" apk-badging.txt
-          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-v0.10.3-aligned-unsigned.apk
-          "$ZIPALIGN" -c -p 4 NenoTV-v0.10.3-aligned-unsigned.apk
+          grep -q "package: name='com.robertalt.raiptv' versionCode='46' versionName='0.10.4'" apk-badging.txt
+          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-v0.10.4-aligned-unsigned.apk
+          "$ZIPALIGN" -c -p 4 NenoTV-v0.10.4-aligned-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-v0.10.3-build
+          name: NenoTV-v0.10.4-build
           path: |
-            NenoTV-v0.10.3-aligned-unsigned.apk
+            NenoTV-v0.10.4-aligned-unsigned.apk
             apksigner.jar
