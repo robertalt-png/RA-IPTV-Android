@@ -2,11 +2,15 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#FFD400" android:pathData="M54,4 A50,50 0,1 1,53.9,4 Z"/>
-    <path android:fillColor="#0A0A0A" android:pathData="M54,11 A43,43 0,1 1,53.9,11 Z"/>
-    <path android:fillColor="#FFD400" android:pathData="M27,29 Q27,24 32,24 L71,24 Q76,24 76,29 L76,54 Q76,59 71,59 L32,59 Q27,59 27,54 Z"/>
-    <path android:fillColor="#0A0A0A" android:pathData="M34,32 L69,32 L69,51 L34,51 Z"/>
-    <path android:fillColor="#FFD400" android:pathData="M45,35 L45,49 L58,42 Z"/>
-    <path android:fillColor="#00000000" android:strokeColor="#FFD400" android:strokeWidth="7" android:strokeLineCap="round" android:pathData="M61,83 C61,68 73,56 88,56"/>
-    <path android:fillColor="#00000000" android:strokeColor="#FFD400" android:strokeWidth="7" android:strokeLineCap="round" android:pathData="M72,84 C72,75 79,68 88,68"/>
+    <!-- NenoTV v0.10: selected yellow tile / black N / play mark -->
+    <path android:fillColor="#FFD400"
+        android:pathData="M18,8 H90 Q100,8 100,18 V90 Q100,100 90,100 H18 Q8,100 8,90 V18 Q8,8 18,8 Z"/>
+    <path android:fillColor="#0A0A0A"
+        android:pathData="M30,24 H38 Q44,24 44,30 V78 Q44,84 38,84 H30 Q24,84 24,78 V30 Q24,24 30,24 Z"/>
+    <path android:fillColor="#0A0A0A"
+        android:pathData="M70,24 H78 Q84,24 84,30 V78 Q84,84 78,84 H70 Q64,84 64,78 V30 Q64,24 70,24 Z"/>
+    <path android:fillColor="#0A0A0A"
+        android:pathData="M35,25 L82,68 L72,84 L27,43 Z"/>
+    <path android:fillColor="#FFD400"
+        android:pathData="M43,43 L61,54 L43,65 Z"/>
 </vector>
