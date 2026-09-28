@@ -36,6 +36,29 @@ jobs:
           cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/ProGate.java" app/src/main/java/com/robertalt/raiptv/
           cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/EntitlementClient.java" app/src/main/java/com/robertalt/raiptv/entitlement/
           cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/EntitlementStore.java" app/src/main/java/com/robertalt/raiptv/storage/
+          cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/ic_nenotv_mark.xml" app/src/main/res/drawable/ic_nivaro_mark.xml
+          cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/ic_nenotv_launcher.xml" app/src/main/res/drawable/ic_nivaro_launcher.xml
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path("app/src/main")
+          for p in root.rglob("*"):
+              if not p.is_file() or p.suffix.lower() not in {".java",".xml",".html",".txt",".js"}: continue
+              try: s=p.read_text()
+              except UnicodeDecodeError: continue
+              s=s.replace("Nivaro IPTV Player 0.9.5","NenoTV Player 0.9.8")
+              s=s.replace("Nivaro IPTV Player","NenoTV")
+              s=s.replace("About Nivaro","About NenoTV")
+              s=s.replace("Over Nivaro","Over NenoTV")
+              s=s.replace("Welkom bij Nivaro","Welkom bij NenoTV")
+              s=s.replace("Welcome to Nivaro","Welcome to NenoTV")
+              s=s.replace("Nivaro compatibility mode","NenoTV compatibility mode")
+              s=s.replace("Nivaro-compatibiliteitsmodus","NenoTV-compatibiliteitsmodus")
+              s=s.replace("Nivaro does not provide a TV service.","NenoTV does not provide a TV service.")
+              s=s.replace("Nivaro levert zelf geen tv-dienst.","NenoTV levert zelf geen tv-dienst.")
+              s=s.replace('android:text="NIVARO"','android:text="NenoTV"')
+              s=s.replace('android:text="Nivaro"','android:text="NenoTV"')
+              p.write_text(s)
+          PY
           sed -i 's/BuildConfig.NENOTV_API_BASE.trim()/"https:\/\/nenotv.com"/' app/src/main/java/com/robertalt/raiptv/entitlement/EntitlementClient.java
 
       - uses: actions/setup-java@v4
