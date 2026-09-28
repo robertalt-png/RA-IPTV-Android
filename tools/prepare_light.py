@@ -14,6 +14,8 @@ s=s.replace("        buildConfigField 'String', 'NIVARO_CAST_RECEIVER_ID', '\"' 
 s=s.replace("    implementation 'org.videolan.android:libvlc-all:3.7.6'\n","")
 s=s.replace("    implementation 'com.google.mlkit:translate:17.0.3'\n","")
 s=s.replace("    implementation 'com.google.mlkit:language-id:17.0.6'\n","")
+if "androidx.appcompat:appcompat" not in s:
+    s=s.replace("dependencies {","dependencies {\n    implementation 'androidx.appcompat:appcompat:1.7.1'")
 if "feature-delivery" not in s:
     s=s.replace("dependencies {","dependencies {\n    implementation 'com.google.android.play:feature-delivery:2.1.0'")
 gradle.write_text(s)
