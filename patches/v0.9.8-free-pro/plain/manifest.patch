@@ -1,0 +1,12 @@
+diff --git a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml
+index 97c8290..2825750 100644
+--- a/app/src/main/AndroidManifest.xml
++++ b/app/src/main/AndroidManifest.xml
+@@ -22,6 +22,7 @@
+             android:exported="false"
+             android:screenOrientation="sensorLandscape"
+             android:supportsPictureInPicture="true" />
++        <activity android:name=".AccountActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="nenotv" android:host="activate"/></intent-filter></activity>
+         <activity android:name=".ProfileActivity" android:exported="false" />
+         <activity android:name=".SettingsActivity" android:exported="false" />
+         <activity android:name=".LanguageSetupActivity" android:exported="false" />
