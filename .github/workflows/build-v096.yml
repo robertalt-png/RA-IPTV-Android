@@ -28,7 +28,7 @@ jobs:
       - name: Apply NenoTV changes
         run: |
           cd base/RA_IPTV_Android_v0.1
-          for p in build-gradle manifest strings main settings profile player; do
+          for p in build-gradle manifest strings ui-pro-en ui-pro-nl main settings profile player; do
             git apply "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/plain/$p.patch"
           done
           mkdir -p app/src/main/java/com/robertalt/raiptv/entitlement
