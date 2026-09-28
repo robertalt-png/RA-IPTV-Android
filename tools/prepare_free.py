@@ -11,8 +11,8 @@ app=root/"app"
 gradle=app/"build.gradle"
 s=gradle.read_text()
 s=s.replace("applicationId 'com.robertalt.raiptv.light'","applicationId 'com.robertalt.raiptv'")
-s=re.sub(r"versionCode\s+\d+","versionCode 49",s,1)
-s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.0'",s,1)
+s=re.sub(r"versionCode\s+\d+","versionCode 50",s,1)
+s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.1'",s,1)
 s=s.replace("    dynamicFeatures = [':proextras']\n","")
 s=s.replace("    implementation 'com.google.android.play:feature-delivery:2.1.0'\n","")
 gradle.write_text(s)
@@ -50,26 +50,63 @@ def replace_method(src, signature, next_signature, body):
     if b<0: raise RuntimeError("Missing next method after: "+signature)
     return src[:a]+body+src[b:]
 
-# No background indexer in Free.
+# Free full-library sync: fetch every provider category in provider order and store locally.
+# No language detection, translation, regrouping or smart sorting is performed.
 a=s.find('    void refreshSearchIndex(boolean force){')
 if a>=0:
     b=s.find('\n    void waitWhilePaused()',a)
     if b>0:
-        s=s[:a]+'''    void refreshSearchIndex(boolean force){ indexRefreshRunning=false; if(indexBanner!=null)indexBanner.setVisibility(View.GONE); }
-'''+s[b:]
+        fullsync='''    void refreshSearchIndex(boolean force){
+        if(provider==null||profile==null||indexRefreshRunning)return;
+        final String key=profileKey();final android.content.SharedPreferences sp=SettingsStore.prefs(this);
+        final String doneKey="free_full_sync_done_v121_"+key;
+        if(!force&&sp.getBoolean(doneKey,false)){hideIndexBanner("");return;}
+        indexRefreshRunning=true;
+        indexFuture=indexExec.submit(()->{
+            boolean complete=false;int liveCount=sp.getInt("free_sync_live_"+key,0),vodCount=sp.getInt("free_sync_vod_"+key,0),seriesCount=sp.getInt("free_sync_series_"+key,0);
+            try{
+                final String[] types={"live","vod","series"};
+                LinkedHashMap<String,List<Category>> map=new LinkedHashMap<>();int total=0,done=0;
+                for(String type:types){List<Category> cats=new ArrayList<>(provider.categories(type));map.put(type,cats);total+=cats.size();done+=Math.min(cats.size(),sp.getInt("free_sync_cursor_"+type+"_"+key,0));}
+                final int grand=Math.max(1,total);final int firstDone=done,fl=liveCount,fv=vodCount,fs=seriesCount;
+                runOnUiThread(()->showFreeSyncProgress(firstDone,grand,fl,fv,fs));
+                for(String type:types){
+                    List<Category> cats=map.get(type);int start=Math.min(cats.size(),sp.getInt("free_sync_cursor_"+type+"_"+key,0));
+                    for(int i=start;i<cats.size();i++){
+                        if(Thread.currentThread().isInterrupted())return;
+                        Category cat=cats.get(i);List<MediaEntry> items=provider.items(type,cat.id);
+                        for(MediaEntry e:items)if(e!=null&&(e.group==null||e.group.trim().isEmpty()))e.group=cat.name;
+                        searchIndex.upsert(key,items);
+                        if("live".equals(type))liveCount+=items.size();else if("vod".equals(type))vodCount+=items.size();else seriesCount+=items.size();
+                        done++;
+                        sp.edit().putInt("free_sync_cursor_"+type+"_"+key,i+1).putInt("free_sync_live_"+key,liveCount).putInt("free_sync_vod_"+key,vodCount).putInt("free_sync_series_"+key,seriesCount).apply();
+                        final int pd=done,pl=liveCount,pv=vodCount,ps=seriesCount;
+                        runOnUiThread(()->showFreeSyncProgress(pd,grand,pl,pv,ps));
+                        try{Thread.sleep(35);}catch(InterruptedException ie){Thread.currentThread().interrupt();return;}
+                    }
+                    int count=searchIndex.countSection(key,type);if(count>0)searchIndex.markSection(key,type,count);
+                }
+                complete=true;
+                sp.edit().putBoolean(doneKey,true).remove("free_sync_cursor_live_"+key).remove("free_sync_cursor_vod_"+key).remove("free_sync_cursor_series_"+key).apply();
+            }catch(Throwable ignored){}finally{
+                indexRefreshRunning=false;indexFuture=null;final boolean ok=complete;
+                runOnUiThread(()->{if(ok)hideIndexBanner("");else restoreFirstSyncBanner();});
+            }
+        });
+    }
+''';
+        s=s[:a]+fullsync+s[b:]
 
-# Never schedule any full-library background work in Free.
-a=s.find('    void scheduleBackgroundIndex(){')
-if a>=0:
-    b=s.find('\n    void ',a+10)
-    if b>0:
-        s=s[:a]+'''    void scheduleBackgroundIndex(){ if(indexBanner!=null)indexBanner.setVisibility(View.GONE); }
-'''+s[b:]
+# Full sync must continue while the user navigates; foreground loads use another executor.
 a=s.find('    void pauseBackgroundIndexForUi(){')
 if a>=0:
     b=s.find('\n    void ',a+10)
-    if b>0:
-        s=s[:a]+'''    void pauseBackgroundIndexForUi(){ if(delayedIndexResume!=null)ui.removeCallbacks(delayedIndexResume); Future<?> f=indexFuture;if(f!=null&&!f.isDone())f.cancel(true); if(indexBanner!=null)indexBanner.setVisibility(View.GONE); }
+    if b>0:s=s[:a]+'''    void pauseBackgroundIndexForUi(){ restoreFirstSyncBanner(); }
+'''+s[b:]
+a=s.find('    void scheduleBackgroundIndex(){')
+if a>=0:
+    b=s.find('\n    void ',a+10)
+    if b>0:s=s[:a]+'''    void scheduleBackgroundIndex(){ if(provider!=null&&profile!=null&&!indexRefreshRunning)refreshSearchIndex(false); }
 '''+s[b:]
 
 # Provider-order spinner helper.
@@ -143,21 +180,74 @@ if a>=0:
 '''
         s=s[:a]+search+s[b:]
 
-# Free never schedules background indexing anywhere, including legacy helper paths.
-s=s.replace('scheduleBackgroundIndex();','')
-
-# Free never shows first-sync/index banner.
+# Compact full-library progress directly below the logo/header.
 a=s.find('    void showIndexBanner(String type,int done,int cats,int titles){')
 if a>=0:
     b=s.find('\n    void restoreFirstSyncBanner()',a)
-    if b>0:s=s[:a]+'    void showIndexBanner(String type,int done,int cats,int titles){if(indexBanner!=null)indexBanner.setVisibility(View.GONE);}\n'+s[b:]
+    if b>0:s=s[:a]+'''    void showIndexBanner(String type,int done,int cats,int titles){showFreeSyncProgress(done,cats,0,titles,0);}
+    void showFreeSyncProgress(int done,int total,int live,int films,int series){
+        if(indexBanner==null||indexBannerText==null)return;
+        int pct=total<=0?0:Math.max(0,Math.min(100,(done*100)/Math.max(1,total)));
+        String msg=T("library")+" · "+pct+"%  ·  "+T("live")+" "+live+"  ·  "+T("movies")+" "+films+"  ·  "+T("series")+" "+series;
+        indexBannerText.setText(msg);if(indexBannerProgress!=null){indexBannerProgress.setIndeterminate(false);indexBannerProgress.setProgress(pct);}indexBanner.setVisibility(View.VISIBLE);
+    }
+'''+s[b:]
 a=s.find('    void restoreFirstSyncBanner(){')
 if a>=0:
     b=s.find('\n    void hideIndexBanner(',a)
-    if b>0:s=s[:a]+'    void restoreFirstSyncBanner(){if(indexBanner!=null)indexBanner.setVisibility(View.GONE);}\n'+s[b:]
+    if b>0:s=s[:a]+'''    void restoreFirstSyncBanner(){
+        if(indexBanner==null||profile==null)return;String key=profileKey();android.content.SharedPreferences sp=SettingsStore.prefs(this);
+        if(sp.getBoolean("free_full_sync_done_v121_"+key,false)){indexBanner.setVisibility(View.GONE);return;}
+        int total=0,done=0;try{for(String type:new String[]{"live","vod","series"}){List<Category> cats=provider==null?Collections.emptyList():provider.categories(type);total+=cats.size();done+=Math.min(cats.size(),sp.getInt("free_sync_cursor_"+type+"_"+key,0));}}catch(Exception ignored){}
+        showFreeSyncProgress(done,Math.max(1,total),sp.getInt("free_sync_live_"+key,0),sp.getInt("free_sync_vod_"+key,0),sp.getInt("free_sync_series_"+key,0));
+    }
+'''+s[b:]
+
+# Start the complete sync as soon as a normal foreground view is usable.
+s=s.replace('warmCategories();','warmCategories();scheduleBackgroundIndex();')
 
 # Free TV-share/cast control stays locked for Pro instead of launching Cast.
 s=s.replace('tvShareButton.setOnClickListener(v->showTvShareMenu());','tvShareButton.setOnClickListener(v->ProGate.require(this,T("casting")));')
 
+# Free UI: no plan badge and no scattered PRO controls. Keep one clear website/Pro route in the menu.
+layout=app/"src/main/res/layout/activity_main.xml"
+x=layout.read_text()
+x=re.sub(r'<Button android:id="@\+id/planBadge"[^>]*/>','',x)
+layout.write_text(x)
+
+# Hide the advanced EPG grid control in Free; list guide remains available.
+s=s.replace('epgModeBar.setVisibility(View.VISIBLE);','epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null)epgGridButton.setVisibility(View.GONE);')
+s=s.replace('if(planBadge!=null)planBadge.setOnClickListener(v->startActivity(new Intent(this,AccountActivity.class)));','')
+s=s.replace('if(planBadge!=null){EntitlementStore e=new EntitlementStore(this);String b=e.shortBadge();if(e.isTrial())b="TRIAL · "+e.trialDaysRemaining()+"d";planBadge.setText(b);boolean premium=e.isPro();planBadge.setTextColor(premium?0xFF0A0A0A:0xFFA7AFBC);planBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(premium?0xFFFFD400:0xFF1B2028));}','')
+
+# Replace bottom-sheet menu with a clean Free menu and a clear website entry.
+ma=s.find('    void showNenoMenu(){')
+mb=s.find('\n    void addNenoMenuItem(',ma)
+if ma>=0 and mb>ma:
+    menu='''    void showNenoMenu(){
+        final Dialog d=new Dialog(this);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(14),dp(18),dp(22));
+        android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();bg.setColor(0xFF10141A);bg.setCornerRadii(new float[]{dp(22),dp(22),dp(22),dp(22),0,0,0,0});box.setBackground(bg);
+        TextView head=new TextView(this);head.setText("NenoTV");head.setTextColor(0xFFFFD400);head.setTextSize(22);head.setTypeface(null,Typeface.BOLD);head.setPadding(0,0,0,dp(10));box.addView(head);
+        addNenoMenuItem(d,box,T("search_everywhere"),()->toggleSearch());
+        addNenoMenuItem(d,box,T("manage_source"),()->startActivityForResult(new Intent(this,ProfileActivity.class),10));
+        addNenoMenuItem(d,box,T("settings"),()->startActivity(new Intent(this,SettingsActivity.class)));
+        addNenoMenuItem(d,box,"🌐 NenoTV.com",()->openNenoWebsite("https://nenotv.com"));
+        addNenoMenuItem(d,box,"NenoTV Pro",()->openNenoWebsite("https://nenotv.com"));
+        addNenoMenuItem(d,box,T("close"),()->{});
+        d.setContentView(box);Window w=d.getWindow();if(w!=null){w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));w.setGravity(Gravity.BOTTOM);w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);w.setDimAmount(0.45f);}d.show();if(w!=null)w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT);
+    }
+    void openNenoWebsite(String url){try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url)));}catch(Exception ignored){}}
+'''
+    s=s[:ma]+menu+s[mb:]
+
+# Settings: remove promotional PRO labels from the Free app. Keep only actual Free settings.
+settingsFile=app/"src/main/java/com/robertalt/raiptv/SettingsActivity.java"
+sx=settingsFile.read_text()
+sx=sx.replace('sec("🔒 PRO · "+T("parental_controls"));','sec(T("parental"));')
+sx=sx.replace('parental.setText("🔒 "+T("hide_adult"));','parental.setText(T("hide_adult"));')
+sx=re.sub(r'if\(on&&!ProGate\.require\(this,T\("parental_controls"\)\)\)\{v\.setChecked\(false\);return;\}','',sx)
+sx=re.sub(r'TextView proHint=t\("🔒 PRO · "\+T\("picture_in_picture"\)\+" · "\+T\("advanced_subtitles"\),12\);proHint\.setTextColor\(0xFFFFD400\);box\.addView\(proHint\);','',sx)
+settingsFile.write_text(sx)
+
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.0: provider-order, on-demand, Media3-only")
+print("Prepared NenoTV Free v0.12.1: provider-order + full background sync")
