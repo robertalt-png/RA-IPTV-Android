@@ -76,18 +76,37 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Build
+      - name: Verify source version
         working-directory: base/RA_IPTV_Android_v0.1
-        run: gradle --no-daemon assembleRelease
-
-      - name: Package
         run: |
-          cp base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk NenoTV-v0.9.8-unsigned.apk
+          set -euo pipefail
+          grep -q "applicationId 'com.robertalt.raiptv'" app/build.gradle
+          grep -q "versionCode 40" app/build.gradle
+          grep -q "versionName '0.9.8'" app/build.gradle
+          grep -n "applicationId\|versionCode\|versionName" app/build.gradle
+
+      - name: Clean build
+        working-directory: base/RA_IPTV_Android_v0.1
+        run: |
+          set -euo pipefail
+          rm -rf app/build build .gradle
+          gradle --no-daemon --no-build-cache --rerun-tasks clean assembleRelease
+
+      - name: Verify and align APK
+        run: |
+          set -euo pipefail
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
+          IN="base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk"
+          "$AAPT" dump badging "$IN" | tee apk-badging.txt
+          grep -q "package: name='com.robertalt.raiptv' versionCode='40' versionName='0.9.8'" apk-badging.txt
+          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-v0.9.8-aligned-unsigned.apk
+          "$ZIPALIGN" -c -p 4 NenoTV-v0.9.8-aligned-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
 
       - uses: actions/upload-artifact@v4
         with:
           name: NenoTV-v0.9.8-build
           path: |
-            NenoTV-v0.9.8-unsigned.apk
+            NenoTV-v0.9.8-aligned-unsigned.apk
             apksigner.jar
