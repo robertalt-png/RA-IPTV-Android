@@ -999,7 +999,7 @@ jobs:
           "$ZIPALIGN" -c -p 4 NenoTV-Pro-Complete-v0.11.0-aligned-unsigned.apk
 
           "$AAPT" dump badging "$LIGHT_IN" | tee light-badging.txt
-          grep -q "package: name='com.robertalt.raiptv.light' versionCode='1' versionName='0.11.0-light'" light-badging.txt
+          grep -q "package: name='com.robertalt.raiptv.light' versionCode='48' versionName='0.11.0'" light-badging.txt
           "$ZIPALIGN" -p -f 4 "$LIGHT_IN" NenoTV-Light-v0.11.0-aligned-unsigned.apk
           "$ZIPALIGN" -c -p 4 NenoTV-Light-v0.11.0-aligned-unsigned.apk
 
