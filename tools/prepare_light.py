@@ -32,6 +32,8 @@ x=re.sub(r'<string name="app_name">.*?</string>','<string name="app_name">NenoTV
 if 'name="title_proextras"' not in x:
     x=x.replace('</resources>','    <string name="title_proextras">NenoTV Pro Media Pack</string>\n</resources>')
 strings.write_text(x)
+feature_strings=app/'src/main/res/values/feature_strings.xml'
+feature_strings.write_text('<resources><string name="title_proextras">NenoTV Pro Media Pack</string></resources>\n')
 
 layout=app/'src/main/res/layout/activity_player.xml'
 x=layout.read_text()
