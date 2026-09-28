@@ -1,8 +1,8 @@
-name: Build NenoTV v0.10.1
+name: Build NenoTV v0.10.2
 
 on:
   push:
-    branches: [ nenotv-v0.10.1-ui-speed ]
+    branches: [ nenotv-v0.10.2-cache-language ]
   workflow_dispatch:
 
 permissions:
@@ -45,7 +45,7 @@ jobs:
               if not p.is_file() or p.suffix.lower() not in {".java",".xml",".html",".txt",".js"}: continue
               try: s=p.read_text()
               except UnicodeDecodeError: continue
-              s=s.replace("Nivaro IPTV Player 0.9.5","NenoTV Player 0.10.1")
+              s=s.replace("Nivaro IPTV Player 0.9.5","NenoTV Player 0.10.2")
               s=s.replace("Nivaro IPTV Player","NenoTV")
               s=s.replace("About Nivaro","About NenoTV")
               s=s.replace("Over Nivaro","Over NenoTV")
@@ -286,9 +286,142 @@ jobs:
           row.write_text(x)
           PY
 
+          # v0.10.2: foreground-first loading + full language consistency
+          python3 - <<'PY'
+          from pathlib import Path
+
+          main=Path("app/src/main/java/com/robertalt/raiptv/MainActivity.java")
+          s=main.read_text()
+
+          # Foreground navigation gets absolute priority over background indexing.
+          s=s.replace(
+              'Handler ui=new Handler(Looper.getMainLooper()); Runnable pendingSearch; MediaEntry selectedHero;',
+              'Handler ui=new Handler(Looper.getMainLooper()); Runnable pendingSearch,delayedIndexResume; MediaEntry selectedHero;'
+          )
+
+          anchor='    int nextRequest(){return ++requestSerial;} boolean current(int token){return token==requestSerial&&!isFinishing()&&!isDestroyed();}\n'
+          helper='''    void pauseBackgroundIndexForUi(){
+              if(delayedIndexResume!=null)ui.removeCallbacks(delayedIndexResume);
+              Future<?> f=indexFuture;if(f!=null&&!f.isDone())f.cancel(true);
+              hideIndexBanner("");
+          }
+          void scheduleBackgroundIndex(){
+              if(provider==null||profile==null||activityPaused)return;
+              if(delayedIndexResume!=null)ui.removeCallbacks(delayedIndexResume);
+              delayedIndexResume=()->{
+                  if(!isUiAlive()||provider==null||activityPaused)return;
+                  if(indexRefreshRunning){ui.postDelayed(delayedIndexResume,900);return;}
+                  refreshSearchIndex(false);
+              };
+              ui.postDelayed(delayedIndexResume,4500);
+          }
+
+          '''
+          if 'void pauseBackgroundIndexForUi()' not in s:
+              s=s.replace(anchor,anchor+helper)
+
+          # Every main navigation action cancels unrelated background work first.
+          s=s.replace('    void loadHome(){\n        stopCachePaging();',
+                      '    void loadHome(){\n        pauseBackgroundIndexForUi();stopCachePaging();')
+          s=s.replace('    void loadSection(String s){\n        stopCachePaging();',
+                      '    void loadSection(String s){\n        pauseBackgroundIndexForUi();stopCachePaging();')
+          s=s.replace('    void loadEpg(){\n        stopCachePaging();',
+                      '    void loadEpg(){\n        pauseBackgroundIndexForUi();stopCachePaging();')
+
+          # After foreground content has started loading, resume maintenance only after idle time.
+          s=s.replace('busy(false,!lastCrash.isEmpty()?T("stability")+" · "+T("previous_error")+": "+lastCrash:(local.isEmpty()?T("watch_without_search"):""));warmCategories();',
+                      'busy(false,!lastCrash.isEmpty()?T("stability")+" · "+T("previous_error")+": "+lastCrash:(local.isEmpty()?T("watch_without_search"):""));warmCategories();scheduleBackgroundIndex();')
+          s=s.replace('else loadItems("all");});}catch(Exception e){runOnUiThread(()->{if(current(token))busy(false,T("error_prefix")+": "+friendly(e));});}});\n    }',
+                      'else loadItems("all");scheduleBackgroundIndex();});}catch(Exception e){runOnUiThread(()->{if(current(token))busy(false,T("error_prefix")+": "+friendly(e));});}});\n    }',1)
+          s=s.replace('else loadEpgChannels("all");});}catch(Exception e){runOnUiThread(()->{if(current(token))busy(false,T("epg_error")+": "+friendly(e));});}});\n    }',
+                      'else loadEpgChannels("all");scheduleBackgroundIndex();});}catch(Exception e){runOnUiThread(()->{if(current(token))busy(false,T("epg_error")+": "+friendly(e));});}});\n    }',1)
+
+          # Never overlay background-index progress over the screen the user is operating.
+          a=s.find('    void showIndexBanner(String type,int done,int cats,int titles){')
+          if a>=0:
+              b=s.find('\n    void hideIndexBanner(',a)
+              if b>0:
+                  s=s[:a]+'    void showIndexBanner(String type,int done,int cats,int titles){if(indexBanner!=null)indexBanner.setVisibility(View.GONE);}\n'+s[b:]
+
+          # EPG: do not aggregate every matching language category first. Use cache if available,
+          # otherwise use only the first matching category so the guide becomes interactive quickly.
+          needle='''    void loadLanguageGroup(String tag,boolean fromRefresh){
+              final String requested="epg".equals(section)?"live":section;'''
+          if needle in s:
+              replacement='''    void loadLanguageGroup(String tag,boolean fromRefresh){
+              final String requested="epg".equals(section)?"live":section;'''
+              s=s.replace(needle,replacement,1)
+              epg_marker='''              if(epg){showEpgByMode(Collections.emptyList());busy(true,currentCategoryName+" · "+T("channels_loading"));}else{showMediaGrid("live".equals(requested));gridAdapter.set(Collections.emptyList(),"live".equals(requested));busy(true,currentCategoryName+" · "+T("library_opening"));}
+              exec.execute(()->{'''
+              epg_repl='''              if(epg){
+                  int cached=searchIndex.countLanguage(profileKey(),"live",normalized);
+                  if(cached>0){List<MediaEntry>x=sortItems(visibleItems(searchIndex.languagePage(profileKey(),"live",normalized,0,Math.min(120,cached),SettingsStore.sort(this))));all=x;showEpgByMode(x);busy(false,x.size()+" "+T("channels"));scheduleBackgroundIndex();return;}
+                  showEpgByMode(Collections.emptyList());busy(true,currentCategoryName+" · "+T("channels_loading"));
+                  if(!matches.isEmpty()){final Category first=matches.get(0);exec.execute(()->{try{List<MediaEntry>x=sortItems(visibleItems(provider.items("live",first.id)));try{for(MediaEntry e:x)if(e!=null&&(e.group==null||e.group.trim().isEmpty()))e.group=first.name;searchIndex.upsert(profileKey(),x);}catch(Exception ignored){}runOnUiThread(()->{if(!current(token)||!"epg".equals(section))return;all=x;showEpgByMode(x);busy(false,x.size()+" "+T("channels"));scheduleBackgroundIndex();});}catch(Exception ex){runOnUiThread(()->{if(current(token))busy(false,T("epg_channels_failed")+": "+friendly(ex));});}});return;}
+              }else{showMediaGrid("live".equals(requested));gridAdapter.set(Collections.emptyList(),"live".equals(requested));busy(true,currentCategoryName+" · "+T("library_opening"));}
+              exec.execute(()->{'''
+              s=s.replace(epg_marker,epg_repl,1)
+
+          # Menu labels always use the selected app language.
+          s=s.replace('final boolean nl="nl".equals(SettingsStore.language(this));\n','')
+          s=s.replace('addNenoMenuItem(d,box,nl?"Zoeken":"Search",()->{toggleSearch();});',
+                      'addNenoMenuItem(d,box,T("search_everywhere"),()->{toggleSearch();});')
+          s=s.replace('addNenoMenuItem(d,box,nl?"Account & Pro":"Account & Pro",()->startActivity(new Intent(this,AccountActivity.class)));',
+                      'addNenoMenuItem(d,box,T("account_and_pro"),()->startActivity(new Intent(this,AccountActivity.class)));')
+          s=s.replace('addNenoMenuItem(d,box,nl?"TV-bron beheren":"Manage TV source",()->startActivityForResult(new Intent(this,ProfileActivity.class),10));',
+                      'addNenoMenuItem(d,box,T("manage_source"),()->startActivityForResult(new Intent(this,ProfileActivity.class),10));')
+          s=s.replace('addNenoMenuItem(d,box,nl?"Cast / TV":"Cast / TV",()->{if(ProGate.require(this,T("casting")))showTvShareMenu();});',
+                      'addNenoMenuItem(d,box,T("casting"),()->{if(ProGate.require(this,T("casting")))showTvShareMenu();});')
+          s=s.replace('addNenoMenuItem(d,box,nl?"Instellingen":"Settings",()->startActivity(new Intent(this,SettingsActivity.class)));',
+                      'addNenoMenuItem(d,box,T("settings"),()->startActivity(new Intent(this,SettingsActivity.class)));')
+          s=s.replace('addNenoMenuItem(d,box,nl?"Sluiten":"Close",()->{});',
+                      'addNenoMenuItem(d,box,T("close"),()->{});')
+
+          # Cleanup callbacks.
+          s=s.replace('if(pendingSearch!=null)ui.removeCallbacks(pendingSearch);Future<?> f=indexFuture;',
+                      'if(pendingSearch!=null)ui.removeCallbacks(pendingSearch);if(delayedIndexResume!=null)ui.removeCallbacks(delayedIndexResume);Future<?> f=indexFuture;')
+
+          main.write_text(s)
+
+          # Add complete account/Pro terminology to every supported language.
+          ui=Path("app/src/main/java/com/robertalt/raiptv/UiText.java")
+          x=ui.read_text()
+          packs={
+          'ES':[
+          ('account_and_pro','Cuenta y NenoTV Pro'),('nenotv_free','NenoTV Free'),('nenotv_pro_trial','NenoTV Pro · Prueba'),('nenotv_pro','NenoTV Pro'),
+          ('activate_restore','Activar o restaurar compra'),('email_address','Correo electrónico'),('order_id_optional','ID de pedido (opcional)'),('activate_pro','Activar / restaurar Pro'),('request_trial','Solicitar prueba gratis'),('refresh_status','Actualizar estado de la cuenta'),('this_device','Este dispositivo'),('device_code','Código del dispositivo'),('trial_remaining','Prueba restante'),('days','días'),('pro_active','Pro está activo'),('devices','dispositivos'),('free_description','TV en directo, películas, series, guía TV básica, búsqueda y favoritos están disponibles en Free.'),('checking_status','Comprobando cuenta de NenoTV…'),('status_updated','Estado de la cuenta actualizado'),('activation_success','NenoTV Pro activado'),('activation_failed','La activación ha fallado'),('server_unavailable','El servicio de cuenta de NenoTV aún no está disponible'),('email_required','Introduce tu correo electrónico'),('pro_required','NenoTV Pro'),('pro_unlock_message','está disponible con NenoTV Pro o durante la prueba Pro.'),('view_pro','Ver NenoTV Pro'),('not_now','Ahora no'),('this_feature','Esta función'),('advanced_epg','Guía TV avanzada'),('recording','Grabación'),('casting','Enviar a TV'),('parental_controls','Control parental'),('advanced_subtitles','Subtítulos externos'),('manage_source','Gestionar fuente de TV')],
+          'DE':[
+          ('account_and_pro','Konto & NenoTV Pro'),('nenotv_free','NenoTV Free'),('nenotv_pro_trial','NenoTV Pro · Testphase'),('nenotv_pro','NenoTV Pro'),('activate_restore','Kauf aktivieren oder wiederherstellen'),('email_address','E-Mail-Adresse'),('order_id_optional','Bestell-ID (optional)'),('activate_pro','Pro aktivieren / wiederherstellen'),('request_trial','Kostenlose Testphase starten'),('refresh_status','Kontostatus aktualisieren'),('this_device','Dieses Gerät'),('device_code','Gerätecode'),('trial_remaining','Verbleibende Testphase'),('days','Tage'),('pro_active','Pro ist aktiv'),('devices','Geräte'),('free_description','Live-TV, Filme, Serien, einfache TV-Übersicht, Suche und Favoriten sind in Free verfügbar.'),('checking_status','NenoTV-Konto wird geprüft…'),('status_updated','Kontostatus aktualisiert'),('activation_success','NenoTV Pro aktiviert'),('activation_failed','Aktivierung fehlgeschlagen'),('server_unavailable','Der NenoTV-Kontodienst ist noch nicht verfügbar'),('email_required','E-Mail-Adresse eingeben'),('pro_required','NenoTV Pro'),('pro_unlock_message','ist mit NenoTV Pro oder während der Pro-Testphase verfügbar.'),('view_pro','NenoTV Pro ansehen'),('not_now','Nicht jetzt'),('this_feature','Diese Funktion'),('advanced_epg','Erweiterte TV-Übersicht'),('recording','Aufnahme'),('casting','Auf TV übertragen'),('parental_controls','Jugendschutz'),('advanced_subtitles','Externe Untertitel'),('manage_source','TV-Quelle verwalten')],
+          'FR':[
+          ('account_and_pro','Compte et NenoTV Pro'),('nenotv_free','NenoTV Free'),('nenotv_pro_trial','NenoTV Pro · Essai'),('nenotv_pro','NenoTV Pro'),('activate_restore','Activer ou restaurer un achat'),('email_address','Adresse e-mail'),('order_id_optional','N° de commande (facultatif)'),('activate_pro','Activer / restaurer Pro'),('request_trial','Demander un essai gratuit'),('refresh_status','Actualiser le statut du compte'),('this_device','Cet appareil'),('device_code','Code appareil'),('trial_remaining','Essai restant'),('days','jours'),('pro_active','Pro est actif'),('devices','appareils'),('free_description','TV en direct, films, séries, guide TV de base, recherche et favoris sont disponibles dans Free.'),('checking_status','Vérification du compte NenoTV…'),('status_updated','Statut du compte actualisé'),('activation_success','NenoTV Pro activé'),('activation_failed','Échec de l’activation'),('server_unavailable','Le service de compte NenoTV n’est pas encore disponible'),('email_required','Saisissez votre adresse e-mail'),('pro_required','NenoTV Pro'),('pro_unlock_message','est disponible avec NenoTV Pro ou pendant votre essai Pro.'),('view_pro','Voir NenoTV Pro'),('not_now','Pas maintenant'),('this_feature','Cette fonction'),('advanced_epg','Guide TV avancé'),('recording','Enregistrement'),('casting','Diffuser sur TV'),('parental_controls','Contrôle parental'),('advanced_subtitles','Sous-titres externes'),('manage_source','Gérer la source TV')],
+          'IT':[
+          ('account_and_pro','Account e NenoTV Pro'),('nenotv_free','NenoTV Free'),('nenotv_pro_trial','NenoTV Pro · Prova'),('nenotv_pro','NenoTV Pro'),('activate_restore','Attiva o ripristina acquisto'),('email_address','Indirizzo e-mail'),('order_id_optional','ID ordine (opzionale)'),('activate_pro','Attiva / ripristina Pro'),('request_trial','Richiedi prova gratuita'),('refresh_status','Aggiorna stato account'),('this_device','Questo dispositivo'),('device_code','Codice dispositivo'),('trial_remaining','Prova rimanente'),('days','giorni'),('pro_active','Pro è attivo'),('devices','dispositivi'),('free_description','TV in diretta, film, serie, guida TV base, ricerca e preferiti sono disponibili in Free.'),('checking_status','Controllo account NenoTV…'),('status_updated','Stato account aggiornato'),('activation_success','NenoTV Pro attivato'),('activation_failed','Attivazione non riuscita'),('server_unavailable','Il servizio account NenoTV non è ancora disponibile'),('email_required','Inserisci il tuo indirizzo e-mail'),('pro_required','NenoTV Pro'),('pro_unlock_message','è disponibile con NenoTV Pro o durante la prova Pro.'),('view_pro','Visualizza NenoTV Pro'),('not_now','Non ora'),('this_feature','Questa funzione'),('advanced_epg','Guida TV avanzata'),('recording','Registrazione'),('casting','Trasmetti alla TV'),('parental_controls','Controllo genitori'),('advanced_subtitles','Sottotitoli esterni'),('manage_source','Gestisci sorgente TV')],
+          'PT':[
+          ('account_and_pro','Conta e NenoTV Pro'),('nenotv_free','NenoTV Free'),('nenotv_pro_trial','NenoTV Pro · Teste'),('nenotv_pro','NenoTV Pro'),('activate_restore','Ativar ou restaurar compra'),('email_address','Endereço de e-mail'),('order_id_optional','ID da encomenda (opcional)'),('activate_pro','Ativar / restaurar Pro'),('request_trial','Pedir teste gratuito'),('refresh_status','Atualizar estado da conta'),('this_device','Este dispositivo'),('device_code','Código do dispositivo'),('trial_remaining','Teste restante'),('days','dias'),('pro_active','Pro está ativo'),('devices','dispositivos'),('free_description','TV em direto, filmes, séries, guia TV básico, pesquisa e favoritos estão disponíveis no Free.'),('checking_status','A verificar conta NenoTV…'),('status_updated','Estado da conta atualizado'),('activation_success','NenoTV Pro ativado'),('activation_failed','Falha na ativação'),('server_unavailable','O serviço de conta NenoTV ainda não está disponível'),('email_required','Introduza o seu e-mail'),('pro_required','NenoTV Pro'),('pro_unlock_message','está disponível com NenoTV Pro ou durante o teste Pro.'),('view_pro','Ver NenoTV Pro'),('not_now','Agora não'),('this_feature','Esta função'),('advanced_epg','Guia TV avançado'),('recording','Gravação'),('casting','Transmitir para TV'),('parental_controls','Controlo parental'),('advanced_subtitles','Legendas externas'),('manage_source','Gerir fonte de TV')],
+          'TR':[
+          ('account_and_pro','Hesap ve NenoTV Pro'),('nenotv_free','NenoTV Free'),('nenotv_pro_trial','NenoTV Pro · Deneme'),('nenotv_pro','NenoTV Pro'),('activate_restore','Satın almayı etkinleştir veya geri yükle'),('email_address','E-posta adresi'),('order_id_optional','Sipariş no (isteğe bağlı)'),('activate_pro','Pro’yu etkinleştir / geri yükle'),('request_trial','Ücretsiz deneme iste'),('refresh_status','Hesap durumunu yenile'),('this_device','Bu cihaz'),('device_code','Cihaz kodu'),('trial_remaining','Kalan deneme'),('days','gün'),('pro_active','Pro etkin'),('devices','cihaz'),('free_description','Canlı TV, filmler, diziler, temel TV rehberi, arama ve favoriler Free sürümünde kullanılabilir.'),('checking_status','NenoTV hesabı kontrol ediliyor…'),('status_updated','Hesap durumu güncellendi'),('activation_success','NenoTV Pro etkinleştirildi'),('activation_failed','Etkinleştirme başarısız'),('server_unavailable','NenoTV hesap hizmeti henüz kullanılamıyor'),('email_required','E-posta adresinizi girin'),('pro_required','NenoTV Pro'),('pro_unlock_message','NenoTV Pro ile veya Pro deneme süresinde kullanılabilir.'),('view_pro','NenoTV Pro’yu görüntüle'),('not_now','Şimdi değil'),('this_feature','Bu özellik'),('advanced_epg','Gelişmiş TV rehberi'),('recording','Kayıt'),('casting','TV’ye aktar'),('parental_controls','Ebeveyn denetimleri'),('advanced_subtitles','Harici altyazılar'),('manage_source','TV kaynağını yönet')],
+          'PL':[
+          ('account_and_pro','Konto i NenoTV Pro'),('nenotv_free','NenoTV Free'),('nenotv_pro_trial','NenoTV Pro · Okres próbny'),('nenotv_pro','NenoTV Pro'),('activate_restore','Aktywuj lub przywróć zakup'),('email_address','Adres e-mail'),('order_id_optional','ID zamówienia (opcjonalne)'),('activate_pro','Aktywuj / przywróć Pro'),('request_trial','Poproś o bezpłatny okres próbny'),('refresh_status','Odśwież stan konta'),('this_device','To urządzenie'),('device_code','Kod urządzenia'),('trial_remaining','Pozostały okres próbny'),('days','dni'),('pro_active','Pro jest aktywne'),('devices','urządzenia'),('free_description','Telewizja na żywo, filmy, seriale, podstawowy program TV, wyszukiwanie i ulubione są dostępne w Free.'),('checking_status','Sprawdzanie konta NenoTV…'),('status_updated','Stan konta zaktualizowany'),('activation_success','NenoTV Pro aktywowane'),('activation_failed','Aktywacja nie powiodła się'),('server_unavailable','Usługa konta NenoTV nie jest jeszcze dostępna'),('email_required','Wpisz adres e-mail'),('pro_required','NenoTV Pro'),('pro_unlock_message','jest dostępne w NenoTV Pro lub podczas okresu próbnego Pro.'),('view_pro','Zobacz NenoTV Pro'),('not_now','Nie teraz'),('this_feature','Ta funkcja'),('advanced_epg','Zaawansowany program TV'),('recording','Nagrywanie'),('casting','Przesyłanie na TV'),('parental_controls','Kontrola rodzicielska'),('advanced_subtitles','Zewnętrzne napisy'),('manage_source','Zarządzaj źródłem TV')],
+          'AR':[
+          ('account_and_pro','الحساب و NenoTV Pro'),('nenotv_free','NenoTV Free'),('nenotv_pro_trial','NenoTV Pro · تجربة'),('nenotv_pro','NenoTV Pro'),('activate_restore','تفعيل الشراء أو استعادته'),('email_address','البريد الإلكتروني'),('order_id_optional','رقم الطلب (اختياري)'),('activate_pro','تفعيل / استعادة Pro'),('request_trial','طلب تجربة مجانية'),('refresh_status','تحديث حالة الحساب'),('this_device','هذا الجهاز'),('device_code','رمز الجهاز'),('trial_remaining','المتبقي من التجربة'),('days','أيام'),('pro_active','Pro مفعّل'),('devices','أجهزة'),('free_description','البث المباشر والأفلام والمسلسلات ودليل التلفاز الأساسي والبحث والمفضلة متاحة في Free.'),('checking_status','جارٍ التحقق من حساب NenoTV…'),('status_updated','تم تحديث حالة الحساب'),('activation_success','تم تفعيل NenoTV Pro'),('activation_failed','فشل التفعيل'),('server_unavailable','خدمة حساب NenoTV غير متاحة بعد'),('email_required','أدخل بريدك الإلكتروني'),('pro_required','NenoTV Pro'),('pro_unlock_message','متاحة مع NenoTV Pro أو أثناء تجربة Pro.'),('view_pro','عرض NenoTV Pro'),('not_now','ليس الآن'),('this_feature','هذه الميزة'),('advanced_epg','دليل تلفاز متقدم'),('recording','تسجيل'),('casting','البث إلى التلفاز'),('parental_controls','الرقابة الأبوية'),('advanced_subtitles','ترجمات خارجية'),('manage_source','إدارة مصدر التلفاز')]
+          }
+          for name,items in packs.items():
+              marker='private static final Map<String,String> '+name+'=map(new String[][]{'
+              pos=x.find(marker)
+              if pos<0: continue
+              pos=x.find('\n',pos)+1
+              existing=x[pos:pos+4000]
+              lines=[]
+              for k,v in items:
+                  if ('{"'+k+'",') not in existing:
+                      v=v.replace('\\','\\\\').replace('"','\\"')
+                      lines.append('        {"%s","%s"},' % (k,v))
+              if lines:x=x[:pos]+'\n'.join(lines)+'\n'+x[pos:]
+          ui.write_text(x)
+          PY
           sed -i 's/BuildConfig.NENOTV_API_BASE.trim()/"https:\/\/nenotv.com"/' app/src/main/java/com/robertalt/raiptv/entitlement/EntitlementClient.java
-          sed -i "s/versionCode 37/versionCode 43/" app/build.gradle
-          sed -i "s/versionName '0.9.5'/versionName '0.10.1'/" app/build.gradle
+          sed -i "s/versionCode 37/versionCode 44/" app/build.gradle
+          sed -i "s/versionName '0.9.5'/versionName '0.10.2'/" app/build.gradle
 
       - uses: actions/setup-java@v4
         with:
@@ -324,14 +457,14 @@ jobs:
           ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
           IN="base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk"
           "$AAPT" dump badging "$IN" | tee apk-badging.txt
-          grep -q "package: name='com.robertalt.raiptv' versionCode='43' versionName='0.10.1'" apk-badging.txt
-          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-v0.10.1-aligned-unsigned.apk
-          "$ZIPALIGN" -c -p 4 NenoTV-v0.10.1-aligned-unsigned.apk
+          grep -q "package: name='com.robertalt.raiptv' versionCode='44' versionName='0.10.2'" apk-badging.txt
+          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-v0.10.2-aligned-unsigned.apk
+          "$ZIPALIGN" -c -p 4 NenoTV-v0.10.2-aligned-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-v0.10.1-build
+          name: NenoTV-v0.10.2-build
           path: |
-            NenoTV-v0.10.1-aligned-unsigned.apk
+            NenoTV-v0.10.2-aligned-unsigned.apk
             apksigner.jar
