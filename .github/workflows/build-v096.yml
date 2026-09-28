@@ -1,8 +1,8 @@
-name: Build NenoTV v0.10.2
+name: Build NenoTV v0.10.3
 
 on:
   push:
-    branches: [ nenotv-v0.10.2-cache-language ]
+    branches: [ nenotv-v0.10.3-first-sync-pro-header ]
   workflow_dispatch:
 
 permissions:
@@ -45,7 +45,7 @@ jobs:
               if not p.is_file() or p.suffix.lower() not in {".java",".xml",".html",".txt",".js"}: continue
               try: s=p.read_text()
               except UnicodeDecodeError: continue
-              s=s.replace("Nivaro IPTV Player 0.9.5","NenoTV Player 0.10.2")
+              s=s.replace("Nivaro IPTV Player 0.9.5","NenoTV Player 0.10.3")
               s=s.replace("Nivaro IPTV Player","NenoTV")
               s=s.replace("About Nivaro","About NenoTV")
               s=s.replace("Over Nivaro","Over NenoTV")
@@ -419,9 +419,140 @@ jobs:
               if lines:x=x[:pos]+'\n'.join(lines)+'\n'+x[pos:]
           ui.write_text(x)
           PY
+          # v0.10.3: first-sync progress + language/plan badges + clearer Pro locks
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          layout=Path("app/src/main/res/layout/activity_main.xml")
+          x=layout.read_text()
+          # Header language and plan badges
+          x=x.replace('<Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>',
+'''<Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
+            <Button android:id="@+id/languageBadge" android:layout_width="48dp" android:layout_height="36dp" android:text="NL" android:textAllCaps="false" android:textColor="#FFF7F8FA" android:textSize="11sp" android:backgroundTint="#151A21" android:contentDescription="Language"/>
+            <Button android:id="@+id/planBadge" android:layout_width="58dp" android:layout_height="36dp" android:layout_marginLeft="5dp" android:text="FREE" android:textAllCaps="false" android:textStyle="bold" android:textColor="#FF0A0A0A" android:textSize="10sp" android:backgroundTint="#FFD400" android:contentDescription="Plan"/>''',1)
+
+          # First sync banner: localized message + determinate progress
+          start=x.find('  <LinearLayout android:id="@+id/indexBanner"')
+          end=x.find('  <FrameLayout android:id="@+id/heroContainer"',start)
+          if start>=0 and end>start:
+              banner='''  <LinearLayout android:id="@+id/indexBanner" android:layout_width="match_parent" android:layout_height="66dp" android:layout_marginLeft="14dp" android:layout_marginRight="14dp" android:layout_marginBottom="5dp" android:orientation="vertical" android:gravity="center_vertical" android:paddingLeft="12dp" android:paddingRight="12dp" android:paddingTop="7dp" android:paddingBottom="7dp" android:background="@drawable/bg_search" android:visibility="gone">
+            <TextView android:id="@+id/indexBannerText" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/text" android:textSize="11sp" android:maxLines="2" android:ellipsize="end"/>
+            <ProgressBar android:id="@+id/indexBannerProgress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="7dp" android:layout_marginTop="6dp" android:max="100" android:progress="0" android:indeterminate="false" android:progressTint="#FFD400" android:progressBackgroundTint="#303640"/>
+          </LinearLayout>
+          '''
+              x=x[:start]+banner+x[end:]
+          layout.write_text(x)
+
+          main=Path("app/src/main/java/com/robertalt/raiptv/MainActivity.java")
+          s=main.read_text()
+          s=s.replace('Spinner categories; ListView list; GridView grid; EditText search; TextView status,title,heroTitle,heroSubtitle,indexBannerText; ImageView heroImage; Button heroAction,heroInfo,genreButton,sortButton,searchToggle,settingsButton,tvShareButton,epgGridButton,epgListButton; ProgressBar progress;',
+                      'Spinner categories; ListView list; GridView grid; EditText search; TextView status,title,heroTitle,heroSubtitle,indexBannerText; ImageView heroImage; Button heroAction,heroInfo,genreButton,sortButton,searchToggle,settingsButton,tvShareButton,epgGridButton,epgListButton,languageBadge,planBadge; ProgressBar progress,indexBannerProgress;')
+          s=s.replace('indexBanner=findViewById(R.id.indexBanner);indexBannerText=findViewById(R.id.indexBannerText);',
+                      'indexBanner=findViewById(R.id.indexBanner);indexBannerText=findViewById(R.id.indexBannerText);indexBannerProgress=findViewById(R.id.indexBannerProgress);languageBadge=findViewById(R.id.languageBadge);planBadge=findViewById(R.id.planBadge);')
+
+          # wire header badges
+          wire='    void wire(){\n'
+          extra='''        if(languageBadge!=null)languageBadge.setOnClickListener(v->showLanguageQuickMenu());
+        if(planBadge!=null)planBadge.setOnClickListener(v->startActivity(new Intent(this,AccountActivity.class)));
+'''
+          if 'showLanguageQuickMenu()' not in s:
+              s=s.replace(wire,wire+extra,1)
+
+          # replace hidden progress method with first-run progress
+          a=s.find('    void showIndexBanner(String type,int done,int cats,int titles){')
+          b=s.find('\n    void hideIndexBanner(',a)
+          if a>=0 and b>0:
+              method='''    void showIndexBanner(String type,int done,int cats,int titles){
+        if(indexBanner==null||indexBannerText==null)return;
+        android.content.SharedPreferences sp=SettingsStore.prefs(this);
+        String key="first_sync_done_"+profileKey();
+        if(sp.getBoolean(key,false)){indexBanner.setVisibility(View.GONE);return;}
+        int pct=cats<=0?0:Math.max(0,Math.min(100,(done*100)/Math.max(1,cats)));
+        String target="vod".equals(type)?T("movies"):("series".equals(type)?T("series"):T("live_tv"));
+        indexBannerText.setText(T("first_sync_wait")+" · "+target+" "+done+"/"+Math.max(1,cats)+" · "+titles+" "+T("titles"));
+        if(indexBannerProgress!=null){indexBannerProgress.setIndeterminate(false);indexBannerProgress.setProgress(pct);}
+        indexBanner.setTag(type);indexBanner.setVisibility(View.VISIBLE);
+    }
+'''
+              s=s[:a]+method+s[b:]
+
+          # mark full sync once all main sections are complete
+          done_marker='if(!Thread.currentThread().isInterrupted()){int count=searchIndex.countSection(key,type);if(count>0){searchIndex.markSection(key,type,count);SettingsStore.prefs(this).edit().remove(cacheCursorKey(type)).apply();reloadIndexedSectionWhenReady(type);}'
+          done_repl=done_marker+'if(searchIndex.isComplete(key,"vod")&&searchIndex.isComplete(key,"series")&&searchIndex.isComplete(key,"live"))SettingsStore.prefs(this).edit().putBoolean("first_sync_done_"+key,true).apply();'
+          s=s.replace(done_marker,done_repl)
+
+          # Update badges whenever returning to app
+          s=s.replace('@Override protected void onResume(){super.onResume();activityPaused=false;',
+                      '@Override protected void onResume(){super.onResume();activityPaused=false;updateHeaderBadges();')
+
+          helpers='''    void updateHeaderBadges(){
+        if(languageBadge!=null)languageBadge.setText(SettingsStore.primaryLanguage(this).toUpperCase(Locale.ROOT));
+        if(planBadge!=null){EntitlementStore e=new EntitlementStore(this);String b=e.shortBadge();if(e.isTrial())b="TRIAL · "+e.trialDaysRemaining()+"d";planBadge.setText(b);planBadge.setTextColor(0xFF0A0A0A);planBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));}
+    }
+    void showLanguageQuickMenu(){
+        final String[] codes={"nl","en","de","fr","es","it","pt","tr","pl","ar"};
+        String[] labels=new String[codes.length];for(int i=0;i<codes.length;i++)labels[i]=SettingsStore.displayLanguage(this,codes[i]);
+        new AlertDialog.Builder(this).setTitle(T("language")).setItems(labels,(d,w)->{SettingsStore.setPrimaryLanguage(this,codes[w]);recreate();}).show();
+    }
+
+'''
+          if 'void updateHeaderBadges()' not in s:
+              s=s.replace('    void openProfile(){',helpers+'    void openProfile(){',1)
+
+          # Call once after initial setup
+          s=s.replace('appliedLanguage=SettingsStore.language(this);appliedContentLanguage=SettingsStore.contentLanguage(this);applyStaticLanguage();wire();',
+                      'appliedLanguage=SettingsStore.language(this);appliedContentLanguage=SettingsStore.contentLanguage(this);applyStaticLanguage();wire();updateHeaderBadges();')
+
+          # clearer Pro labels in UI
+          s=s.replace('epgGridButton.setText("EPG");','epgGridButton.setText("🔒 PRO · "+T("advanced_epg"));')
+          s=s.replace('epgGridButton.setOnClickListener(v->{epgGridMode=true;SettingsStore.prefs(this).edit().putBoolean("epg_grid",true).apply();showEpgByMode(all);});',
+                      'epgGridButton.setOnClickListener(v->{if(!ProGate.require(this,T("advanced_epg")))return;epgGridMode=true;SettingsStore.prefs(this).edit().putBoolean("epg_grid",true).apply();showEpgByMode(all);});')
+
+          main.write_text(s)
+
+          # Settings: show locks and explain Pro-only options
+          settings=Path("app/src/main/java/com/robertalt/raiptv/SettingsActivity.java")
+          x=settings.read_text()
+          x=x.replace('sec(T("parental"));Switch parental=new Switch(this);parental.setText(T("hide_adult"));',
+                      'sec("🔒 PRO · "+T("parental_controls"));Switch parental=new Switch(this);parental.setText("🔒 "+T("hide_adult"));')
+          x=x.replace('parental.setOnCheckedChangeListener((v,on)->{',
+                      'parental.setOnCheckedChangeListener((v,on)->{if(on&&!ProGate.require(this,T("parental_controls"))){v.setChecked(false);return;}')
+          x=x.replace('sec(T("playback"));', 'sec(T("playback"));TextView proHint=t("🔒 PRO · "+T("picture_in_picture")+" · "+T("advanced_subtitles"),12);proHint.setTextColor(0xFFFFD400);box.addView(proHint);')
+          settings.write_text(x)
+
+          # Add localized first-sync and Pro benefit strings to all languages that already exist.
+          ui=Path("app/src/main/java/com/robertalt/raiptv/UiText.java")
+          x=ui.read_text()
+          packs={
+          'EN':{'first_sync_wait':'Preparing your library. Please wait while NenoTV processes your complete TV list. You can keep using the app.','picture_in_picture':'Picture-in-Picture','pro_benefit_casting':'Cast live TV, movies and series to a supported TV.','pro_benefit_epg':'See multiple channels and programmes together in an advanced timeline guide.','pro_benefit_recording':'Record live programmes when your device and storage support it.','pro_benefit_parental':'Protect categories and content with a PIN.','pro_benefit_subtitles':'Use external subtitles and additional subtitle options.','pro_benefit_pip':'Keep watching in a small window while using other apps.','pro_benefit_sources':'Add and switch between multiple TV sources.'},
+          'NL':{'first_sync_wait':'Bibliotheek voorbereiden. Even geduld terwijl NenoTV je volledige TV-lijst verwerkt. Je kunt de app ondertussen gewoon gebruiken.','picture_in_picture':'Beeld-in-beeld','pro_benefit_casting':'Stuur Live TV, films en series naar een ondersteunde TV.','pro_benefit_epg':'Bekijk meerdere zenders en programma’s tegelijk in een uitgebreide tijdlijn.','pro_benefit_recording':'Neem live-programma’s op wanneer je apparaat en opslag dit ondersteunen.','pro_benefit_parental':'Beveilig categorieën en content met een pincode.','pro_benefit_subtitles':'Gebruik externe ondertitels en extra ondertitelopties.','pro_benefit_pip':'Blijf kijken in een klein venster terwijl je andere apps gebruikt.','pro_benefit_sources':'Voeg meerdere TV-bronnen toe en wissel eenvoudig.'},
+          'DE':{'first_sync_wait':'Mediathek wird vorbereitet. Bitte warten Sie, während NenoTV Ihre vollständige TV-Liste verarbeitet. Die App kann weiter benutzt werden.','picture_in_picture':'Bild-im-Bild','pro_benefit_casting':'Live-TV, Filme und Serien auf einen unterstützten Fernseher übertragen.','pro_benefit_epg':'Mehrere Sender und Programme gleichzeitig in einer erweiterten Zeitleiste sehen.','pro_benefit_recording':'Live-Sendungen aufnehmen, wenn Gerät und Speicher dies unterstützen.','pro_benefit_parental':'Kategorien und Inhalte mit einer PIN schützen.','pro_benefit_subtitles':'Externe Untertitel und zusätzliche Untertiteloptionen verwenden.','pro_benefit_pip':'In einem kleinen Fenster weiterschauen, während andere Apps genutzt werden.','pro_benefit_sources':'Mehrere TV-Quellen hinzufügen und einfach wechseln.'},
+          'FR':{'first_sync_wait':'Préparation de la bibliothèque. Veuillez patienter pendant que NenoTV traite votre liste TV complète. Vous pouvez continuer à utiliser l’application.','picture_in_picture':'Image dans l’image','pro_benefit_casting':'Diffusez la TV en direct, les films et les séries vers un téléviseur compatible.','pro_benefit_epg':'Affichez plusieurs chaînes et programmes dans une grille chronologique avancée.','pro_benefit_recording':'Enregistrez les programmes en direct si votre appareil et votre stockage le permettent.','pro_benefit_parental':'Protégez les catégories et le contenu avec un code PIN.','pro_benefit_subtitles':'Utilisez des sous-titres externes et des options supplémentaires.','pro_benefit_pip':'Continuez à regarder dans une petite fenêtre pendant l’utilisation d’autres applications.','pro_benefit_sources':'Ajoutez plusieurs sources TV et passez facilement de l’une à l’autre.'},
+          'ES':{'first_sync_wait':'Preparando la biblioteca. Espera mientras NenoTV procesa tu lista de TV completa. Puedes seguir usando la app.','picture_in_picture':'Imagen en imagen','pro_benefit_casting':'Envía TV en directo, películas y series a un televisor compatible.','pro_benefit_epg':'Consulta varios canales y programas a la vez en una guía cronológica avanzada.','pro_benefit_recording':'Graba programas en directo si el dispositivo y el almacenamiento lo permiten.','pro_benefit_parental':'Protege categorías y contenido con un PIN.','pro_benefit_subtitles':'Usa subtítulos externos y opciones adicionales.','pro_benefit_pip':'Sigue viendo en una ventana pequeña mientras usas otras apps.','pro_benefit_sources':'Añade varias fuentes de TV y cambia fácilmente entre ellas.'},
+          'IT':{'first_sync_wait':'Preparazione della libreria. Attendi mentre NenoTV elabora l’intero elenco TV. Puoi continuare a usare l’app.','picture_in_picture':'Picture-in-Picture','pro_benefit_casting':'Trasmetti TV in diretta, film e serie a una TV supportata.','pro_benefit_epg':'Visualizza più canali e programmi insieme in una guida temporale avanzata.','pro_benefit_recording':'Registra programmi in diretta quando dispositivo e memoria lo consentono.','pro_benefit_parental':'Proteggi categorie e contenuti con un PIN.','pro_benefit_subtitles':'Usa sottotitoli esterni e opzioni aggiuntive.','pro_benefit_pip':'Continua a guardare in una piccola finestra mentre usi altre app.','pro_benefit_sources':'Aggiungi più sorgenti TV e passa facilmente da una all’altra.'},
+          'PT':{'first_sync_wait':'A preparar a biblioteca. Aguarde enquanto o NenoTV processa a sua lista de TV completa. Pode continuar a usar a aplicação.','picture_in_picture':'Imagem em imagem','pro_benefit_casting':'Transmita TV em direto, filmes e séries para uma TV compatível.','pro_benefit_epg':'Veja vários canais e programas numa grelha temporal avançada.','pro_benefit_recording':'Grave programas em direto quando o dispositivo e o armazenamento suportarem.','pro_benefit_parental':'Proteja categorias e conteúdos com PIN.','pro_benefit_subtitles':'Use legendas externas e opções adicionais.','pro_benefit_pip':'Continue a ver numa pequena janela enquanto utiliza outras aplicações.','pro_benefit_sources':'Adicione várias fontes de TV e alterne facilmente.'},
+          'TR':{'first_sync_wait':'Kütüphane hazırlanıyor. NenoTV tüm TV listenizi işlerken lütfen bekleyin. Uygulamayı kullanmaya devam edebilirsiniz.','picture_in_picture':'Resim içinde resim','pro_benefit_casting':'Canlı TV, film ve dizileri desteklenen bir TV’ye aktarın.','pro_benefit_epg':'Birden fazla kanal ve programı gelişmiş zaman çizelgesinde birlikte görün.','pro_benefit_recording':'Cihaz ve depolama destekliyorsa canlı programları kaydedin.','pro_benefit_parental':'Kategorileri ve içeriği PIN ile koruyun.','pro_benefit_subtitles':'Harici altyazıları ve ek altyazı seçeneklerini kullanın.','pro_benefit_pip':'Diğer uygulamaları kullanırken küçük bir pencerede izlemeye devam edin.','pro_benefit_sources':'Birden fazla TV kaynağı ekleyin ve kolayca geçiş yapın.'},
+          'PL':{'first_sync_wait':'Przygotowywanie biblioteki. Poczekaj, aż NenoTV przetworzy pełną listę TV. Możesz nadal korzystać z aplikacji.','picture_in_picture':'Obraz w obrazie','pro_benefit_casting':'Przesyłaj telewizję na żywo, filmy i seriale na obsługiwany telewizor.','pro_benefit_epg':'Zobacz wiele kanałów i programów w zaawansowanej osi czasu.','pro_benefit_recording':'Nagrywaj programy na żywo, jeśli urządzenie i pamięć na to pozwalają.','pro_benefit_parental':'Chroń kategorie i treści kodem PIN.','pro_benefit_subtitles':'Używaj zewnętrznych napisów i dodatkowych opcji napisów.','pro_benefit_pip':'Oglądaj dalej w małym oknie podczas korzystania z innych aplikacji.','pro_benefit_sources':'Dodaj wiele źródeł TV i łatwo się między nimi przełączaj.'},
+          'AR':{'first_sync_wait':'جارٍ تجهيز المكتبة. يُرجى الانتظار بينما يعالج NenoTV قائمة التلفاز الكاملة. يمكنك متابعة استخدام التطبيق.','picture_in_picture':'صورة داخل صورة','pro_benefit_casting':'اعرض البث المباشر والأفلام والمسلسلات على تلفاز مدعوم.','pro_benefit_epg':'اعرض عدة قنوات وبرامج معًا في دليل زمني متقدم.','pro_benefit_recording':'سجّل البرامج المباشرة عندما يدعم الجهاز والتخزين ذلك.','pro_benefit_parental':'احمِ الفئات والمحتوى برمز PIN.','pro_benefit_subtitles':'استخدم ترجمات خارجية وخيارات إضافية للترجمة.','pro_benefit_pip':'واصل المشاهدة في نافذة صغيرة أثناء استخدام تطبيقات أخرى.','pro_benefit_sources':'أضف عدة مصادر تلفاز وانتقل بينها بسهولة.'}
+          }
+          for name,items in packs.items():
+              marker='private static final Map<String,String> '+name+'=map(new String[][]{'
+              pos=x.find(marker)
+              if pos<0: continue
+              pos=x.find('\n',pos)+1
+              existing=x[pos:pos+5000]
+              lines=[]
+              for k,v in items.items():
+                  if ('{"'+k+'",') not in existing:
+                      v=v.replace('\\','\\\\').replace('"','\\"')
+                      lines.append('        {"%s","%s"},' % (k,v))
+              if lines:x=x[:pos]+'\n'.join(lines)+'\n'+x[pos:]
+          ui.write_text(x)
+          PY
           sed -i 's/BuildConfig.NENOTV_API_BASE.trim()/"https:\/\/nenotv.com"/' app/src/main/java/com/robertalt/raiptv/entitlement/EntitlementClient.java
-          sed -i "s/versionCode 37/versionCode 44/" app/build.gradle
-          sed -i "s/versionName '0.9.5'/versionName '0.10.2'/" app/build.gradle
+          sed -i "s/versionCode 37/versionCode 45/" app/build.gradle
+          sed -i "s/versionName '0.9.5'/versionName '0.10.3'/" app/build.gradle
 
       - uses: actions/setup-java@v4
         with:
@@ -457,14 +588,14 @@ jobs:
           ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
           IN="base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk"
           "$AAPT" dump badging "$IN" | tee apk-badging.txt
-          grep -q "package: name='com.robertalt.raiptv' versionCode='44' versionName='0.10.2'" apk-badging.txt
-          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-v0.10.2-aligned-unsigned.apk
-          "$ZIPALIGN" -c -p 4 NenoTV-v0.10.2-aligned-unsigned.apk
+          grep -q "package: name='com.robertalt.raiptv' versionCode='45' versionName='0.10.3'" apk-badging.txt
+          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-v0.10.3-aligned-unsigned.apk
+          "$ZIPALIGN" -c -p 4 NenoTV-v0.10.3-aligned-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-v0.10.2-build
+          name: NenoTV-v0.10.3-build
           path: |
-            NenoTV-v0.10.2-aligned-unsigned.apk
+            NenoTV-v0.10.3-aligned-unsigned.apk
             apksigner.jar
