@@ -1,8 +1,8 @@
-name: Build NenoTV v0.11.0 Dual
+name: Build NenoTV Free v0.12.0
 
 on:
   push:
-    branches: [ nenotv-v0.11.0-dual-light-complete ]
+    branches: [ nenotv-v0.12.0-free-core ]
   workflow_dispatch:
 
 permissions:
@@ -923,20 +923,11 @@ jobs:
           sed -i "s/versionCode 37/versionCode 48/" app/build.gradle
           sed -i "s/versionName '0.9.5'/versionName '0.11.0'/" app/build.gradle
 
-      - name: Prepare Light + modular projects
+      - name: Prepare NenoTV Free core
         run: |
           set -euo pipefail
-          cp -a base/RA_IPTV_Android_v0.1 base/RA_IPTV_Android_v0.1-light
-          cd base/RA_IPTV_Android_v0.1-light
-          python3 "$GITHUB_WORKSPACE/tools/prepare_light.py"
-          cd "$GITHUB_WORKSPACE"
-          cp -a base/RA_IPTV_Android_v0.1-light base/RA_IPTV_Android_v0.1-light-apk
-          python3 - <<'PY'
-          from pathlib import Path
-          root=Path("base/RA_IPTV_Android_v0.1-light-apk")
-          p=root/"app/build.gradle"; s=p.read_text(); s=s.replace("    dynamicFeatures = [':proextras']\n",""); p.write_text(s)
-          p=root/"settings.gradle"; s=p.read_text(); s=s.replace("\ninclude ':proextras'\n","\n"); p.write_text(s)
-          PY
+          cd base/RA_IPTV_Android_v0.1
+          python3 "$GITHUB_WORKSPACE/tools/prepare_free.py"
 
       - uses: actions/setup-java@v4
         with:
@@ -953,69 +944,35 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Show dual source versions
+      - name: Show Free source version
         run: |
-          echo "== Complete =="
           grep -n "applicationId\|versionCode\|versionName" base/RA_IPTV_Android_v0.1/app/build.gradle || true
-          echo "== Light APK =="
-          grep -n "applicationId\|versionCode\|versionName" base/RA_IPTV_Android_v0.1-light-apk/app/build.gradle || true
-          echo "== Light modular =="
-          grep -n "applicationId\|versionCode\|versionName\|dynamicFeatures" base/RA_IPTV_Android_v0.1-light/app/build.gradle || true
+          grep -n "libvlc\|mlkit:translate\|language-id" base/RA_IPTV_Android_v0.1/app/build.gradle || true
 
-      - name: Build Pro Complete APK
+      - name: Build NenoTV Free APK
         working-directory: base/RA_IPTV_Android_v0.1
         run: |
           set -euo pipefail
           rm -rf app/build build .gradle
           gradle --no-daemon --no-build-cache --rerun-tasks clean assembleRelease
 
-      - name: Build Light APK
-        working-directory: base/RA_IPTV_Android_v0.1-light-apk
-        run: |
-          set -euo pipefail
-          rm -rf app/build build .gradle
-          gradle --no-daemon --no-build-cache --rerun-tasks clean assembleRelease
-
-      - name: Build Light modular AAB
-        working-directory: base/RA_IPTV_Android_v0.1-light
-        run: |
-          set -euo pipefail
-          rm -rf app/build proextras/build build .gradle
-          gradle --no-daemon --no-build-cache --rerun-tasks clean bundleRelease
-
-      - name: Verify and align dual APKs
+      - name: Verify and align Free APK
         run: |
           set -euo pipefail
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
           ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
-
-          COMPLETE_IN="base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk"
-          LIGHT_IN="base/RA_IPTV_Android_v0.1-light-apk/app/build/outputs/apk/release/app-release-unsigned.apk"
-          LIGHT_AAB="base/RA_IPTV_Android_v0.1-light/app/build/outputs/bundle/release/app-release.aab"
-
-          "$AAPT" dump badging "$COMPLETE_IN" | tee complete-badging.txt
-          grep -q "package: name='com.robertalt.raiptv' versionCode='48' versionName='0.11.0'" complete-badging.txt
-          "$ZIPALIGN" -p -f 4 "$COMPLETE_IN" NenoTV-Pro-Complete-v0.11.0-aligned-unsigned.apk
-          "$ZIPALIGN" -c -p 4 NenoTV-Pro-Complete-v0.11.0-aligned-unsigned.apk
-
-          "$AAPT" dump badging "$LIGHT_IN" | tee light-badging.txt
-          grep -q "package: name='com.robertalt.raiptv.light' versionCode='48' versionName='0.11.0'" light-badging.txt
-          "$ZIPALIGN" -p -f 4 "$LIGHT_IN" NenoTV-Light-v0.11.0-aligned-unsigned.apk
-          "$ZIPALIGN" -c -p 4 NenoTV-Light-v0.11.0-aligned-unsigned.apk
-
-          test -f "$LIGHT_AAB"
-          cp "$LIGHT_AAB" NenoTV-Light-v0.11.0-modular.aab
+          IN="base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk"
+          "$AAPT" dump badging "$IN" | tee free-badging.txt
+          grep -q "package: name='com.robertalt.raiptv' versionCode='49' versionName='0.12.0'" free-badging.txt
+          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-Free-v0.12.0-aligned-unsigned.apk
+          "$ZIPALIGN" -c -p 4 NenoTV-Free-v0.12.0-aligned-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
-
-          ls -lh NenoTV-*.apk NenoTV-*.aab
+          ls -lh NenoTV-Free-v0.12.0-aligned-unsigned.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-v0.11.0-dual-build
+          name: NenoTV-Free-v0.12.0-build
           path: |
-            NenoTV-Pro-Complete-v0.11.0-aligned-unsigned.apk
-            NenoTV-Light-v0.11.0-aligned-unsigned.apk
-            NenoTV-Light-v0.11.0-modular.aab
-            complete-badging.txt
-            light-badging.txt
+            NenoTV-Free-v0.12.0-aligned-unsigned.apk
+            free-badging.txt
             apksigner.jar
