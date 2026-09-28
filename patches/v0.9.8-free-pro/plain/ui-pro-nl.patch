@@ -1,0 +1,10 @@
+diff --git a/app/src/main/java/com/robertalt/raiptv/UiText.java b/app/src/main/java/com/robertalt/raiptv/UiText.java
+--- a/app/src/main/java/com/robertalt/raiptv/UiText.java
++++ b/app/src/main/java/com/robertalt/raiptv/UiText.java
+@@
+     private static final Map<String,String> NL=map(new String[][]{
++        {"account_and_pro","Account & NenoTV Pro"},{"nenotv_free","NenoTV Free"},{"nenotv_pro_trial","NenoTV Pro · Proefperiode"},{"nenotv_pro","NenoTV Pro"},
++        {"activate_restore","Activeren of aankoop herstellen"},{"email_address","E-mailadres"},{"order_id_optional","Order ID (optioneel)"},{"activate_pro","Pro activeren / herstellen"},{"request_trial","Gratis proefperiode aanvragen"},{"refresh_status","Accountstatus vernieuwen"},
++        {"this_device","Dit apparaat"},{"device_code","Apparaatcode"},{"trial_remaining","Proefperiode resterend"},{"days","dagen"},{"pro_active","Pro is actief"},{"devices","apparaten"},
++        {"free_description","Live TV, Films, Series, basis-TV-gids, zoeken en favorieten zijn beschikbaar in Free."},{"checking_status","NenoTV-account controleren…"},{"status_updated","Accountstatus bijgewerkt"},{"activation_success","NenoTV Pro geactiveerd"},{"activation_failed","Activeren mislukt"},{"server_unavailable","De NenoTV-accountservice is nog niet beschikbaar"},{"email_required","Vul je e-mailadres in"},
++        {"pro_required","NenoTV Pro"},{"pro_unlock_message","is beschikbaar met NenoTV Pro of tijdens je Pro-proefperiode."},{"view_pro","Bekijk NenoTV Pro"},{"not_now","Niet nu"},{"this_feature","Deze functie"},{"advanced_epg","Geavanceerde TV-gids"},{"recording","Opnemen"},{"casting","Casten en TV delen"},{"parental_controls","Ouderlijk toezicht"},{"advanced_subtitles","Externe ondertiteling"},{"manage_source","TV-bron beheren"},
