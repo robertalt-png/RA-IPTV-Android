@@ -1,8 +1,8 @@
-name: Build NenoTV v0.10.0
+name: Build NenoTV v0.10.1
 
 on:
   push:
-    branches: [ nenotv-v0.10.0-branding-menu ]
+    branches: [ nenotv-v0.10.1-ui-speed ]
   workflow_dispatch:
 
 permissions:
@@ -45,7 +45,7 @@ jobs:
               if not p.is_file() or p.suffix.lower() not in {".java",".xml",".html",".txt",".js"}: continue
               try: s=p.read_text()
               except UnicodeDecodeError: continue
-              s=s.replace("Nivaro IPTV Player 0.9.5","NenoTV Player 0.10.0")
+              s=s.replace("Nivaro IPTV Player 0.9.5","NenoTV Player 0.10.1")
               s=s.replace("Nivaro IPTV Player","NenoTV")
               s=s.replace("About Nivaro","About NenoTV")
               s=s.replace("Over Nivaro","Over NenoTV")
@@ -127,9 +127,169 @@ jobs:
               s=s.replace('    void showTvShareMenu(){',menu+'    void showTvShareMenu(){',1)
           main.write_text(s)
           PY
+
+          # v0.10.1: UI cleanup + faster first results for Films/Series
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          main=Path("app/src/main/java/com/robertalt/raiptv/MainActivity.java")
+          s=main.read_text()
+
+          # Visible brand text: never fall back to old Nivaro wording.
+          s=s.replace('title.setText("NIVARO");title.setTextSize(21);title.setLetterSpacing(0.08f);title.setTextColor(0xFFFFD400);title.setTypeface(null,Typeface.BOLD);',
+                      'title.setText("NenoTV");title.setTextSize(17);title.setLetterSpacing(0.02f);title.setTextColor(0xFFFFD400);title.setSingleLine(true);title.setTypeface(null,Typeface.BOLD);')
+          s=s.replace('profile=profiles.load();title.setText("Nivaro");',
+                      'profile=profiles.load();title.setText("NenoTV");')
+          s=s.replace(':"NIVARO";} String friendly', ':"NenoTV";} String friendly')
+
+          # Primary language is already first: no star prefix, so "Nederlands" fits cleanly.
+          s=s.replace('return ContentLanguage.preferenceCode(code).equals(SettingsStore.contentLanguage(this))?"★ "+n:n;',
+                      'return n;')
+
+          # Smaller first cache page = content appears sooner; more pages are appended on scroll.
+          s=s.replace('static final int CACHE_PAGE_SIZE=600;', 'static final int CACHE_PAGE_SIZE=240;')
+
+          # Active bottom navigation state.
+          nav='''    void updateBottomNav(String active){
+              int on=0xFFFFD400,off=getResources().getColor(R.color.muted);
+              int[] ids={R.id.navHome,R.id.navLive,R.id.navEpg,R.id.navMovies,R.id.navSeries};
+              String[] keys={"home","live","epg","vod","series"};
+              for(int i=0;i<ids.length;i++){Button b=findViewById(ids[i]);if(b==null)continue;boolean selected=keys[i].equals(active);b.setTextColor(selected?on:off);b.setTypeface(null,selected?Typeface.BOLD:Typeface.NORMAL);}
+          }
+
+          '''
+          if 'void updateBottomNav(String active)' not in s:
+              s=s.replace('    void openProfile(){',nav+'    void openProfile(){',1)
+          s=s.replace('section="home";SettingsStore.setLastSection(this,"home");',
+                      'section="home";updateBottomNav("home");SettingsStore.setLastSection(this,"home");')
+          s=s.replace('section=s;autoDefaultGroup=true;SettingsStore.setLastSection(this,s);',
+                      'section=s;updateBottomNav(s);autoDefaultGroup=true;SettingsStore.setLastSection(this,s);')
+          s=s.replace('section="epg";autoDefaultGroup=true;SettingsStore.setLastSection(this,"epg");',
+                      'section="epg";updateBottomNav("epg");autoDefaultGroup=true;SettingsStore.setLastSection(this,"epg");')
+
+          # Only show the background-index banner for the section currently on screen.
+          old='void showIndexBanner(String type,int done,int cats,int titles){if(indexBanner==null||indexBannerText==null)return;String target="vod".equals(type)?T("movies"):T("series");String prefix="nl".equals(SettingsStore.primaryLanguage(this))?"Nog even geduld — ":"";String msg=prefix+T("loading")+" "+target+" · "+Math.max(0,done)+"/"+Math.max(1,cats)+" "+T("categories")+" · "+Math.max(0,titles)+" "+T("titles");indexBannerText.setText(msg);indexBanner.setTag(type);indexBanner.setVisibility(View.VISIBLE);}'
+          new='void showIndexBanner(String type,int done,int cats,int titles){if(indexBanner==null||indexBannerText==null||!type.equals(section))return;String target="vod".equals(type)?T("movies"):T("series");String msg=target+" · "+Math.max(0,done)+"/"+Math.max(1,cats)+" "+T("categories")+" · "+Math.max(0,titles)+" "+T("titles");indexBannerText.setText(msg);indexBanner.setTag(type);indexBanner.setVisibility(View.VISIBLE);}'
+          s=s.replace(old,new)
+          s=s.replace('busy(true,total+" "+T("results")+" · "+T("index_building"));',
+                      'busy(false,total+" "+T("results"));')
+
+          # Fetch only the selected language categories, max 3 at a time.
+          # The first completed category is rendered immediately while the rest finish.
+          a=s.index('    void loadLanguageGroup(String tag,boolean fromRefresh){')
+          b=s.index('\n    void loadOtherGroup(boolean fromRefresh){',a)
+          faster='''    void loadLanguageGroup(String tag,boolean fromRefresh){
+              final String requested="epg".equals(section)?"live":section;final String normalized=ContentLanguage.normalizeTag(tag);if(normalized.isEmpty()){if("epg".equals(section))loadEpgChannels("all");else loadItems("all");return;}
+              stopCachePaging();final int token=nextRequest();final boolean epg="epg".equals(section);final String wantedId="multi".equals(normalized)?"multi":"lang:"+normalized;currentCategoryId=wantedId;currentCategoryName=groupLabel(wantedId);final List<Category>matches=matchingLanguageCategories(normalized);
+              if(epg){showEpgByMode(Collections.emptyList());busy(true,currentCategoryName+" · "+T("channels_loading"));}else{showMediaGrid("live".equals(requested));gridAdapter.set(Collections.emptyList(),"live".equals(requested));busy(true,currentCategoryName+" · "+T("library_opening"));}
+              exec.execute(()->{
+                  ExecutorService fast=null;
+                  try{
+                      int count=searchIndex.countLanguage(profileKey(),requested,normalized);
+                      if(count>0){
+                          final int ready=count;
+                          runOnUiThread(()->{if(!current(token)||!wantedId.equals(currentCategoryId))return;if(epg){List<MediaEntry>x=sortItems(visibleItems(searchIndex.languagePage(profileKey(),requested,normalized,0,Math.min(250,ready),SettingsStore.sort(this))));all=x;showEpgByMode(x);busy(false,x.size()+" "+T("channels")+" · "+currentCategoryName);}else loadCachedLanguage(requested,token,normalized,ready);});
+                          return;
+                      }
+                      if(!matches.isEmpty()){
+                          fullLibraryToken=token;
+                          int workers=Math.max(1,Math.min(3,matches.size()));
+                          fast=Executors.newFixedThreadPool(workers);
+                          CompletionService<List<MediaEntry>> cs=new ExecutorCompletionService<>(fast);
+                          for(Category c:matches)cs.submit(()->{
+                              List<MediaEntry>batch=provider.items(requested,c.id);
+                              for(MediaEntry e:batch)if(e!=null&&(e.group==null||e.group.trim().isEmpty()))e.group=c.name;
+                              return batch;
+                          });
+                          boolean firstShown=false;
+                          for(int i=0;i<matches.size();i++){
+                              if(!current(token)||Thread.currentThread().isInterrupted())break;
+                              List<MediaEntry>batch;
+                              try{batch=cs.take().get();}catch(Exception one){continue;}
+                              if(!firstShown&&!epg){
+                                  List<MediaEntry>first=sortItems(visibleItems(batch));
+                                  if(!first.isEmpty()){
+                                      final ArrayList<MediaEntry>show=new ArrayList<>(first);
+                                      final int done=i+1;
+                                      runOnUiThread(()->{if(!current(token)||!wantedId.equals(currentCategoryId))return;all=new ArrayList<>(show);showMediaGrid("live".equals(requested));gridAdapter.set(show,"live".equals(requested));if(selectedHero==null)previewAuto(show.get(0));busy(true,show.size()+" "+T("results")+" · "+done+"/"+matches.size()+" "+T("categories"));});
+                                      firstShown=true;
+                                  }
+                              }
+                              try{searchIndex.upsert(profileKey(),batch);}catch(Exception ignored){}
+                          }
+                          count=searchIndex.countLanguage(profileKey(),requested,normalized);
+                      }
+                      final int readyCount=count;final boolean complete=searchIndex.isComplete(profileKey(),requested);
+                      fullLibraryToken=0;
+                      runOnUiThread(()->{if(!current(token)||!wantedId.equals(currentCategoryId))return;if(readyCount>0){if(epg){List<MediaEntry>x=sortItems(visibleItems(searchIndex.languagePage(profileKey(),requested,normalized,0,Math.min(250,readyCount),SettingsStore.sort(this))));all=x;showEpgByMode(x);busy(false,x.size()+" "+T("channels")+" · "+currentCategoryName);}else loadCachedLanguage(requested,token,normalized,readyCount);return;}if(!complete){busy(true,currentCategoryName+" · "+T("index_building"));if(!indexRefreshRunning)refreshSearchIndex(false);}else busy(false,T("no_results"));});
+                  }catch(Throwable ex){runOnUiThread(()->{if(current(token))busy(false,T("error_prefix")+": "+friendlyThrowable(ex));});}
+                  finally{if(fast!=null)fast.shutdownNow();if(fullLibraryToken==token)fullLibraryToken=0;}
+              });
+          }
+          '''
+          s=s[:a]+faster+s[b:]
+          main.write_text(s)
+
+          # Compact background index banner and give the language selector more room.
+          layout=Path("app/src/main/res/layout/activity_main.xml")
+          x=layout.read_text()
+          x=re.sub(r'(<LinearLayout android:id="@\+id/indexBanner"[^>]*android:layout_height=")42dp(")',r'\g<1>32dp\2',x)
+          x=x.replace('android:id="@+id/indexBannerText" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:paddingLeft="9dp" android:textColor="@color/text" android:textSize="11.5sp"',
+                      'android:id="@+id/indexBannerText" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:paddingLeft="9dp" android:textColor="@color/muted" android:textSize="10.5sp"')
+          x=x.replace('android:id="@+id/genreButton" android:layout_width="92dp"', 'android:id="@+id/genreButton" android:layout_width="82dp"')
+          x=x.replace('android:id="@+id/sortButton" android:layout_width="76dp"', 'android:id="@+id/sortButton" android:layout_width="68dp"')
+          x=x.replace('android:id="@+id/heroAction" android:layout_width="wrap_content" android:layout_height="36dp" android:minHeight="0dp" android:text="▶ Afspelen" android:textAllCaps="false" android:textColor="#FFFFFFFF" android:backgroundTint="@color/accent"',
+                      'android:id="@+id/heroAction" android:layout_width="wrap_content" android:layout_height="36dp" android:minHeight="0dp" android:text="▶ Afspelen" android:textAllCaps="false" android:textColor="#FF0A0A0A" android:backgroundTint="#FFD400"')
+          layout.write_text(x)
+
+          # Ratings: 4.929 -> 4,9 / 4.9 depending on device locale.
+          entry=Path("app/src/main/java/com/robertalt/raiptv/model/MediaEntry.java")
+          x=entry.read_text()
+          x=x.replace('s.append("★ ").append(rating);','s.append("★ ").append(formatRating(rating));')
+          if 'String formatRating(String value)' not in x:
+              x=x.replace('    public String meta(){',
+'''    public static String formatRating(String value){
+        if(value==null)return "";
+        String v=value.trim();if(v.isEmpty())return "";
+        try{double d=Double.parseDouble(v.replace(',','.'));return new java.text.DecimalFormat("0.#").format(d);}catch(Exception ignored){return v;}
+    }
+    public String meta(){''')
+          entry.write_text(x)
+
+          # Faster visible poster loading + branded placeholder for missing artwork.
+          row=Path("app/src/main/java/com/robertalt/raiptv/MediaRowAdapter.java")
+          x=row.read_text()
+          x=x.replace('Executors.newFixedThreadPool(2)', 'Executors.newFixedThreadPool(4)')
+          x=x.replace('new LruCache<String,Bitmap>(8*1024)', 'new LruCache<String,Bitmap>(16*1024)')
+          x=x.replace('c.setRequestProperty("User-Agent","Nivaro/0.5.5");', 'c.setRequestProperty("User-Agent","NenoTV/0.10.1");')
+          x=x.replace('c.setRequestProperty("Connection","close");', 'c.setRequestProperty("Connection","keep-alive");')
+          p=x.index('    public static void loadArtwork(')
+          q=x.index('\n    private static byte[] readLimited',p)
+          method='''    public static void loadArtwork(ImageView image,String url,String label,int targetW,int targetH){
+        image.setBackgroundColor(0xFF151A21);image.setContentDescription(label);image.setTag(url);
+        image.setPadding(0,0,0,0);
+        if(url==null||url.trim().isEmpty()){
+            int pad=(int)(14*image.getResources().getDisplayMetrics().density);
+            image.setPadding(pad,pad,pad,pad);image.setScaleType(ImageView.ScaleType.CENTER_INSIDE);image.setImageResource(R.drawable.ic_nivaro_mark);return;
+        }
+        image.setImageDrawable(null);
+        Bitmap cached=cache.get(url);if(cached!=null){image.setImageBitmap(cached);return;}
+        images.execute(()->{HttpURLConnection c=null;try{
+            c=(HttpURLConnection)new URL(url).openConnection();c.setConnectTimeout(4000);c.setReadTimeout(5500);c.setUseCaches(true);c.setInstanceFollowRedirects(true);
+            c.setRequestProperty("User-Agent","NenoTV/0.10.1");c.setRequestProperty("Connection","keep-alive");c.setRequestProperty("Accept","image/*,*/*;q=0.8");c.setRequestProperty("Accept-Encoding","identity");
+            int code=c.getResponseCode();if(code<200||code>=300)return;byte[]data=readLimited(c.getInputStream());if(data.length==0)return;Bitmap bm=decodeScaled(data,targetW,targetH);if(bm==null)return;cache.put(url,bm);
+            image.post(()->{Object tag=image.getTag();if(tag!=null&&tag.equals(url)){image.setPadding(0,0,0,0);image.setImageBitmap(bm);}});
+        }catch(Exception ignored){}finally{if(c!=null)c.disconnect();}});
+    }
+          '''
+          x=x[:p]+method+x[q:]
+          row.write_text(x)
+          PY
+
           sed -i 's/BuildConfig.NENOTV_API_BASE.trim()/"https:\/\/nenotv.com"/' app/src/main/java/com/robertalt/raiptv/entitlement/EntitlementClient.java
-          sed -i "s/versionCode 37/versionCode 42/" app/build.gradle
-          sed -i "s/versionName '0.9.5'/versionName '0.10.0'/" app/build.gradle
+          sed -i "s/versionCode 37/versionCode 43/" app/build.gradle
+          sed -i "s/versionName '0.9.5'/versionName '0.10.1'/" app/build.gradle
 
       - uses: actions/setup-java@v4
         with:
@@ -165,14 +325,14 @@ jobs:
           ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
           IN="base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk"
           "$AAPT" dump badging "$IN" | tee apk-badging.txt
-          grep -q "package: name='com.robertalt.raiptv' versionCode='42' versionName='0.10.0'" apk-badging.txt
-          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-v0.10.0-aligned-unsigned.apk
-          "$ZIPALIGN" -c -p 4 NenoTV-v0.10.0-aligned-unsigned.apk
+          grep -q "package: name='com.robertalt.raiptv' versionCode='43' versionName='0.10.1'" apk-badging.txt
+          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-v0.10.1-aligned-unsigned.apk
+          "$ZIPALIGN" -c -p 4 NenoTV-v0.10.1-aligned-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-v0.10.0-build
+          name: NenoTV-v0.10.1-build
           path: |
-            NenoTV-v0.10.0-aligned-unsigned.apk
+            NenoTV-v0.10.1-aligned-unsigned.apk
             apksigner.jar
