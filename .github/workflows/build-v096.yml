@@ -1,8 +1,8 @@
-name: Build NenoTV v0.10.4
+name: Build NenoTV v0.10.5
 
 on:
   push:
-    branches: [ nenotv-v0.10.4-language-index-fix ]
+    branches: [ nenotv-v0.10.5-performance ]
   workflow_dispatch:
 
 permissions:
@@ -45,7 +45,7 @@ jobs:
               if not p.is_file() or p.suffix.lower() not in {".java",".xml",".html",".txt",".js"}: continue
               try: s=p.read_text()
               except UnicodeDecodeError: continue
-              s=s.replace("Nivaro IPTV Player 0.9.5","NenoTV Player 0.10.4")
+              s=s.replace("Nivaro IPTV Player 0.9.5","NenoTV Player 0.10.5")
               s=s.replace("Nivaro IPTV Player","NenoTV")
               s=s.replace("About Nivaro","About NenoTV")
               s=s.replace("Over Nivaro","Over NenoTV")
@@ -730,9 +730,191 @@ jobs:
 
           main.write_text(s)
           PY
+          # v0.10.5: performance-only pass — keep UI responsive while indexing/EPG load
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # --- Search database: WAL + short write transactions, never scan/rewrite language hints on UI reads.
+          p=Path("app/src/main/java/com/robertalt/raiptv/storage/SearchIndexStore.java")
+          x=p.read_text()
+          x=x.replace('public SearchIndexStore(Context c){ super(c,DB,null,VERSION); }',
+                      'public SearchIndexStore(Context c){ super(c,DB,null,VERSION); try{setWriteAheadLoggingEnabled(true);}catch(Exception ignored){} }')
+          a=x.index('    public synchronized void upsert(String profile,List<MediaEntry> items){')
+          b=x.index('\n    private void upsertInternal',a)
+          x=x[:a]+'''    public void upsert(String profile,List<MediaEntry> items){
+              if(items==null||items.isEmpty())return;
+              SQLiteDatabase db=getWritableDatabase();
+              final int chunk=80;
+              for(int start=0;start<items.size()&&!Thread.currentThread().isInterrupted();start+=chunk){
+                  int end=Math.min(items.size(),start+chunk);boolean complete=true;
+                  db.beginTransaction();
+                  try{
+                      for(int i=start;i<end;i++){if(Thread.currentThread().isInterrupted()){complete=false;break;}upsertInternal(db,profile,items.get(i));}
+                      if(complete)db.setTransactionSuccessful();
+                  }finally{db.endTransaction();}
+                  if(!complete)break;
+                  Thread.yield();
+              }
+          }
+          '''+x[b:]
+          a=x.index('    private void ensureLanguageHints(SQLiteDatabase db,String profile,String section){')
+          b=x.index('\n    public synchronized List<MediaEntry> sectionPage',a)
+          x=x[:a]+'''    private void ensureLanguageHints(SQLiteDatabase db,String profile,String section){
+              // v0.10.5: new index rows already contain language tags.
+              // Never perform a full decode/write migration from a foreground read.
+          }
+          '''+x[b:]
+          p.write_text(x)
+
+          # --- Main screen: fast foreground loads, separate EPG workers, quieter background indexing.
+          p=Path("app/src/main/java/com/robertalt/raiptv/MainActivity.java")
+          s=p.read_text()
+          s=s.replace('ExecutorService exec=Executors.newFixedThreadPool(4), heroExec=Executors.newSingleThreadExecutor(), indexExec=Executors.newSingleThreadExecutor();',
+                      'ExecutorService exec=Executors.newFixedThreadPool(3), heroExec=Executors.newSingleThreadExecutor(), indexExec=Executors.newSingleThreadExecutor(); ThreadPoolExecutor epgExec=(ThreadPoolExecutor)Executors.newFixedThreadPool(2); volatile int epgRequestSerial=0;')
+          s=s.replace('ui.postDelayed(delayedIndexResume,4500);','ui.postDelayed(delayedIndexResume,8000);')
+          s=s.replace('Future<?> f=indexFuture;if(f!=null&&!f.isDone())f.cancel(true);\n              restoreFirstSyncBanner();',
+                      'Future<?> f=indexFuture;if(f!=null&&!f.isDone())f.cancel(true);epgRequestSerial++;try{epgExec.getQueue().clear();}catch(Exception ignored){}\n              restoreFirstSyncBanner();')
+
+          # Films/Series: if the selected language is not cached yet, fetch only enough to paint the screen.
+          a=s.index('    void loadLanguageGroup(String tag,boolean fromRefresh){')
+          b=s.index('\n    void loadOtherGroup(boolean fromRefresh){',a)
+          fast='''    void loadLanguageGroup(String tag,boolean fromRefresh){
+              final String requested="epg".equals(section)?"live":section;
+              final String normalized=ContentLanguage.normalizeTag(tag);
+              if(normalized.isEmpty()){if("epg".equals(section))loadEpgChannels("all");else loadItems("all");return;}
+              stopCachePaging();final int token=nextRequest();final boolean epg="epg".equals(section);
+              final String wantedId="multi".equals(normalized)?"multi":"lang:"+normalized;
+              currentCategoryId=wantedId;currentCategoryName=groupLabel(wantedId);
+              final List<Category>matches=matchingLanguageCategories(normalized);
+
+              int cached=searchIndex.countLanguage(profileKey(),requested,normalized);
+              if(cached>0){
+                  if(epg){
+                      List<MediaEntry>x=sortItems(visibleItems(searchIndex.languagePage(profileKey(),requested,normalized,0,Math.min(80,cached),SettingsStore.sort(this))));
+                      all=x;showEpgByMode(x);busy(false,x.size()+" "+T("channels"));scheduleBackgroundIndex();
+                  }else{
+                      loadCachedLanguage(requested,token,normalized,cached);scheduleBackgroundIndex();
+                  }
+                  return;
+              }
+
+              if(epg){
+                  showEpgByMode(Collections.emptyList());busy(true,currentCategoryName+" · "+T("channels_loading"));
+              }else{
+                  showMediaGrid("live".equals(requested));gridAdapter.set(Collections.emptyList(),"live".equals(requested));busy(true,T("library_opening"));
+              }
+              if(matches.isEmpty()){busy(false,T("no_results"));scheduleBackgroundIndex();return;}
+
+              exec.execute(()->{
+                  try{
+                      List<MediaEntry>ready=Collections.emptyList();
+                      int attempts=Math.min(3,matches.size());
+                      for(int i=0;i<attempts&&!Thread.currentThread().isInterrupted();i++){
+                          Category cat=matches.get(i);
+                          List<MediaEntry>batch=provider.items(requested,cat.id);
+                          for(MediaEntry e:batch)if(e!=null)e.group=cat.name;
+                          try{searchIndex.upsert(profileKey(),batch);}catch(Exception ignored){}
+                          List<MediaEntry>visible=sortItems(visibleItems(batch));
+                          if(!visible.isEmpty()){ready=visible;break;}
+                      }
+                      final ArrayList<MediaEntry>shown=new ArrayList<>(ready);
+                      runOnUiThread(()->{
+                          if(!current(token)||!wantedId.equals(currentCategoryId))return;
+                          if(shown.isEmpty()){busy(true,T("first_sync_wait"));restoreFirstSyncBanner();}
+                          else if(epg){all=shown;showEpgByMode(shown);busy(false,shown.size()+" "+T("channels"));}
+                          else{all=new ArrayList<>(shown);showMediaGrid("live".equals(requested));gridAdapter.set(shown,"live".equals(requested));if(selectedHero==null)previewAuto(shown.get(0));busy(false,shown.size()+" "+T("results"));}
+                          scheduleBackgroundIndex();
+                      });
+                  }catch(Throwable ex){runOnUiThread(()->{if(current(token)){busy(false,T("error_prefix")+": "+friendlyThrowable(ex));scheduleBackgroundIndex();}});}
+              });
+          }
+          '''
+          s=s[:a]+fast+s[b:]
+
+          # First-sync UI updates are cheap; persistence happens on index thread.
+          a=s.index('    void showIndexBanner(String type,int done,int cats,int titles){')
+          b=s.index('\n    void restoreFirstSyncBanner()',a)
+          method='''    void showIndexBanner(String type,int done,int cats,int titles){
+              if(indexBanner==null||indexBannerText==null)return;
+              android.content.SharedPreferences sp=SettingsStore.prefs(this);String key=profileKey();
+              if(sp.getBoolean("first_sync_done_"+key,false)){indexBanner.setVisibility(View.GONE);return;}
+              int total=Math.max(1,cats),finished=Math.max(0,Math.min(done,total));
+              int pct=Math.max(0,Math.min(100,(finished*100)/total));
+              indexBannerText.setText(T("first_sync_wait")+" · "+pct+"% · "+finished+"/"+total+" "+T("categories")+" · "+Math.max(0,titles)+" "+T("titles"));
+              if(indexBannerProgress!=null){indexBannerProgress.setIndeterminate(false);indexBannerProgress.setMax(100);indexBannerProgress.setProgress(pct);}
+              indexBanner.setVisibility(View.VISIBLE);
+          }
+          '''
+          s=s[:a]+method+s[b:]
+
+          s=s.replace('searchIndex.upsert(key,items);if(Thread.currentThread().isInterrupted())break;\n                                indexed=true;publishIndexedTop(type);',
+                      'searchIndex.upsert(key,items);if(Thread.currentThread().isInterrupted())break;\n                                indexed=true;')
+          s=s.replace('globalDone++;final int gd=globalDone,gt=grandTotal,ti=searchIndex.count(key);\n                            if(isUiAlive())runOnUiThread(()->showIndexBanner("",gd,gt,ti));',
+                      'globalDone++;final int gd=globalDone,gt=grandTotal,ti=searchIndex.count(key);sp.edit().putInt("first_sync_done_count_"+key,gd).putInt("first_sync_total_count_"+key,gt).putInt("first_sync_titles_"+key,ti).apply();\n                            if(isUiAlive()&&(gd==gt||gd%5==0))runOnUiThread(()->showIndexBanner("",gd,gt,ti));\n                            try{Thread.sleep(120);}catch(InterruptedException ie){Thread.currentThread().interrupt();break;}')
+          s=s.replace('final int initialDone=globalDone,grandTotal=Math.max(1,globalTotal),initialTitles=searchIndex.count(key);\n                    if(isUiAlive())runOnUiThread(()->showIndexBanner("",initialDone,grandTotal,initialTitles));',
+                      'final int initialDone=globalDone,grandTotal=Math.max(1,globalTotal),initialTitles=searchIndex.count(key);sp.edit().putInt("first_sync_done_count_"+key,initialDone).putInt("first_sync_total_count_"+key,grandTotal).putInt("first_sync_titles_"+key,initialTitles).apply();\n                    if(isUiAlive())runOnUiThread(()->showIndexBanner("",initialDone,grandTotal,initialTitles));')
+
+          # EPG grid: separate queue, fewer visible rows, no per-program ML translation while scrolling.
+          a=s.index('    void renderEpgBoard(List<MediaEntry>channels){')
+          b=s.index('\n    boolean isRadioChannel',a)
+          render='''    void renderEpgBoard(List<MediaEntry>channels){
+              epgRequestSerial++;try{epgExec.getQueue().clear();}catch(Exception ignored){}
+              hideContentViews();epgBoard.setVisibility(View.VISIBLE);epgBoardContainer.removeAllViews();
+              List<MediaEntry>src=new ArrayList<>(channels==null?Collections.emptyList():channels);
+              src.sort((a,b)->{int ar=isRadioChannel(a)?1:0,br=isRadioChannel(b)?1:0;return ar!=br?Integer.compare(ar,br):0;});
+              epgBaseEpoch=(System.currentTimeMillis()/1000L/1800L)*1800L;addEpgTimelineHeader();
+              int cap=getResources().getConfiguration().screenWidthDp>=600?18:10;
+              int n=Math.min(cap,src.size());for(int i=0;i<n;i++)addEpgBoardRow(src.get(i));
+              if(src.size()>n){TextView more=new TextView(this);more.setText("+ "+(src.size()-n)+" "+T("channels")+" · "+T("list"));more.setTextColor(getResources().getColor(R.color.muted));more.setTextSize(12);more.setGravity(Gravity.CENTER);more.setPadding(dp(8),dp(14),dp(8),dp(18));more.setOnClickListener(v->setEpgMode(false));epgBoardContainer.addView(more);}
+          }
+          '''
+          s=s[:a]+render+s[b:]
+
+          a=s.index('    void addEpgBoardRow(MediaEntry ch){')
+          b=s.index('\n    TextView epgTimelineCard',a)
+          row='''    void addEpgBoardRow(MediaEntry ch){
+              LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(3),dp(2),dp(3),dp(2));
+              TextView name=new TextView(this);name.setText(DisplayText.title(ch));name.setTextColor(getResources().getColor(R.color.text));name.setTextSize(10.5f);name.setTypeface(null,Typeface.BOLD);name.setMaxLines(2);name.setEllipsize(TextUtils.TruncateAt.END);name.setGravity(Gravity.CENTER_VERTICAL);row.addView(name,new LinearLayout.LayoutParams(dp(105),dp(66)));
+              FrameLayout timeline=new FrameLayout(this);timeline.setBackgroundColor(0xFF10141C);int timelineDp=epgTimelineWidth();row.addView(timeline,new LinearLayout.LayoutParams(dp(timelineDp),dp(66)));row.setOnClickListener(v->play(ch));epgBoardContainer.addView(row,new LinearLayout.LayoutParams(-1,dp(70)));
+              TextView loading=epgTimelineCard(T("epg_loading"),false);FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(-1,-1);loading.setLayoutParams(lp);timeline.addView(loading);
+              final long base=epgBaseEpoch;final int request=epgRequestSerial;
+              epgExec.execute(()->{try{
+                  if(request!=epgRequestSerial)return;
+                  List<EpgEntry>events=provider.epgEntries(ch,6);
+                  runOnUiThread(()->{
+                      if(!isUiAlive()||!"epg".equals(section)||base!=epgBaseEpoch||request!=epgRequestSerial)return;
+                      timeline.removeAllViews();long horizon=base+7200L;int added=0;
+                      for(EpgEntry e:events){long st=e.startEpoch>0?e.startEpoch:base,en=e.endEpoch>st?e.endEpoch:st+1800L;if(en<=base||st>=horizon)continue;long visStart=Math.max(base,st),visEnd=Math.min(horizon,en);int left=(int)Math.round((visStart-base)*timelineDp/7200.0),width=Math.max(46,(int)Math.round((visEnd-visStart)*timelineDp/7200.0));String range=e.range();TextView card=epgTimelineCard((range.isEmpty()?"":range+"\\n")+e.title,e.isNow());FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(dp(width),dp(62));cp.leftMargin=dp(left);cp.topMargin=dp(2);card.setLayoutParams(cp);timeline.addView(card);added++;}
+                      if(added==0){TextView none=epgTimelineCard(T("no_epg"),false);FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(-1,-1);none.setLayoutParams(np);timeline.addView(none);}
+                  });
+              }catch(Exception ignored){runOnUiThread(()->{if(isUiAlive()&&"epg".equals(section)&&request==epgRequestSerial){timeline.removeAllViews();TextView none=epgTimelineCard(T("no_epg"),false);FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(-1,-1);none.setLayoutParams(np);timeline.addView(none);}});}});
+          }
+          '''
+          s=s[:a]+row+s[b:]
+          p.write_text(s)
+
+          # EPG list: max 2 fetches, keep translations on-demand/detail only.
+          p=Path("app/src/main/java/com/robertalt/raiptv/EpgAdapter.java")
+          x=p.read_text()
+          x=x.replace('private final ExecutorService exec=Executors.newFixedThreadPool(4);','private final ExecutorService exec=Executors.newFixedThreadPool(2);')
+          import re
+          x=re.sub(r'InfoTranslator\.translate\(a\.title,SettingsStore\.primaryLanguage\(context\),out->ui\.post\(\(\)->\{if\(key\.equals\(h\.now\.getTag\(\)\)\)h\.now\.setText\(nowPrefix\+out\);\}\)\);','',x)
+          x=re.sub(r'InfoTranslator\.translate\(b\.title,SettingsStore\.primaryLanguage\(context\),out->ui\.post\(\(\)->\{if\(key\.equals\(h\.next\.getTag\(\)\)\)h\.next\.setText\(nextPrefix\+out\);\}\)\);','',x)
+          p.write_text(x)
+
+          # Live grid: do not start ML translation jobs for every visible EPG title.
+          p=Path("app/src/main/java/com/robertalt/raiptv/MediaGridAdapter.java")
+          x=p.read_text()
+          x=x.replace('private static final ExecutorService epgExec=Executors.newFixedThreadPool(2);','private static final ExecutorService epgExec=Executors.newSingleThreadExecutor();')
+          a=x.find('final String key=e.uniqueKey();InfoTranslator.translate(cur.title')
+          if a>=0:
+              b=x.find(';}',a)
+              if b>=0:x=x[:a]+x[b+1:]
+          p.write_text(x)
+          PY
           sed -i 's/BuildConfig.NENOTV_API_BASE.trim()/"https:\/\/nenotv.com"/' app/src/main/java/com/robertalt/raiptv/entitlement/EntitlementClient.java
-          sed -i "s/versionCode 37/versionCode 46/" app/build.gradle
-          sed -i "s/versionName '0.9.5'/versionName '0.10.4'/" app/build.gradle
+          sed -i "s/versionCode 37/versionCode 47/" app/build.gradle
+          sed -i "s/versionName '0.9.5'/versionName '0.10.5'/" app/build.gradle
 
       - uses: actions/setup-java@v4
         with:
@@ -768,14 +950,14 @@ jobs:
           ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
           IN="base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk"
           "$AAPT" dump badging "$IN" | tee apk-badging.txt
-          grep -q "package: name='com.robertalt.raiptv' versionCode='46' versionName='0.10.4'" apk-badging.txt
-          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-v0.10.4-aligned-unsigned.apk
-          "$ZIPALIGN" -c -p 4 NenoTV-v0.10.4-aligned-unsigned.apk
+          grep -q "package: name='com.robertalt.raiptv' versionCode='47' versionName='0.10.5'" apk-badging.txt
+          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-v0.10.5-aligned-unsigned.apk
+          "$ZIPALIGN" -c -p 4 NenoTV-v0.10.5-aligned-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-v0.10.4-build
+          name: NenoTV-v0.10.5-build
           path: |
-            NenoTV-v0.10.4-aligned-unsigned.apk
+            NenoTV-v0.10.5-aligned-unsigned.apk
             apksigner.jar
