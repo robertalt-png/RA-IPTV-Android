@@ -1,0 +1,25 @@
+diff --git a/app/build.gradle b/app/build.gradle
+index 882def8..da7333d 100644
+--- a/app/build.gradle
++++ b/app/build.gradle
+@@ -3,6 +3,7 @@ plugins {
+ }
+ 
+ def nivaroCastReceiverId = project.findProperty('NIVARO_CAST_RECEIVER_ID') ?: System.getenv('NIVARO_CAST_RECEIVER_ID') ?: ''
++def nenoTvApiBase = project.findProperty('NENOTV_API_BASE') ?: System.getenv('NENOTV_API_BASE') ?: 'https://nenotv.com'
+ 
+ android {
+     namespace 'com.robertalt.raiptv'
+@@ -12,9 +13,10 @@ android {
+         applicationId 'com.robertalt.raiptv'
+         minSdk 26
+         targetSdk 36
+-        versionCode 37
+-        versionName '0.9.5'
++        versionCode 40
++        versionName '0.9.8'
+         buildConfigField 'String', 'NIVARO_CAST_RECEIVER_ID', '"' + nivaroCastReceiverId + '"'
++        buildConfigField 'String', 'NENOTV_API_BASE', '"' + nenoTvApiBase + '"'
+     }
+ 
+     buildFeatures { buildConfig true }
