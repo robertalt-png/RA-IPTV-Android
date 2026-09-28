@@ -1,8 +1,8 @@
-name: Build NenoTV v0.9.7
+name: Build NenoTV v0.9.8
 
 on:
   push:
-    branches: [ nenotv-v0.9.7 ]
+    branches: [ nenotv-v0.9.8-free-pro ]
   workflow_dispatch:
 
 permissions:
@@ -10,160 +10,64 @@ permissions:
   actions: read
 
 jobs:
-  build-nenotv-v097:
+  build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
-      - name: Download verified v0.9.5 source
+      - uses: actions/checkout@v4
+
+      - name: Get base source
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
           mkdir -p base
           cd base
-          gh run download 36349587668 --repo robertalt-png/RA-IPTV-Android --name NenoTV-v0.9.5-build
-          test -f NenoTV-v0.9.5-source.tar.gz
-          tar -xzf NenoTV-v0.9.5-source.tar.gz
-          test -f RA_IPTV_Android_v0.1/app/build.gradle
-          grep -q "versionName '0.9.5'" RA_IPTV_Android_v0.1/app/build.gradle
+          gh run download 36349587668 --repo robertalt-png/RA-IPTV-Android --name Nivaro-v0.9.5-build
+          tar -xzf Nivaro-v0.9.5-source.tar.gz
 
-      - name: Apply NenoTV v0.9.7 branding
-        shell: bash
+      - name: Apply NenoTV changes
         run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          r=Path("base/RA_IPTV_Android_v0.1")
-          def rep(path,old,new):
-              p=r/path
-              s=p.read_text()
-              if old not in s:
-                  raise SystemExit("missing marker in "+str(path))
-              p.write_text(s.replace(old,new))
+          cd base/RA_IPTV_Android_v0.1
+          for p in build-gradle manifest strings main settings profile player; do
+            git apply "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/plain/$p.patch"
+          done
+          mkdir -p app/src/main/java/com/robertalt/raiptv/entitlement
+          cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/AccountActivity.java" app/src/main/java/com/robertalt/raiptv/
+          cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/ProGate.java" app/src/main/java/com/robertalt/raiptv/
+          cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/EntitlementClient.java" app/src/main/java/com/robertalt/raiptv/entitlement/
+          cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/EntitlementStore.java" app/src/main/java/com/robertalt/raiptv/storage/
 
-          rep(Path("app/build.gradle"),"versionCode 37","versionCode 39")
-          rep(Path("app/build.gradle"),"versionName '0.9.5'","versionName '0.9.7'")
-          rep(Path("app/src/main/java/com/robertalt/raiptv/SettingsActivity.java"),"NenoTV IPTV Player 0.9.5","NenoTV Player 0.9.7")
-
-          # In-app brand icon based on the upper yellow/black NenoTV logo:
-          # circular TV/play symbol with cast waves.
-          mark=r/"app/src/main/res/drawable/ic_nivaro_mark.xml"
-          mark.write_text("""<?xml version="1.0" encoding="utf-8"?>
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp"
-              android:height="108dp"
-              android:viewportWidth="108"
-              android:viewportHeight="108">
-              <path
-                  android:fillColor="#FFD400"
-                  android:pathData="M54,4 A50,50 0,1 1,53.9,4 Z"/>
-              <path
-                  android:fillColor="#0A0A0A"
-                  android:pathData="M54,11 A43,43 0,1 1,53.9,11 Z"/>
-              <path
-                  android:fillColor="#FFD400"
-                  android:pathData="M27,29 Q27,24 32,24 L71,24 Q76,24 76,29 L76,54 Q76,59 71,59 L32,59 Q27,59 27,54 Z"/>
-              <path
-                  android:fillColor="#0A0A0A"
-                  android:pathData="M34,32 L69,32 L69,51 L34,51 Z"/>
-              <path
-                  android:fillColor="#FFD400"
-                  android:pathData="M45,35 L45,49 L58,42 Z"/>
-              <path
-                  android:fillColor="#00000000"
-                  android:strokeColor="#FFD400"
-                  android:strokeWidth="7"
-                  android:strokeLineCap="round"
-                  android:pathData="M61,83 C61,68 73,56 88,56"/>
-              <path
-                  android:fillColor="#00000000"
-                  android:strokeColor="#FFD400"
-                  android:strokeWidth="7"
-                  android:strokeLineCap="round"
-                  android:pathData="M72,84 C72,75 79,68 88,68"/>
-          </vector>""")
-
-          # Make the Home header compact, single-line and fully visible.
-          p=r/"app/src/main/res/layout/activity_main.xml"
-          s=p.read_text()
-          old='''    <LinearLayout android:layout_width="0dp" android:layout_height="44dp" android:layout_weight="1" android:gravity="center_vertical" android:orientation="horizontal">
-              <ImageView android:layout_width="38dp" android:layout_height="38dp" android:src="@drawable/ic_nivaro_mark" android:contentDescription="NenoTV"/>
-              <TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="7dp" android:text="NenoTV" android:textColor="#FFD400" android:textSize="21sp" android:textStyle="bold" android:letterSpacing="0.08"/>
-          </LinearLayout>'''
-          new='''    <LinearLayout android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:gravity="center_vertical" android:orientation="horizontal" android:paddingRight="3dp">
-              <ImageView android:layout_width="28dp" android:layout_height="28dp" android:src="@drawable/ic_nivaro_mark" android:scaleType="fitCenter" android:contentDescription="NenoTV"/>
-              <TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="4dp" android:text="NenoTV" android:textColor="#FFD400" android:textSize="13sp" android:textStyle="bold" android:letterSpacing="0.04" android:singleLine="true" android:maxLines="1" android:includeFontPadding="false"/>
-          </LinearLayout>'''
-          if old not in s:
-              raise SystemExit("v0.9.5 header marker missing")
-          s=s.replace(old,new)
-          s=s.replace('android:paddingLeft="16dp" android:paddingRight="12dp" android:paddingTop="8dp" android:paddingBottom="5dp"',
-                      'android:paddingLeft="10dp" android:paddingRight="8dp" android:paddingTop="8dp" android:paddingBottom="5dp"',1)
-          s=s.replace('android:id="@+id/profileButton" android:layout_width="wrap_content" android:layout_height="42dp"',
-                      'android:id="@+id/profileButton" android:layout_width="72dp" android:layout_height="42dp"',1)
-          s=s.replace('android:id="@+id/profileButton" android:layout_width="72dp" android:layout_height="42dp" android:layout_marginLeft="5dp" android:text="Profiel"',
-                      'android:id="@+id/profileButton" android:layout_width="72dp" android:layout_height="42dp" android:layout_marginLeft="4dp" android:text="Profiel" android:textSize="11sp"',1)
-          p.write_text(s)
-
-          # Keep code-driven title styling compatible with the compact header.
-          p=r/"app/src/main/java/com/robertalt/raiptv/MainActivity.java"
-          s=p.read_text()
-          old='title.setText("NenoTV");title.setTextSize(21);title.setLetterSpacing(0.08f);title.setTextColor(0xFFFFD400);title.setTypeface(null,Typeface.BOLD);'
-          new='title.setText("NenoTV");title.setTextSize(13);title.setLetterSpacing(0.04f);title.setTextColor(0xFFFFD400);title.setSingleLine(true);title.setTypeface(null,Typeface.BOLD);'
-          if old not in s:
-              raise SystemExit("v0.9.5 title styling marker missing")
-          p.write_text(s.replace(old,new))
-
-          print("v0.9.7 compact NenoTV branding applied")
-          PY
-
-          grep -q "versionCode 39" base/RA_IPTV_Android_v0.1/app/build.gradle
-          grep -q "versionName '0.9.7'" base/RA_IPTV_Android_v0.1/app/build.gradle
-          grep -q 'android:textSize="13sp"' base/RA_IPTV_Android_v0.1/app/src/main/res/layout/activity_main.xml
-          grep -q 'strokeColor="#FFD400"' base/RA_IPTV_Android_v0.1/app/src/main/res/drawable/ic_nivaro_mark.xml
-
-      - name: Export v0.9.7 source
-        run: tar -czf NenoTV-v0.9.7-source.tar.gz -C base RA_IPTV_Android_v0.1
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Prepare Android SDK
-        shell: bash
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Android SDK
         run: |
-          set -euo pipefail
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Set up Gradle 8.13
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.13'
-
-      - name: Build APKs
+      - name: Build
         working-directory: base/RA_IPTV_Android_v0.1
-        run: gradle --no-daemon --stacktrace assembleDebug assembleRelease
+        run: gradle --no-daemon assembleDebug assembleRelease
 
-      - name: Stage artifacts
+      - name: Package
         run: |
-          set -euo pipefail
-          cp base/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk NenoTV-v0.9.7-debug.apk
-          cp base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk NenoTV-v0.9.7-unsigned.apk
+          cp base/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk NenoTV-v0.9.8-debug.apk
+          cp base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk NenoTV-v0.9.8-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
-          sha256sum NenoTV-v0.9.7-debug.apk NenoTV-v0.9.7-unsigned.apk
+          tar -czf NenoTV-Android-v0.9.8-source.tar.gz -C base RA_IPTV_Android_v0.1
 
-      - name: Upload v0.9.7 build
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-v0.9.7-build
+          name: NenoTV-v0.9.8-build
           path: |
-            NenoTV-v0.9.7-debug.apk
-            NenoTV-v0.9.7-unsigned.apk
-            NenoTV-v0.9.7-source.tar.gz
+            NenoTV-v0.9.8-debug.apk
+            NenoTV-v0.9.8-unsigned.apk
+            NenoTV-Android-v0.9.8-source.tar.gz
             apksigner.jar
-          if-no-files-found: error
-          retention-days: 30
