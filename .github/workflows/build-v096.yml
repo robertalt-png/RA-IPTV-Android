@@ -254,7 +254,7 @@ jobs:
            '        String v=value.trim();if(v.isEmpty())return "";\\n'
            '        try{double d=Double.parseDouble(v.replace(",", "."));return new java.text.DecimalFormat("0.#").format(d);}catch(Exception ignored){return v;}\\n'
            '    }\\n'
-           '    public String meta(){')
+           '    public String meta(){'))
           entry.write_text(x)
 
           # Faster visible poster loading + branded placeholder for missing artwork.
