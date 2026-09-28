@@ -1,0 +1,22 @@
+diff --git a/app/src/main/java/com/robertalt/raiptv/MainActivity.java b/app/src/main/java/com/robertalt/raiptv/MainActivity.java
+index 66bd51a..950b9cc 100644
+--- a/app/src/main/java/com/robertalt/raiptv/MainActivity.java
++++ b/app/src/main/java/com/robertalt/raiptv/MainActivity.java
+@@ -80 +80 @@ public class MainActivity extends Activity {
+-        ((Button)findViewById(R.id.profileButton)).setText(T("profile"));
++        updateEntitlementBadge();
+@@ -90 +90 @@ public class MainActivity extends Activity {
+-        findViewById(R.id.profileButton).setOnClickListener(v->startActivityForResult(new Intent(this,ProfileActivity.class),10));
++        findViewById(R.id.profileButton).setOnClickListener(v->startActivity(new Intent(this,AccountActivity.class)));
+@@ -92 +92 @@ public class MainActivity extends Activity {
+-        tvShareButton.setOnClickListener(v->showTvShareMenu());
++        tvShareButton.setOnClickListener(v->{if(ProGate.require(this,T("casting")))showTvShareMenu();});
+@@ -98 +98 @@ public class MainActivity extends Activity {
+-        epgGridButton.setOnClickListener(v->setEpgMode(true));epgListButton.setOnClickListener(v->setEpgMode(false));
++        epgGridButton.setOnClickListener(v->{if(ProGate.require(this,T("advanced_epg")))setEpgMode(true);});epgListButton.setOnClickListener(v->setEpgMode(false));
+@@ -108,0 +109,2 @@ public class MainActivity extends Activity {
++    void updateEntitlementBadge(){Button b=findViewById(R.id.profileButton);if(b==null)return;EntitlementStore e=new EntitlementStore(this);b.setText(e.shortBadge());b.setContentDescription(e.statusLabel(this));}
++
+@@ -441 +443 @@ TextView addInfoBlock(LinearLayout b,String l,String x){TextView h=new TextView(
+-    @Override protected void onResume(){super.onResume();activityPaused=false;resumeIndexSoon();String nowLang=SettingsStore.language(this);if(appliedLanguage!=null&&!appliedLanguage.isEmpty()&&!appliedLanguage.equals(nowLang)){recreate();return;}String nowContent=SettingsStore.contentLanguage(this);if(appliedContentLanguage!=null&&!appliedContentLanguage.isEmpty()&&!appliedContentLanguage.equals(nowContent)){appliedContentLanguage=nowContent;if(provider!=null){if("home".equals(section)||"local".equals(section))loadHome();else if("epg".equals(section))loadEpg();else loadSection(section);}return;}if(provider!=null){setHeroHeight(heroHeight());android.content.SharedPreferences sp=SettingsStore.prefs(this);if(sp.getBoolean("force_reindex",false)){sp.edit().putBoolean("force_reindex",false).apply();try{searchIndex.clearAll();}catch(Exception ignored){}refreshSearchIndex(true);}}}
++    @Override protected void onResume(){super.onResume();activityPaused=false;updateEntitlementBadge();resumeIndexSoon();String nowLang=SettingsStore.language(this);if(appliedLanguage!=null&&!appliedLanguage.isEmpty()&&!appliedLanguage.equals(nowLang)){recreate();return;}String nowContent=SettingsStore.contentLanguage(this);if(appliedContentLanguage!=null&&!appliedContentLanguage.isEmpty()&&!appliedContentLanguage.equals(nowContent)){appliedContentLanguage=nowContent;if(provider!=null){if("home".equals(section)||"local".equals(section))loadHome();else if("epg".equals(section))loadEpg();else loadSection(section);}return;}if(provider!=null){setHeroHeight(heroHeight());android.content.SharedPreferences sp=SettingsStore.prefs(this);if(sp.getBoolean("force_reindex",false)){sp.edit().putBoolean("force_reindex",false).apply();try{searchIndex.clearAll();}catch(Exception ignored){}refreshSearchIndex(true);}}}
