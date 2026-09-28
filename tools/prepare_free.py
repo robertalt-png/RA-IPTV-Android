@@ -143,6 +143,9 @@ if a>=0:
 '''
         s=s[:a]+search+s[b:]
 
+# Free never schedules background indexing anywhere, including legacy helper paths.
+s=s.replace('scheduleBackgroundIndex();','')
+
 # Free never shows first-sync/index banner.
 a=s.find('    void showIndexBanner(String type,int done,int cats,int titles){')
 if a>=0:
