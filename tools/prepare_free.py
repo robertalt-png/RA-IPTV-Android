@@ -11,8 +11,8 @@ app=root/"app"
 gradle=app/"build.gradle"
 s=gradle.read_text()
 s=s.replace("applicationId 'com.robertalt.raiptv.light'","applicationId 'com.robertalt.raiptv'")
-s=re.sub(r"versionCode\s+\d+","versionCode 64",s,1)
-s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.6.6'",s,1)
+s=re.sub(r"versionCode\s+\d+","versionCode 65",s,1)
+s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.6.7'",s,1)
 s=s.replace("    dynamicFeatures = [':proextras']\n","")
 s=s.replace("    implementation 'com.google.android.play:feature-delivery:2.1.0'\n","")
 gradle.write_text(s)
@@ -57,7 +57,7 @@ if a>=0:
     b=s.find('\n    void waitWhilePaused()',a)
     if b>0:
         fullsync='''    void refreshSearchIndex(boolean force){
-        if(provider==null||profile==null||indexRefreshRunning)return;
+        if(provider==null||profile==null||indexRefreshRunning||isFinishing()||isDestroyed()||indexExec==null||indexExec.isShutdown()||indexExec.isTerminated())return;
         final String key=profileKey();final android.content.SharedPreferences sp=SettingsStore.prefs(this);
         final String doneKey="free_full_sync_done_v121_"+key;
         if(!force&&sp.getBoolean(doneKey,false)){hideIndexBanner("");return;}
@@ -106,7 +106,7 @@ if a>=0:
 a=s.find('    void scheduleBackgroundIndex(){')
 if a>=0:
     b=s.find('\n    void ',a+10)
-    if b>0:s=s[:a]+'''    void scheduleBackgroundIndex(){ if(provider!=null&&profile!=null&&!indexRefreshRunning)refreshSearchIndex(false); }
+    if b>0:s=s[:a]+'''    void scheduleBackgroundIndex(){ if(provider!=null&&profile!=null&&!indexRefreshRunning&&!isFinishing()&&!isDestroyed()&&indexExec!=null&&!indexExec.isShutdown()&&!indexExec.isTerminated())refreshSearchIndex(false); }
 '''+s[b:]
 
 # Provider-order spinner helper.
