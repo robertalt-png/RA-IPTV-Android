@@ -11,8 +11,8 @@ app=root/"app"
 gradle=app/"build.gradle"
 s=gradle.read_text()
 s=s.replace("applicationId 'com.robertalt.raiptv.light'","applicationId 'com.robertalt.raiptv'")
-s=re.sub(r"versionCode\s+\d+","versionCode 54",s,1)
-s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.5'",s,1)
+s=re.sub(r"versionCode\s+\d+","versionCode 55",s,1)
+s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.6'",s,1)
 s=s.replace("    dynamicFeatures = [':proextras']\n","")
 s=s.replace("    implementation 'com.google.android.play:feature-delivery:2.1.0'\n","")
 gradle.write_text(s)
@@ -434,7 +434,7 @@ s=s.replace('epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null)epgGr
             'epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null)epgGridButton.setVisibility(View.GONE);')
 
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.5: resilient full sync + clean language")
+print("Prepared NenoTV Free v0.12.6: resilient full sync + clean language")
 
 # v0.12.4: language switching must not recreate the Activity while the library sync is active.
 old='new AlertDialog.Builder(this).setTitle(T("language")).setItems(labels,(d,w)->{SettingsStore.setPrimaryLanguage(this,codes[w]);recreate();}).show();'
@@ -702,5 +702,139 @@ public class ProfileActivity extends Activity{
 }
 ''')
 
+
+# v0.12.6: IPTV Free polish — direct search, global local-index search, favorites, robust progress restore, source labels and player retry.
+
+# Header search button: direct one-tap access, placed before hamburger menu.
+layout=app/"src/main/res/layout/activity_main.xml"
+lx=layout.read_text()
+search_tag='''<Button android:id="@+id/searchToggle" android:layout_width="40dp" android:layout_height="36dp" android:layout_marginLeft="5dp" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:text="⌕" android:textSize="22sp" android:textColor="#FFFFFFFF" android:backgroundTint="#151A21" android:visibility="visible" android:contentDescription="Search"/>'''
+lx=re.sub(r'<Button android:id="@\+id/searchToggle"[^>]*/>',search_tag,lx,flags=re.S)
+sm=re.search(r'<Button android:id="@\+id/searchToggle"[^>]*/>',lx,re.S)
+mm=re.search(r'<Button android:id="@\+id/menuButton"[^>]*/>',lx,re.S)
+if sm and mm and sm.start()>mm.start():
+    tag=sm.group(0);lx=lx[:sm.start()]+lx[sm.end():]
+    mm=re.search(r'<Button android:id="@\+id/menuButton"[^>]*/>',lx,re.S)
+    if mm:lx=lx[:mm.start()]+tag+"\n            "+lx[mm.start():]
+layout.write_text(lx)
+
+# Search the complete local Free library that has already been synchronized.
+a=s.find('    void searchEverywhere(String q){')
+if a>=0:
+    b=s.find('\n    String safe(',a)
+    if b>0:
+        method=r'''    void searchEverywhere(String q){
+        String z=q==null?"":q.trim().toLowerCase(Locale.ROOT);latestSearchQuery=z;
+        if("epg".equals(section)){
+            filterBar.setVisibility(z.isEmpty()?View.VISIBLE:View.GONE);showEpgList();epgAdapter.configure(provider,profileKey());epgAdapter.set(all);if(!z.isEmpty())epgAdapter.filter(z);busy(false,z.isEmpty()?T("epg"):T("results"));return;
+        }
+        if(z.isEmpty()){
+            if("home".equals(section)||"local".equals(section)){loadHome();return;}
+            filterBar.setVisibility(View.VISIBLE);categories.setVisibility(View.VISIBLE);showMediaGrid("live".equals(section));gridAdapter.set(new ArrayList<>(all),"live".equals(section));busy(false,all.size()+" "+T("results"));return;
+        }
+        if(z.length()<2){gridAdapter.set(Collections.emptyList(),false);status.setText(T("type_2"));return;}
+        categories.setVisibility(View.GONE);filterBar.setVisibility(View.GONE);showMediaGrid(false);
+        exec.execute(()->{List<MediaEntry> found;try{found=visibleItems(searchIndex.search(profileKey(),z,250));}catch(Throwable e){found=Collections.emptyList();}final List<MediaEntry> result=found;runOnUiThread(()->{if(!z.equals(latestSearchQuery))return;gridAdapter.set(result,false);busy(false,result.isEmpty()?T("no_results_for")+" ‘"+z+"’":result.size()+" "+T("results"));});});
+    }
+'''
+        s=s[:a]+method+s[b:]
+
+# Favorieten are a primary Home shelf: Continue -> Favorites -> recent live.
+s=s.replace('addShelf(T("continue"),cont);addShelf(T("recent_live"),live);addShelf(T("favorites"),favs);',
+            'addShelf(T("continue"),cont);addShelf(T("favorites"),favs);addShelf(T("recent_live"),live);')
+
+# Restore progress from the category completion sets used by the resilient sync.
+a=s.find('    void restoreFirstSyncBanner(){')
+if a>=0:
+    b=s.find('\n    void hideIndexBanner(',a)
+    if b>0:
+        restore=r'''    void restoreFirstSyncBanner(){
+        if(indexBanner==null||profile==null)return;String key=profileKey();android.content.SharedPreferences sp=SettingsStore.prefs(this);
+        if(sp.getBoolean("free_full_sync_done_v122_"+key,false)){indexBanner.setVisibility(View.GONE);return;}
+        int total=0,done=0;
+        try{
+            for(String type:new String[]{"live","vod","series"}){
+                List<Category> cats=provider==null?Collections.emptyList():provider.categories(type);total+=cats.size();
+                java.util.Set<String> completed=sp.getStringSet("free_sync_donecats_"+type+"_"+key,java.util.Collections.emptySet());
+                for(Category cat:cats)if(completed.contains(safe(cat.id)))done++;
+            }
+        }catch(Exception ignored){}
+        showFreeSyncProgress(done,Math.max(1,total),sp.getInt("free_sync_live_"+key,0),sp.getInt("free_sync_vod_"+key,0),sp.getInt("free_sync_series_"+key,0));
+    }
+'''
+        s=s[:a]+restore+s[b:]
+
+# Wire direct search explicitly.
+if 'searchToggle.setOnClickListener(v->toggleSearch())' not in s:
+    s=s.replace('    void wire(){\n','    void wire(){\n        if(searchToggle!=null)searchToggle.setOnClickListener(v->toggleSearch());\n',1)
+
+# Settings microcopy/version.
+settings=app/"src/main/java/com/robertalt/raiptv/SettingsActivity.java"
+sx=settings.read_text()
+sx=sx.replace('Kies een blok om de Free-instellingen aan te passen.','Kies een onderdeel.')
+sx=sx.replace('Choose a block to change Free settings.','Choose a section.')
+sx=sx.replace('NenoTV Free · 0.12.5','NenoTV Free · 0.12.6').replace('NenoTV Free 0.12.5','NenoTV Free 0.12.6')
+settings.write_text(sx)
+
+# TV source: permanent field labels + NenoTV-yellow source selector.
+profile=app/"src/main/java/com/robertalt/raiptv/ProfileActivity.java"
+profile.write_text(r'''package com.robertalt.raiptv;
+
+import android.app.*;import android.os.*;import android.view.*;import android.widget.*;import android.content.res.ColorStateList;import android.graphics.Typeface;
+import com.robertalt.raiptv.model.Profile;import com.robertalt.raiptv.provider.*;import com.robertalt.raiptv.storage.*;
+import java.util.concurrent.*;
+
+public class ProfileActivity extends Activity{
+    String T(String k){return UiText.t(this,k);}int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
+    EditText name,server,user,pass,m3u,epg,bridge,bridgeToken;RadioButton xtream,m3uRadio;TextView status,nameLabel,serverLabel,userLabel,passLabel,m3uLabel,epgLabel;SecureProfileStore store;ExecutorService exec=Executors.newSingleThreadExecutor();
+    String lang(){String l=SettingsStore.language(this);return l==null?"en":l.toLowerCase(java.util.Locale.ROOT);}
+    String tx(String key){
+        String l=lang();
+        if("source".equals(key)){if("nl".equals(l))return "TV-bron";if("de".equals(l))return "TV-Quelle";if("fr".equals(l))return "Source TV";if("es".equals(l))return "Fuente TV";if("it".equals(l))return "Sorgente TV";if("pt".equals(l))return "Fonte TV";if("tr".equals(l))return "TV kaynağı";if("pl".equals(l))return "Źródło TV";if("ar".equals(l))return "مصدر التلفاز";return "TV source";}
+        if("name".equals(key)){if("nl".equals(l))return "Naam";if("de".equals(l))return "Name";if("fr".equals(l))return "Nom";if("es".equals(l))return "Nombre";if("it".equals(l))return "Nome";if("pt".equals(l))return "Nome";if("tr".equals(l))return "Ad";if("pl".equals(l))return "Nazwa";if("ar".equals(l))return "الاسم";return "Name";}
+        if("server".equals(key)){if("nl".equals(l))return "Server";if("de".equals(l))return "Server";if("fr".equals(l))return "Serveur";if("es".equals(l))return "Servidor";if("it".equals(l))return "Server";if("pt".equals(l))return "Servidor";if("tr".equals(l))return "Sunucu";if("pl".equals(l))return "Serwer";if("ar".equals(l))return "الخادم";return "Server";}
+        if("user".equals(key))return T("username");if("pass".equals(key))return T("password");
+        if("m3u".equals(key))return "M3U-URL";if("epg".equals(key))return "EPG-URL";
+        if("defaults".equals(key)){if("nl".equals(l))return "Audio en ondertitels zoals aangeleverd door de provider.";if("de".equals(l))return "Audio und Untertitel wie vom Anbieter geliefert.";if("fr".equals(l))return "Audio et sous-titres tels que fournis par le fournisseur.";if("es".equals(l))return "Audio y subtítulos tal como los proporciona el proveedor.";if("it".equals(l))return "Audio e sottotitoli come forniti dal provider.";if("pt".equals(l))return "Áudio e legendas tal como fornecidos pelo fornecedor.";if("tr".equals(l))return "Sağlayıcının sunduğu ses ve altyazılar.";if("pl".equals(l))return "Dźwięk i napisy dostarczone przez dostawcę.";if("ar".equals(l))return "الصوت والترجمة كما يوفرهما المزود.";return "Audio and subtitles as supplied by the provider.";}
+        return key;
+    }
+    @Override public void onCreate(Bundle b){super.onCreate(b);setContentView(R.layout.activity_profile);UiText.applyDirection(this);store=new SecureProfileStore(this);
+        name=findViewById(R.id.nameField);server=findViewById(R.id.serverField);user=findViewById(R.id.userField);pass=findViewById(R.id.passField);m3u=findViewById(R.id.m3uField);epg=findViewById(R.id.epgField);bridge=findViewById(R.id.bridgeField);bridgeToken=findViewById(R.id.bridgeTokenField);xtream=findViewById(R.id.xtreamRadio);m3uRadio=findViewById(R.id.m3uRadio);status=findViewById(R.id.profileStatus);
+        nameLabel=labelBefore(name,tx("name"));serverLabel=labelBefore(server,tx("server"));userLabel=labelBefore(user,tx("user"));passLabel=labelBefore(pass,tx("pass"));m3uLabel=labelBefore(m3u,tx("m3u"));epgLabel=labelBefore(epg,tx("epg"));
+        ColorStateList tint=new ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{0xFFFFD400,0xFFA7AFBC});xtream.setButtonTintList(tint);m3uRadio.setButtonTintList(tint);
+        applyLanguage();load();hideProFields();updateTypeVisibility();
+        ((RadioGroup)findViewById(R.id.typeGroup)).setOnCheckedChangeListener((g,id)->updateTypeVisibility());
+        Button test=findViewById(R.id.testButton);test.setOnClickListener(v->test());
+        Button save=findViewById(R.id.saveButton);save.setTextColor(0xFF0A0A0A);save.setBackgroundTintList(ColorStateList.valueOf(0xFFFFD400));save.setOnClickListener(v->{Profile p=collect();store.save(p);setResult(RESULT_OK);finish();});
+    }
+    TextView labelBefore(EditText field,String text){ViewGroup parent=(ViewGroup)field.getParent();TextView l=new TextView(this);l.setText(text);l.setTextColor(0xFFA7AFBC);l.setTextSize(12);l.setTypeface(null,Typeface.BOLD);l.setPadding(dp(8),dp(9),0,dp(3));int i=parent.indexOfChild(field);parent.addView(l,Math.max(0,i),new ViewGroup.LayoutParams(-1,-2));return l;}
+    void applyLanguage(){((TextView)findViewById(R.id.profileTitle)).setText(tx("source"));((TextView)findViewById(R.id.profileIntro)).setText(T("profile_intro"));name.setHint("");server.setHint("");user.setHint("");pass.setHint("");m3u.setHint("");epg.setHint("");((TextView)findViewById(R.id.profileDefaults)).setText(tx("defaults"));((Button)findViewById(R.id.testButton)).setText(T("test_connection"));((Button)findViewById(R.id.saveButton)).setText(T("save"));}
+    void hideProFields(){findViewById(R.id.bridgeLabel).setVisibility(View.GONE);bridge.setVisibility(View.GONE);bridgeToken.setVisibility(View.GONE);}
+    void updateTypeVisibility(){boolean x=xtream.isChecked();setVisible(server,serverLabel,x);setVisible(user,userLabel,x);setVisible(pass,passLabel,x);setVisible(m3u,m3uLabel,!x);setVisible(epg,epgLabel,!x);}
+    void setVisible(View field,View label,boolean yes){field.setVisibility(yes?View.VISIBLE:View.GONE);label.setVisibility(yes?View.VISIBLE:View.GONE);}
+    void load(){if(!store.exists())return;Profile p=store.load();xtream.setChecked(p.type==Profile.Type.XTREAM);m3uRadio.setChecked(p.type==Profile.Type.M3U);name.setText(p.name);server.setText(p.server);user.setText(p.username);pass.setText(p.password);m3u.setText(p.m3uUrl);epg.setText(p.epgUrl);bridge.setText(p.bridgeUrl);bridgeToken.setText(p.bridgeToken);}
+    Profile collect(){Profile p=new Profile();p.type=m3uRadio.isChecked()?Profile.Type.M3U:Profile.Type.XTREAM;p.name=name.getText().toString().trim();p.server=server.getText().toString().trim();p.username=user.getText().toString().trim();p.password=pass.getText().toString();p.m3uUrl=m3u.getText().toString().trim();p.epgUrl=epg.getText().toString().trim();p.bridgeUrl=bridge.getText().toString().trim();p.bridgeToken=bridgeToken.getText().toString();return p;}
+    Provider provider(Profile p){return p.type==Profile.Type.XTREAM?new XtreamProvider(p):new M3uProvider(p,SettingsStore.primaryLanguage(this));}
+    void test(){status.setTextColor(0xFFA7AFBC);status.setText(T("testing_connection"));Profile p=collect();exec.execute(()->{try{provider(p).authenticate();runOnUiThread(()->{status.setTextColor(0xFF7ED957);status.setText(T("connection_ok"));});}catch(Exception e){runOnUiThread(()->{status.setTextColor(0xFFFF6B6B);status.setText(T("failed")+": "+friendly(e));});}});}
+    String friendly(Exception e){String m=e.getMessage();if(m==null||m.trim().isEmpty())return T("unknown_error");if(m.contains("LOGIN_FAILED"))return T("login_failed");return T("unknown_error");}
+    @Override protected void onDestroy(){super.onDestroy();exec.shutdownNow();}
+}
+''')
+
+# Free Media3 player: automatic retry for transient stream errors, no technical error-code text.
+player=app/"src/main/java/com/robertalt/raiptv/PlayerActivity.java"
+px=player.read_text()
+px=px.replace('boolean userSeeking=false,destroyed=false; int aspectMode=0; float playbackSpeed=1f;',
+              'boolean userSeeking=false,destroyed=false; int aspectMode=0,retryCount=0; float playbackSpeed=1f;')
+old='exo.addListener(new Player.Listener(){@Override public void onPlaybackStateChanged(int state){if(state==Player.STATE_READY)status.setText("Media3 · "+T("playing"));else if(state==Player.STATE_ENDED)finish();}@Override public void onPlayerError(PlaybackException e){status.setText(T("error_prefix")+": "+e.getErrorCodeName());}});'
+new='exo.addListener(new Player.Listener(){@Override public void onPlaybackStateChanged(int state){if(state==Player.STATE_READY){retryCount=0;status.setText("Media3 · "+T("playing"));}else if(state==Player.STATE_ENDED)finish();}@Override public void onPlayerError(PlaybackException e){retryStream();}});'
+px=px.replace(old,new)
+if 'void retryStream()' not in px:
+    px=px.replace('    void updateProgress(){',r'''    void retryStream(){if(exo==null||destroyed)return;if(retryCount>=2){status.setText(streamText(false));return;}retryCount++;status.setText(streamText(true));final int attempt=retryCount;ui.postDelayed(()->{if(exo==null||destroyed)return;try{exo.seekToDefaultPosition();exo.prepare();exo.play();}catch(Throwable ignored){}},700L*attempt);}
+    String streamText(boolean retry){String l=SettingsStore.language(this);if("nl".equals(l))return retry?"Stream opnieuw verbinden…":"Stream tijdelijk niet beschikbaar";if("de".equals(l))return retry?"Stream wird neu verbunden…":"Stream vorübergehend nicht verfügbar";if("fr".equals(l))return retry?"Reconnexion du flux…":"Flux temporairement indisponible";if("es".equals(l))return retry?"Reconectando stream…":"Stream temporalmente no disponible";if("it".equals(l))return retry?"Riconnessione stream…":"Stream temporaneamente non disponibile";if("pt".equals(l))return retry?"A reconectar o stream…":"Stream temporariamente indisponível";if("tr".equals(l))return retry?"Yayın yeniden bağlanıyor…":"Yayın geçici olarak kullanılamıyor";if("pl".equals(l))return retry?"Ponowne łączenie ze strumieniem…":"Strumień chwilowo niedostępny";if("ar".equals(l))return retry?"جارٍ إعادة الاتصال بالبث…":"البث غير متاح مؤقتًا";return retry?"Reconnecting stream…":"Stream temporarily unavailable";}
+
+    void updateProgress(){''')
+player.write_text(px)
+
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.5: provider-order + full background sync")
+print("Prepared NenoTV Free v0.12.6: provider-order + full background sync")
