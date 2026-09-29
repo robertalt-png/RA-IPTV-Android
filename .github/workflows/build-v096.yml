@@ -929,6 +929,19 @@ jobs:
           cd base/RA_IPTV_Android_v0.1
           python3 "$GITHUB_WORKSPACE/tools/prepare_free.py"
 
+      - name: Archive generated v0.12.6.1 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf NenoTV-Free-v0.12.6.1-source.tar.gz -C base RA_IPTV_Android_v0.1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NenoTV-Free-v0.12.6.1-source
+          path: NenoTV-Free-v0.12.6.1-source.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
