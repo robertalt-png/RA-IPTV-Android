@@ -11,8 +11,8 @@ app=root/"app"
 gradle=app/"build.gradle"
 s=gradle.read_text()
 s=s.replace("applicationId 'com.robertalt.raiptv.light'","applicationId 'com.robertalt.raiptv'")
-s=re.sub(r"versionCode\s+\d+","versionCode 64",s,1)
-s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.6.6'",s,1)
+s=re.sub(r"versionCode\s+\d+","versionCode 65",s,1)
+s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.6.7'",s,1)
 s=s.replace("    dynamicFeatures = [':proextras']\n","")
 s=s.replace("    implementation 'com.google.android.play:feature-delivery:2.1.0'\n","")
 gradle.write_text(s)
@@ -1022,5 +1022,74 @@ if '{"activate_restore","Aankoop activeren of herstellen"}' not in ux:
 
 ui.write_text(ux)
 
+# v0.12.6.7: lifecycle-safe background library sync.
+# Automated Android QA found a real RejectedExecutionException when a delayed sync
+# attempted to submit work after MainActivity.onDestroy() had shut down indexExec.
+if 'freeLifecycleDestroyed' not in s:
+    s=s.replace(
+        'Runnable pendingSearch,delayedIndexResume; MediaEntry selectedHero;',
+        'Runnable pendingSearch,delayedIndexResume,delayedIndexRetry; MediaEntry selectedHero; volatile boolean freeLifecycleDestroyed=false;',
+        1
+    )
+
+s=s.replace(
+    '    void scheduleBackgroundIndex(){ if(provider!=null&&profile!=null&&!indexRefreshRunning)refreshSearchIndex(false); }',
+    '    void scheduleBackgroundIndex(){ if(!isUiAlive()||indexExec==null||indexExec.isShutdown()||indexExec.isTerminated())return;if(provider!=null&&profile!=null&&!indexRefreshRunning)refreshSearchIndex(false); }',
+    1
+)
+
+s=s.replace(
+    '''    void refreshSearchIndex(boolean force){
+        if(provider==null||profile==null||indexRefreshRunning)return;''',
+    '''    void refreshSearchIndex(boolean force){
+        if(!isUiAlive()||indexExec==null||indexExec.isShutdown()||indexExec.isTerminated()||provider==null||profile==null||indexRefreshRunning)return;''',
+    1
+)
+
+s=s.replace(
+    '''                runOnUiThread(()->{
+                    if(ok)hideIndexBanner("");
+                    else{restoreFirstSyncBanner();ui.postDelayed(()->scheduleBackgroundIndex(),4000);}
+                });''',
+    '''                runOnUiThread(()->{
+                    if(!isUiAlive())return;
+                    if(ok)hideIndexBanner("");
+                    else{
+                        restoreFirstSyncBanner();
+                        if(delayedIndexRetry!=null)ui.removeCallbacks(delayedIndexRetry);
+                        delayedIndexRetry=()->{delayedIndexRetry=null;scheduleBackgroundIndex();};
+                        ui.postDelayed(delayedIndexRetry,4000);
+                    }
+                });''',
+    1
+)
+
+old_resume='''    void resumeIndexSoon(){
+        if(!resumeIndexAfterPlayback||provider==null)return;
+        ui.postDelayed(new Runnable(){@Override public void run(){if(!isUiAlive()||provider==null)return;if(indexRefreshRunning){ui.postDelayed(this,250);return;}resumeIndexAfterPlayback=false;refreshSearchIndex(false);}},300);
+    }'''
+new_resume='''    void resumeIndexSoon(){
+        if(!resumeIndexAfterPlayback||provider==null||!isUiAlive())return;
+        if(delayedIndexResume!=null)ui.removeCallbacks(delayedIndexResume);
+        delayedIndexResume=new Runnable(){@Override public void run(){
+            if(!isUiAlive()||provider==null){delayedIndexResume=null;return;}
+            if(indexRefreshRunning){ui.postDelayed(this,250);return;}
+            delayedIndexResume=null;resumeIndexAfterPlayback=false;refreshSearchIndex(false);
+        }};
+        ui.postDelayed(delayedIndexResume,300);
+    }'''
+if old_resume in s:s=s.replace(old_resume,new_resume,1)
+
+s=s.replace(
+    '    boolean isUiAlive(){return !isFinishing()&&!isDestroyed();}',
+    '    boolean isUiAlive(){return !freeLifecycleDestroyed&&!isFinishing()&&!isDestroyed();}',
+    1
+)
+
+old_destroy='''    @Override protected void onDestroy(){requestSerial++;heroSerial++;if(pendingSearch!=null)ui.removeCallbacks(pendingSearch);if(delayedIndexResume!=null)ui.removeCallbacks(delayedIndexResume);Future<?> f=indexFuture;if(f!=null)f.cancel(true);exec.shutdownNow();heroExec.shutdownNow();indexExec.shutdownNow();if(searchIndex!=null)searchIndex.close();if(epgAdapter!=null)epgAdapter.shutdown();if(epgStore!=null)epgStore.close();super.onDestroy();}'''
+new_destroy='''    @Override protected void onDestroy(){freeLifecycleDestroyed=true;activityPaused=true;requestSerial++;heroSerial++;if(pendingSearch!=null)ui.removeCallbacks(pendingSearch);if(delayedIndexResume!=null)ui.removeCallbacks(delayedIndexResume);if(delayedIndexRetry!=null)ui.removeCallbacks(delayedIndexRetry);Future<?> f=indexFuture;if(f!=null)f.cancel(true);indexRefreshRunning=false;exec.shutdownNow();heroExec.shutdownNow();indexExec.shutdownNow();if(searchIndex!=null)searchIndex.close();if(epgAdapter!=null)epgAdapter.shutdown();if(epgStore!=null)epgStore.close();super.onDestroy();}'''
+if old_destroy not in s: throw new Error("onDestroy marker missing");
+s=s.replace(old_destroy,new_destroy,1)
+
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.6.5: REST fallback + account localization + Pro/EPG fixes")
+print("Prepared NenoTV Free v0.12.6.7: lifecycle-safe background sync + player controls fix")
