@@ -244,8 +244,7 @@ jobs:
             set -eu
             mkdir -p "$GITHUB_WORKSPACE/qa-evidence/screenshots"
             adb logcat -c
-            cd "$GITHUB_WORKSPACE/src/RA_IPTV_Android_v0.1"
-            gradle --no-daemon :app:connectedDebugAndroidTest
+            gradle -p "$GITHUB_WORKSPACE/src/RA_IPTV_Android_v0.1" --no-daemon :app:connectedDebugAndroidTest
             adb shell screencap -p /sdcard/qa-final.png || true
             adb pull /sdcard/qa-final.png "$GITHUB_WORKSPACE/qa-evidence/screenshots/final-api35.png" || true
             adb logcat -d > "$GITHUB_WORKSPACE/qa-evidence/logcat-api35.txt"
@@ -346,8 +345,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            cd "$GITHUB_WORKSPACE/src/RA_IPTV_Android_v0.1"
-            gradle --no-daemon :app:connectedDebugAndroidTest
+            gradle -p "$GITHUB_WORKSPACE/src/RA_IPTV_Android_v0.1" --no-daemon :app:connectedDebugAndroidTest
 
       - name: Upload compatibility evidence
         if: always()
