@@ -11,8 +11,8 @@ app=root/"app"
 gradle=app/"build.gradle"
 s=gradle.read_text()
 s=s.replace("applicationId 'com.robertalt.raiptv.light'","applicationId 'com.robertalt.raiptv'")
-s=re.sub(r"versionCode\s+\d+","versionCode 56",s,1)
-s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.7'",s,1)
+s=re.sub(r"versionCode\s+\d+","versionCode 57",s,1)
+s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.8'",s,1)
 s=s.replace("    dynamicFeatures = [':proextras']\n","")
 s=s.replace("    implementation 'com.google.android.play:feature-delivery:2.1.0'\n","")
 gradle.write_text(s)
@@ -434,7 +434,7 @@ s=s.replace('epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null)epgGr
             'epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null)epgGridButton.setVisibility(View.GONE);')
 
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.7: resilient full sync + clean language")
+print("Prepared NenoTV Free v0.12.8: resilient full sync + clean language")
 
 # v0.12.4: language switching must not recreate the Activity while the library sync is active.
 old='new AlertDialog.Builder(this).setTitle(T("language")).setItems(labels,(d,w)->{SettingsStore.setPrimaryLanguage(this,codes[w]);recreate();}).show();'
@@ -1130,5 +1130,292 @@ settings=app/"src/main/java/com/robertalt/raiptv/SettingsActivity.java"
 sx=settings.read_text().replace('NenoTV Free · 0.12.6','NenoTV Free · 0.12.7').replace('NenoTV Free 0.12.6','NenoTV Free 0.12.7')
 settings.write_text(sx)
 
+
+# v0.12.8 correctness + visual polish.
+
+def replace_method_final(src, start_sig, next_sig, body):
+    a=src.find(start_sig)
+    if a<0:return src
+    b=src.find(next_sig,a+len(start_sig))
+    if b<0:return src
+    return src[:a]+body+src[b:]
+
+# ---------- Free EPG: list-only + one correct Now/Next algorithm ----------
+s=s.replace('epgModeBar.setVisibility(View.VISIBLE);','epgModeBar.setVisibility(View.GONE);')
+s=s.replace('setHeroHeight(heroHeight());collapseSearch();seriesEpisodeMode=false;latestSearchQuery="";genreButton.setVisibility(View.GONE);sortButton.setVisibility(View.VISIBLE);filterBar.setVisibility(View.VISIBLE);categories.setVisibility(View.VISIBLE);epgModeBar.setVisibility(View.GONE);',
+            'setHeroHeight(dp(145));collapseSearch();seriesEpisodeMode=false;latestSearchQuery="";genreButton.setVisibility(View.GONE);sortButton.setVisibility(View.GONE);filterBar.setVisibility(View.VISIBLE);categories.setVisibility(View.VISIBLE);epgModeBar.setVisibility(View.GONE);')
+
+s=replace_method_final(s,'    void setEpgMode(boolean gridMode){','\n    void showEpgByMode(',r'''    void setEpgMode(boolean gridMode){epgGridMode=false;if("epg".equals(section))showEpgByMode(all);}
+''')
+s=replace_method_final(s,'    void showEpgByMode(List<MediaEntry>channels){','\n    void renderEpgBoard(',r'''    void showEpgByMode(List<MediaEntry>channels){epgGridMode=false;epgModeBar.setVisibility(View.GONE);showEpgList();epgAdapter.configure(provider,profileKey());epgAdapter.set(channels==null?Collections.emptyList():channels);}
+''')
+
+epg=app/"src/main/java/com/robertalt/raiptv/EpgAdapter.java"
+epg.write_text(r'''package com.robertalt.raiptv;
+
+import android.content.*;import android.os.*;import android.view.*;import android.widget.*;
+import com.robertalt.raiptv.model.*;import com.robertalt.raiptv.provider.Provider;import com.robertalt.raiptv.storage.EpgStore;
+import java.util.*;import java.util.concurrent.*;
+
+public class EpgAdapter extends BaseAdapter {
+    private final LayoutInflater in;private final EpgStore store;private final Context context;private final Handler ui=new Handler(Looper.getMainLooper());
+    private final ExecutorService exec=Executors.newFixedThreadPool(2);private final Map<String,List<EpgEntry>>cache=new ConcurrentHashMap<>();private final Set<String>loading=ConcurrentHashMap.newKeySet();
+    private List<MediaEntry>all=new ArrayList<>(),shown=new ArrayList<>();private Provider provider;private String profileKey="";private volatile boolean disposed=false;
+    private final Runnable autoRefresh=new Runnable(){public void run(){if(disposed)return;cache.clear();loading.clear();notifyDataSetChanged();ui.postDelayed(this,10*60*1000L);}};
+    static class H{ImageView logo;TextView channel,now,next;ProgressBar progress;}
+    public EpgAdapter(Context c,EpgStore s){context=c;in=LayoutInflater.from(c);store=s;}
+    public void configure(Provider p,String key){disposed=false;provider=p;profileKey=key==null?"":key;cache.clear();loading.clear();ui.removeCallbacks(autoRefresh);ui.postDelayed(autoRefresh,10*60*1000L);}
+    public void set(List<MediaEntry>x){all=x==null?new ArrayList<>():new ArrayList<>(x);shown=new ArrayList<>(all);notifyDataSetChanged();}
+    public void filter(String q){String z=q==null?"":q.toLowerCase(Locale.ROOT).trim();shown=new ArrayList<>();for(MediaEntry e:all){if(e==null)continue;String n=e.name==null?"":e.name.toLowerCase(Locale.ROOT);String g=e.group==null?"":e.group.toLowerCase(Locale.ROOT);if(z.isEmpty()||n.contains(z)||g.contains(z))shown.add(e);}notifyDataSetChanged();}
+    public int getCount(){return shown.size();}public MediaEntry getItem(int i){return shown.get(i);}public long getItemId(int i){return i;}
+    public View getView(int i,View v,ViewGroup p){
+        H h;if(v==null){v=in.inflate(R.layout.row_epg,p,false);h=new H();h.logo=v.findViewById(R.id.epgLogo);h.channel=v.findViewById(R.id.epgChannel);h.now=v.findViewById(R.id.epgNow);h.next=v.findViewById(R.id.epgNext);h.progress=v.findViewById(R.id.epgProgress);v.setTag(h);}else h=(H)v.getTag();
+        MediaEntry e=getItem(i);h.channel.setText(DisplayText.title(e));MediaRowAdapter.loadArtwork(h.logo,e.logo,e.name,180,180);String k=key(e);h.now.setTag(k);h.next.setTag(k);h.now.setText(UiText.t(context,"now")+"  "+UiText.t(context,"epg_loading"));h.next.setText("");h.progress.setProgress(0);
+        List<EpgEntry>rows=cache.get(k);if(rows!=null)bind(h,rows,k);else load(e,k);return v;
+    }
+    private String key(MediaEntry e){return profileKey+"|"+e.uniqueKey();}
+    private void load(MediaEntry e,String k){
+        if(disposed||provider==null||e==null||!loading.add(k))return;
+        exec.execute(()->{try{List<EpgEntry>r=store.get(k);if(r.isEmpty()){r=provider.epgEntries(e,12);if(!r.isEmpty())store.put(k,r);}cache.put(k,r);}catch(Exception ex){cache.put(k,Collections.emptyList());}finally{loading.remove(k);if(!disposed)ui.post(()->{if(!disposed)notifyDataSetChanged();});}});
+    }
+    private List<EpgEntry>normal(List<EpgEntry>rows){
+        ArrayList<EpgEntry>x=new ArrayList<>();HashSet<String>seen=new HashSet<>();
+        if(rows!=null)for(EpgEntry e:rows){if(e==null||e.startEpoch<=0||e.endEpoch<=e.startEpoch)continue;String k=e.startEpoch+"|"+e.endEpoch+"|"+(e.title==null?"":e.title.trim().toLowerCase(Locale.ROOT));if(seen.add(k))x.add(e);}
+        x.sort((a,b)->{int q=Long.compare(a.startEpoch,b.startEpoch);return q!=0?q:Long.compare(a.endEpoch,b.endEpoch);});return x;
+    }
+    private void bind(H h,List<EpgEntry>rows,String key){
+        List<EpgEntry>r=normal(rows);if(r.isEmpty()){h.now.setText(UiText.t(context,"no_epg"));h.next.setText("");h.progress.setProgress(0);return;}
+        long now=System.currentTimeMillis()/1000L;EpgEntry cur=null,next=null;
+        for(EpgEntry e:r)if(e.startEpoch<=now&&now<e.endEpoch&&(cur==null||e.startEpoch>cur.startEpoch))cur=e;
+        if(cur!=null){
+            long floor=cur.endEpoch-60L;
+            for(EpgEntry e:r)if(e.startEpoch>=floor&&e.startEpoch>cur.startEpoch){next=e;break;}
+        }else{
+            for(EpgEntry e:r)if(e.startEpoch>now){next=e;break;}
+        }
+        if(cur!=null){
+            h.now.setText(UiText.t(context,"now")+"  "+time(cur)+cur.title);
+            long span=cur.endEpoch-cur.startEpoch,done=Math.max(0,Math.min(span,now-cur.startEpoch));h.progress.setProgress(span>0?(int)Math.min(100,(done*100)/span):0);
+        }else{h.now.setText(UiText.t(context,"no_epg"));h.progress.setProgress(0);}
+        if(next!=null)h.next.setText(UiText.t(context,"next")+"  "+time(next)+next.title);else h.next.setText("");
+    }
+    private String time(EpgEntry e){String r=e.range();return r.isEmpty()?"":r+"  ";}
+    public void shutdown(){disposed=true;ui.removeCallbacks(autoRefresh);loading.clear();cache.clear();exec.shutdownNow();}
+}
+''')
+
+# Taller, calmer EPG rows; yellow means active/progress, not red.
+row=app/"src/main/res/layout/row_epg.xml"
+row.write_text(r'''<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+ android:layout_width="match_parent" android:layout_height="112dp" android:orientation="horizontal"
+ android:gravity="center_vertical" android:padding="10dp" android:background="@drawable/bg_card">
+ <ImageView android:id="@+id/epgLogo" android:layout_width="70dp" android:layout_height="70dp" android:scaleType="centerInside" android:background="#252A33"/>
+ <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical" android:gravity="center_vertical" android:paddingLeft="12dp">
+  <TextView android:id="@+id/epgChannel" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/text" android:textSize="15sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end"/>
+  <TextView android:id="@+id/epgNow" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/text" android:textSize="13sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="6dp"/>
+  <ProgressBar android:id="@+id/epgProgress" style="@android:style/Widget.ProgressBar.Horizontal" android:layout_width="match_parent" android:layout_height="4dp" android:layout_marginTop="5dp" android:max="100" android:progressTint="#FFD400" android:progressBackgroundTint="#343A44"/>
+  <TextView android:id="@+id/epgNext" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/muted" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="5dp"/>
+ </LinearLayout>
+</LinearLayout>
+''')
+
+# ---------- Series correctness ----------
+series_select=r'''    void select(MediaEntry e){
+        if(e.type.equals("series")){
+            stopCachePaging();final int token=nextRequest();busy(true,T("episodes_loading"));
+            exec.execute(()->{try{
+                List<MediaEntry>raw=provider.seriesEpisodes(e);ArrayList<MediaEntry>x=new ArrayList<>(raw==null?Collections.emptyList():raw);
+                for(MediaEntry ep:x)if(ep.categoryId==null||ep.categoryId.isEmpty())ep.categoryId=e.categoryId;
+                x.sort((a,b)->{int as=a.season>0?a.season:9999,bs=b.season>0?b.season:9999;if(as!=bs)return Integer.compare(as,bs);int ae=a.episode>0?a.episode:9999,be=b.episode>0?b.episode:9999;if(ae!=be)return Integer.compare(ae,be);return safe(a.name).compareToIgnoreCase(safe(b.name));});
+                runOnUiThread(()->{if(current(token)){
+                    seriesEpisodeMode=true;showMediaList();categories.setVisibility(View.GONE);genreButton.setVisibility(View.GONE);all=x;adapter.set(x);
+                    MediaEntry next=nextEpisodeFor(e,x);heroTitle.setText(DisplayText.title(e));
+                    if(next!=null){
+                        selectedHero=next;boolean resume=library.progressPercent(next)>0&&library.progressPercent(next)<90;boolean history=hasSeriesHistory(e,x);
+                        String action=resume?T("continue"):(history?T("next_episode"):startSeriesLabel());
+                        heroSubtitle.setText(action+" · S"+Math.max(1,next.season)+"E"+Math.max(1,next.episode)+" · "+episodeShortTitle(next));
+                        heroAction.setText("▶  "+action);heroAction.setVisibility(View.VISIBLE);heroInfo.setVisibility(View.VISIBLE);
+                    }else{selectedHero=e;heroSubtitle.setText(T("no_episodes"));heroAction.setVisibility(View.GONE);heroInfo.setVisibility(View.VISIBLE);}
+                    busy(false,x.size()+" "+T("episodes"));
+                }});
+            }catch(Exception ex){runOnUiThread(()->{if(current(token))busy(false,T("series_error")+": "+friendly(ex));});}});
+            return;
+        }
+        play(e);
+    }
+    boolean sameSeries(MediaEntry series,MediaEntry ep){return ep!=null&&"episode".equals(ep.type)&&((series.seriesId!=null&&!series.seriesId.isEmpty()&&series.seriesId.equals(ep.seriesId))||(!safe(series.name).isEmpty()&&safe(series.name).equals(safe(ep.seriesTitle))));}
+    boolean hasSeriesHistory(MediaEntry series,List<MediaEntry>episodes){for(MediaEntry ep:episodes)if(library.progressPercent(ep)>0)return true;for(MediaEntry r:library.recent())if(sameSeries(series,r))return true;return false;}
+    String startSeriesLabel(){String l=SettingsStore.language(this);if("nl".equals(l))return "Start serie";if("de".equals(l))return "Serie starten";if("fr".equals(l))return "Commencer la série";if("es".equals(l))return "Iniciar serie";if("it".equals(l))return "Inizia serie";if("pt".equals(l))return "Iniciar série";if("tr".equals(l))return "Diziyi başlat";if("pl".equals(l))return "Rozpocznij serial";if("ar".equals(l))return "بدء المسلسل";return "Start series";}
+    String episodeShortTitle(MediaEntry ep){String n=DisplayText.title(ep);try{String z=n.replaceFirst("(?i)^.*?S\\\\d{1,2}E\\\\d{1,3}\\\\s*[-–:]?\\\\s*","").trim();if(!z.isEmpty())return z;}catch(Exception ignored){}return n;}
+'''
+s=replace_method_final(s,'    void select(MediaEntry e){','\n    MediaEntry nextEpisodeFor(',series_select)
+
+next_method=r'''    MediaEntry nextEpisodeFor(MediaEntry series,List<MediaEntry>episodes){
+        if(episodes==null||episodes.isEmpty())return null;
+        for(MediaEntry ep:episodes){int pct=library.progressPercent(ep);if(pct>0&&pct<90)return ep;}
+        MediaEntry last=null;
+        for(MediaEntry r:library.recent())if(sameSeries(series,r)){last=r;break;}
+        if(last!=null){
+            for(int i=0;i<episodes.size();i++){MediaEntry ep=episodes.get(i);if(ep.season==last.season&&ep.episode==last.episode){if(i+1<episodes.size())return episodes.get(i+1);return null;}}
+        }
+        return episodes.get(0);
+    }
+'''
+s=replace_method_final(s,'    MediaEntry nextEpisodeFor(MediaEntry series,List<MediaEntry> episodes){','\n    void setHeroHeight(',next_method)
+
+# Episode rows: show the episode title once; S/E metadata below it; yellow chip.
+row_media=app/"src/main/res/layout/row_media.xml"
+rm=row_media.read_text().replace('android:textColor="@color/accent2"','android:textColor="#FFD400"')
+row_media.write_text(rm)
+
+media=app/"src/main/java/com/robertalt/raiptv/MediaRowAdapter.java"
+mx=media.read_text()
+old='MediaEntry e=getItem(i);h.name.setText(DisplayText.title(e));h.fav.setText(store.isFavorite(e)?"★":"");String meta=DisplayText.shortMeta(e);'
+new='MediaEntry e=getItem(i);h.name.setText("episode".equals(e.type)?episodeTitle(e):DisplayText.title(e));h.fav.setText(store.isFavorite(e)?"★":"");String meta="episode".equals(e.type)?episodeMeta(e):DisplayText.shortMeta(e);'
+mx=mx.replace(old,new)
+if 'String episodeTitle(MediaEntry e)' not in mx:
+    mx=mx.replace('    String typeLabel(String t){',r'''    String episodeTitle(MediaEntry e){String n=DisplayText.title(e);try{String z=n.replaceFirst("(?i)^.*?S\\d{1,2}E\\d{1,3}\\s*[-–:]?\\s*","").trim();if(!z.isEmpty())return z;}catch(Exception ignored){}return n;}
+    String episodeMeta(MediaEntry e){ArrayList<String>x=new ArrayList<>();if(e.season>0&&e.episode>0)x.add("S"+e.season+"E"+e.episode);if(e.year!=null&&!e.year.trim().isEmpty())x.add(e.year.trim());if(e.group!=null&&!e.group.trim().isEmpty())x.add(e.group.trim());return android.text.TextUtils.join(" · ",x);}
+    String typeLabel(String t){''')
+media.write_text(mx)
+
+# ---------- Detail popup ----------
+# Score 0 means unavailable, not a genuine zero rating.
+s=s.replace('String score=d.scoreLabel();if(!score.isEmpty())addInfoLine(box,T("score")+": "+score,true);',
+            'String score=d.scoreLabel();if(!score.isEmpty()&&!score.equals("0")&&!score.equals("0.0")&&!score.equals("0,0"))addInfoLine(box,T("score")+": "+score,true);')
+
+# ---------- Artwork fallback ----------
+grid=app/"src/main/java/com/robertalt/raiptv/MediaGridAdapter.java"
+gx=grid.read_text()
+gx=gx.replace('MediaRowAdapter.loadArtwork(h.poster,e.logo,e.name,isLive?220:210,isLive?130:300);',
+              'String artUrl=(e.logo==null||e.logo.trim().isEmpty())?e.backdrop:e.logo;MediaRowAdapter.loadArtwork(h.poster,artUrl,e.name,isLive?220:210,isLive?130:300);')
+grid.write_text(gx)
+
+# ---------- Sync counts ----------
+# Display unique indexed items instead of raw provider rows, and use locale thousands separators.
+s=s.replace('if("live".equals(type))liveCount+=items.size();else if("vod".equals(type))filmCount+=items.size();else seriesCount+=items.size();',
+            'int uniqueCount=searchIndex.countSection(key,type);if("live".equals(type))liveCount=uniqueCount;else if("vod".equals(type))filmCount=uniqueCount;else seriesCount=uniqueCount;')
+s=s.replace('if("live".equals(type))live=aggregate.size();else if("vod".equals(type))vod=aggregate.size();else series=aggregate.size();',
+            'int uniqueCount=searchIndex.countSection(key,type);if("live".equals(type))live=uniqueCount;else if("vod".equals(type))vod=uniqueCount;else series=uniqueCount;')
+s=s.replace('String msg=freeUi("library")+" · "+pct+"%\\n"+T("live")+" "+live+"  ·  "+T("movies")+" "+films+"  ·  "+T("series")+" "+series;',
+            'String msg=freeUi("library")+" · "+pct+"%\\n"+T("live")+" "+fmtLibraryCount(live)+"  ·  "+T("movies")+" "+fmtLibraryCount(films)+"  ·  "+T("series")+" "+fmtLibraryCount(series);')
+if 'String fmtLibraryCount(int n)' not in s:
+    anchor='    void showFreeSyncProgress(int done,int total,int live,int films,int series){'
+    a=s.find(anchor)
+    if a>=0:s=s[:a]+'    String fmtLibraryCount(int n){try{return java.text.NumberFormat.getIntegerInstance(SettingsStore.appLocale(this)).format(n);}catch(Exception e){return String.valueOf(n);}}\\n'+s[a:]
+
+# ---------- Player: fullscreen, auto-hide, consistent yellow/dark controls ----------
+pl=app/"src/main/res/layout/activity_player.xml"
+pl.write_text(r'''<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+ android:id="@+id/playerRoot" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000">
+ <FrameLayout android:id="@+id/vlcLayout" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone"/>
+ <androidx.media3.ui.PlayerView android:id="@+id/media3View" android:layout_width="match_parent" android:layout_height="match_parent" app:use_controller="false"/>
+ <FrameLayout android:id="@+id/playerControls" android:layout_width="match_parent" android:layout_height="match_parent" android:clickable="true" android:focusable="true" android:focusableInTouchMode="true">
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_gravity="top" android:orientation="vertical" android:padding="16dp" android:background="#9A000000">
+   <TextView android:id="@+id/playerTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFFFFF" android:textSize="20sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end"/>
+   <TextView android:id="@+id/playerNowNext" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFFFFF" android:textSize="12sp" android:paddingTop="5dp" android:maxLines="2" android:ellipsize="end" android:visibility="gone"/>
+   <ProgressBar android:id="@+id/playerEpgProgress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="4dp" android:layout_marginTop="5dp" android:max="100" android:progressTint="#FFD400" android:progressBackgroundTint="#3A3F48" android:visibility="gone"/>
+   <TextView android:id="@+id/playerStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#C7CDD6" android:textSize="11sp" android:paddingTop="4dp" android:visibility="gone"/>
+  </LinearLayout>
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_gravity="bottom" android:orientation="vertical" android:paddingLeft="16dp" android:paddingRight="16dp" android:paddingTop="18dp" android:paddingBottom="12dp" android:background="@drawable/bg_player_controls">
+   <SeekBar android:id="@+id/seekBar" android:layout_width="match_parent" android:layout_height="wrap_content" android:progressTint="#FFD400" android:thumbTint="#FFD400"/>
+   <LinearLayout android:layout_width="match_parent" android:layout_height="54dp" android:gravity="center_vertical" android:orientation="horizontal">
+    <Button android:id="@+id/channelPrevButton" android:layout_width="64dp" android:layout_height="44dp" android:text="CH−" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55151A22" android:visibility="gone"/>
+    <Button android:id="@+id/rewindButton" android:layout_width="66dp" android:layout_height="44dp" android:layout_marginLeft="5dp" android:text="↶ 10" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55151A22"/>
+    <Button android:id="@+id/playPauseButton" android:layout_width="62dp" android:layout_height="48dp" android:layout_marginLeft="5dp" android:text="❚❚" android:textSize="18sp" android:textColor="#101010" android:backgroundTint="#FFD400"/>
+    <Button android:id="@+id/forwardButton" android:layout_width="66dp" android:layout_height="44dp" android:layout_marginLeft="5dp" android:text="10 ↷" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55151A22"/>
+    <Button android:id="@+id/channelNextButton" android:layout_width="64dp" android:layout_height="44dp" android:layout_marginLeft="5dp" android:text="CH+" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55151A22" android:visibility="gone"/>
+    <TextView android:id="@+id/timeText" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="00:00" android:textColor="#FFFFFF" android:textSize="13sp" android:paddingLeft="12dp"/>
+   </LinearLayout>
+   <HorizontalScrollView android:layout_width="match_parent" android:layout_height="46dp" android:scrollbars="none">
+    <LinearLayout android:layout_width="wrap_content" android:layout_height="match_parent" android:gravity="center_vertical" android:orientation="horizontal">
+     <Button android:id="@+id/catchupButton" android:layout_width="wrap_content" android:layout_height="40dp" android:text="↶ Terugkijken" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55151A22" android:visibility="gone"/>
+     <Button android:id="@+id/favoriteButton" android:layout_width="48dp" android:layout_height="40dp" android:text="♡" android:textSize="20sp" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55151A22"/>
+     <Button android:id="@+id/audioButton" android:layout_width="wrap_content" android:layout_height="40dp" android:layout_marginLeft="5dp" android:text="Audio" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55151A22"/>
+     <Button android:id="@+id/subtitleButton" android:layout_width="wrap_content" android:layout_height="40dp" android:layout_marginLeft="5dp" android:text="CC" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55151A22"/>
+     <Button android:id="@+id/speedButton" android:layout_width="wrap_content" android:layout_height="40dp" android:layout_marginLeft="5dp" android:text="1.0×" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55151A22"/>
+     <Button android:id="@+id/aspectButton" android:layout_width="wrap_content" android:layout_height="40dp" android:layout_marginLeft="5dp" android:text="Fit" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55151A22"/>
+     <Button android:id="@+id/castRouteButton" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone"/>
+     <Button android:id="@+id/sleepButton" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone"/>
+     <Button android:id="@+id/recordButton" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone"/>
+     <Button android:id="@+id/pipButton" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone"/>
+    </LinearLayout>
+   </HorizontalScrollView>
+  </LinearLayout>
+ </FrameLayout>
+</FrameLayout>
+''')
+
+player=app/"src/main/java/com/robertalt/raiptv/PlayerActivity.java"
+player.write_text(r'''package com.robertalt.raiptv;
+
+import android.app.*;import android.content.res.ColorStateList;import android.graphics.Color;import android.os.*;import android.view.*;import android.widget.*;
+import androidx.fragment.app.FragmentActivity;import androidx.media3.common.*;import androidx.media3.exoplayer.ExoPlayer;import androidx.media3.ui.AspectRatioFrameLayout;import androidx.media3.ui.PlayerView;
+import com.robertalt.raiptv.model.*;import com.robertalt.raiptv.provider.*;import com.robertalt.raiptv.storage.*;
+import java.util.*;import java.util.concurrent.*;
+
+public class PlayerActivity extends FragmentActivity{
+ PlayerView media3View;ExoPlayer exo;MediaEntry entry;LibraryStore library;Provider provider;ArrayList<MediaEntry>liveChannels=new ArrayList<>();int liveIndex=-1,retryCount=0,aspectMode=0;boolean playingCatchup=false,controlsVisible=true,userSeeking=false,destroyed=false;float playbackSpeed=1f;
+ EpgEntry nowProgramme,nextProgramme;TextView title,status,timeText,nowNext;ProgressBar epgProgress;Button playPause,rewind,forward,audio,subtitle,pip,speed,aspect,sleep,record,favorite,castButton,channelPrev,channelNext,catchup;SeekBar seek;FrameLayout controls,root;Handler ui=new Handler(Looper.getMainLooper());ExecutorService bg=Executors.newSingleThreadExecutor();
+ String T(String k){return UiText.t(this,k);}Runnable tick=new Runnable(){public void run(){if(destroyed)return;updateProgress();updateEpgProgress();ui.postDelayed(this,500);}};Runnable autoHide=()->hideControls();
+
+ @Override public void onCreate(Bundle b){super.onCreate(b);CrashGuard.install(this);getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);setContentView(R.layout.activity_player);UiText.applyDirection(this);hideSystemUi();library=new LibraryStore(this);
+  root=findViewById(R.id.playerRoot);media3View=findViewById(R.id.media3View);controls=findViewById(R.id.playerControls);title=findViewById(R.id.playerTitle);status=findViewById(R.id.playerStatus);timeText=findViewById(R.id.timeText);nowNext=findViewById(R.id.playerNowNext);epgProgress=findViewById(R.id.playerEpgProgress);playPause=findViewById(R.id.playPauseButton);rewind=findViewById(R.id.rewindButton);forward=findViewById(R.id.forwardButton);audio=findViewById(R.id.audioButton);subtitle=findViewById(R.id.subtitleButton);pip=findViewById(R.id.pipButton);seek=findViewById(R.id.seekBar);speed=findViewById(R.id.speedButton);aspect=findViewById(R.id.aspectButton);sleep=findViewById(R.id.sleepButton);record=findViewById(R.id.recordButton);favorite=findViewById(R.id.favoriteButton);castButton=findViewById(R.id.castRouteButton);channelPrev=findViewById(R.id.channelPrevButton);channelNext=findViewById(R.id.channelNextButton);catchup=findViewById(R.id.catchupButton);
+  entry=(MediaEntry)getIntent().getSerializableExtra("media");if(entry==null){finish();return;}title.setText(DisplayText.title(entry));wire();applyButtonFocus();updateModeUi();startPlayer();if("live".equals(entry.type))loadLiveContext();ui.post(tick);showControls();
+ }
+
+ void hideSystemUi(){getWindow().setStatusBarColor(Color.TRANSPARENT);getWindow().setNavigationBarColor(Color.BLACK);getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_STABLE);}
+ void wire(){
+  root.setOnClickListener(v->toggleControls());media3View.setOnClickListener(v->toggleControls());controls.setOnClickListener(v->showControls());
+  playPause.setOnClickListener(v->{showControls();if(exo==null)return;if(exo.isPlaying())exo.pause();else exo.play();updatePlayIcon();});
+  rewind.setOnClickListener(v->{showControls();if(exo!=null)exo.seekTo(Math.max(0,exo.getCurrentPosition()-10000));});forward.setOnClickListener(v->{showControls();if(exo!=null)exo.seekTo(exo.getCurrentPosition()+10000);});
+  channelPrev.setOnClickListener(v->{showControls();switchChannel(-1);});channelNext.setOnClickListener(v->{showControls();switchChannel(1);});catchup.setOnClickListener(v->{showControls();if(playingCatchup)playLiveEntry();else showCatchup();});
+  seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onStartTrackingTouch(SeekBar b){userSeeking=true;showControls();}public void onStopTrackingTouch(SeekBar b){userSeeking=false;if(exo!=null&&exo.getDuration()>0)exo.seekTo((long)(exo.getDuration()*(b.getProgress()/1000f)));showControls();}public void onProgressChanged(SeekBar b,int p,boolean u){}});
+  favorite.setOnClickListener(v->{showControls();if(entry!=null){library.toggleFavorite(entry);updateFavorite();}});audio.setOnClickListener(v->{showControls();showTracks(C.TRACK_TYPE_AUDIO);});subtitle.setOnClickListener(v->{showControls();showTracks(C.TRACK_TYPE_TEXT);});speed.setOnClickListener(v->{showControls();showSpeed();});aspect.setOnClickListener(v->{showControls();cycleAspect();});updateFavorite();
+ }
+ void applyButtonFocus(){for(Button b:new Button[]{channelPrev,channelNext,rewind,forward,audio,subtitle,speed,aspect,catchup,favorite})if(b!=null){ColorStateList c=new ColorStateList(new int[][]{new int[]{android.R.attr.state_focused},new int[]{android.R.attr.state_pressed},new int[]{}},new int[]{0xFFFFD400,0xFFFFD400,0xFF202630});b.setBackgroundTintList(c);b.setOnFocusChangeListener((v,on)->{((Button)v).setTextColor(on?0xFF101010:0xFFFFFFFF);if(on)showControls();});}playPause.setBackgroundTintList(ColorStateList.valueOf(0xFFFFD400));playPause.setTextColor(0xFF101010);}
+ void updateModeUi(){boolean live="live".equals(entry.type)&&!playingCatchup;channelPrev.setVisibility(live?View.VISIBLE:View.GONE);channelNext.setVisibility(live?View.VISIBLE:View.GONE);rewind.setVisibility(live?View.GONE:View.VISIBLE);forward.setVisibility(live?View.GONE:View.VISIBLE);seek.setVisibility(live?View.GONE:View.VISIBLE);timeText.setVisibility(live?View.GONE:View.VISIBLE);speed.setVisibility(live?View.GONE:View.VISIBLE);aspect.setVisibility(live?View.GONE:View.VISIBLE);}
+ void toggleControls(){if(controlsVisible)hideControls();else showControls();}
+ void showControls(){controlsVisible=true;controls.setVisibility(View.VISIBLE);ui.removeCallbacks(autoHide);ui.postDelayed(autoHide,3500);hideSystemUi();}
+ void hideControls(){if(userSeeking)return;controlsVisible=false;controls.setVisibility(View.GONE);hideSystemUi();}
+ void showStatus(String x){if(x==null||x.trim().isEmpty()){status.setVisibility(View.GONE);return;}status.setText(x);status.setVisibility(View.VISIBLE);}
+
+ Provider makeProvider(){try{Profile p=new SecureProfileStore(this).load();if(p==null)return null;Provider q=p.type==Profile.Type.XTREAM?new XtreamProvider(p):new M3uProvider(p,SettingsStore.primaryLanguage(this));if(p.type==Profile.Type.M3U)q.authenticate();return q;}catch(Exception e){return null;}}
+ void loadLiveContext(){nowNext.setVisibility(View.VISIBLE);epgProgress.setVisibility(View.VISIBLE);bg.execute(()->{provider=makeProvider();if(provider==null)return;try{List<MediaEntry>rows=provider.items("live",(entry.categoryId==null||entry.categoryId.isEmpty())?"all":entry.categoryId);liveChannels=new ArrayList<>(rows);for(int i=0;i<liveChannels.size();i++){MediaEntry x=liveChannels.get(i);if(x.uniqueKey().equals(entry.uniqueKey())||(!entry.id.isEmpty()&&entry.id.equals(x.id))){liveIndex=i;break;}}}catch(Exception ignored){}loadNowNext();});}
+ List<EpgEntry>normalizeEpg(List<EpgEntry>rows){ArrayList<EpgEntry>x=new ArrayList<>();HashSet<String>seen=new HashSet<>();if(rows!=null)for(EpgEntry e:rows){if(e==null||e.startEpoch<=0||e.endEpoch<=e.startEpoch)continue;String k=e.startEpoch+"|"+e.endEpoch+"|"+(e.title==null?"":e.title);if(seen.add(k))x.add(e);}x.sort((a,b)->Long.compare(a.startEpoch,b.startEpoch));return x;}
+ void loadNowNext(){if(provider==null||entry==null||!"live".equals(entry.type))return;final String key=entry.uniqueKey();try{List<EpgEntry>rows=normalizeEpg(provider.epgEntries(entry,12));long now=System.currentTimeMillis()/1000L;EpgEntry cur=null,nxt=null;for(EpgEntry e:rows)if(e.startEpoch<=now&&now<e.endEpoch&&(cur==null||e.startEpoch>cur.startEpoch))cur=e;if(cur!=null){long floor=cur.endEpoch-60L;for(EpgEntry e:rows)if(e.startEpoch>=floor&&e.startEpoch>cur.startEpoch){nxt=e;break;}}final EpgEntry fc=cur,fn=nxt;final boolean canCatch=entry.catchup;runOnUiThread(()->{if(destroyed||entry==null||!key.equals(entry.uniqueKey()))return;nowProgramme=fc;nextProgramme=fn;renderNowNext();catchup.setVisibility(canCatch?View.VISIBLE:View.GONE);});}catch(Exception ignored){runOnUiThread(()->{if(!destroyed){nowNext.setText(T("no_epg"));epgProgress.setProgress(0);}});}}
+ void renderNowNext(){StringBuilder x=new StringBuilder();if(nowProgramme!=null){x.append(T("now")).append(" · ");String r=nowProgramme.range();if(!r.isEmpty())x.append(r).append(" · ");x.append(nowProgramme.title);}if(nextProgramme!=null){if(x.length()>0)x.append("\n");x.append(T("next")).append(" · ");String r=nextProgramme.range();if(!r.isEmpty())x.append(r).append(" · ");x.append(nextProgramme.title);}nowNext.setText(x.length()==0?T("no_epg"):x.toString());updateEpgProgress();}
+ void updateEpgProgress(){if(epgProgress==null||nowProgramme==null){if(epgProgress!=null)epgProgress.setProgress(0);return;}long n=System.currentTimeMillis()/1000L,span=nowProgramme.endEpoch-nowProgramme.startEpoch;if(span>0&&n>=nowProgramme.startEpoch){epgProgress.setProgress((int)Math.max(0,Math.min(100,((n-nowProgramme.startEpoch)*100)/span)));if(n>=nowProgramme.endEpoch&&provider!=null)bg.execute(this::loadNowNext);}}
+ void switchChannel(int d){if(liveChannels==null||liveChannels.isEmpty()||liveIndex<0)return;int n=liveChannels.size();liveIndex=(liveIndex+d+n)%n;entry=liveChannels.get(liveIndex);playingCatchup=false;title.setText(DisplayText.title(entry));library.recent(entry);updateFavorite();updateModeUi();playLiveEntry();if(provider!=null)bg.execute(this::loadNowNext);}
+ ArrayList<String>streamUrls(MediaEntry e){ArrayList<String>u=new ArrayList<>();if(e!=null&&e.candidates!=null)u.addAll(e.candidates);if(u.isEmpty()&&e!=null&&e.url!=null&&!e.url.isEmpty())u.add(e.url);return u;}
+ void startPlayer(){playLiveEntry();}
+ void playLiveEntry(){playingCatchup=false;updateModeUi();if(catchup!=null)catchup.setText("↶ "+catchupLabel());ArrayList<String>u=streamUrls(entry);if(u.isEmpty()){showStatus(T("no_stream_url"));return;}playUrl(u.get(0),!"live".equals(entry.type));library.recent(entry);}
+ void playUrl(String url,boolean seekable){if(exo==null){exo=new ExoPlayer.Builder(this).build();media3View.setPlayer(exo);exo.addListener(new Player.Listener(){@Override public void onPlaybackStateChanged(int state){if(state==Player.STATE_READY){retryCount=0;showStatus("");ui.postDelayed(autoHide,1200);}else if(state==Player.STATE_ENDED&&playingCatchup)playLiveEntry();}@Override public void onPlayerError(PlaybackException e){retryStream();}});}exo.setMediaItem(MediaItem.fromUri(url));exo.prepare();if(seekable&&entry!=null&&!"live".equals(entry.type)){long r=library.progress(entry);if(r>10000)exo.seekTo(r);}exo.play();showStatus("");updatePlayIcon();}
+ void showCatchup(){if(provider==null||entry==null||!entry.catchup)return;showStatus(catchupLoading());final String key=entry.uniqueKey();bg.execute(()->{try{List<EpgEntry>rows=provider.archiveEntries(entry,24);ArrayList<EpgEntry>usable=new ArrayList<>();ArrayList<String>labels=new ArrayList<>();for(EpgEntry e:rows){String u=provider.catchupUrl(entry,e);if(u!=null&&!u.isEmpty()){usable.add(e);labels.add((e.range().isEmpty()?"":e.range()+"  ")+e.title);}}runOnUiThread(()->{if(destroyed||entry==null||!key.equals(entry.uniqueKey()))return;showStatus("");if(usable.isEmpty()){Toast.makeText(this,noCatchup(),Toast.LENGTH_SHORT).show();return;}new AlertDialog.Builder(this).setTitle(catchupLabel()).setItems(labels.toArray(new String[0]),(d,w)->playArchive(usable.get(w))).setNegativeButton(T("close"),null).show();});}catch(Exception e){runOnUiThread(()->{showStatus("");Toast.makeText(this,noCatchup(),Toast.LENGTH_SHORT).show();});}});}
+ void playArchive(EpgEntry p){if(provider==null)return;try{String u=provider.catchupUrl(entry,p);if(u==null||u.isEmpty())return;playingCatchup=true;updateModeUi();title.setText(DisplayText.title(entry)+" · "+p.title);catchup.setText("● LIVE");playUrl(u,true);}catch(Exception ignored){}}
+ String catchupLabel(){String l=SettingsStore.language(this);if("nl".equals(l))return "Terugkijken";if("de".equals(l))return "Nachholen";if("fr".equals(l))return "Replay";if("es".equals(l))return "Repetición";if("it".equals(l))return "Replay";if("pt".equals(l))return "Rever";if("tr".equals(l))return "Geri izle";if("pl".equals(l))return "Cofnij";if("ar".equals(l))return "إعادة";return "Catch-up";}
+ String catchupLoading(){return "nl".equals(SettingsStore.language(this))?"Terugkijkprogramma’s laden…":"Loading catch-up…";}String noCatchup(){return "nl".equals(SettingsStore.language(this))?"Geen terugkijkprogramma’s beschikbaar":"No catch-up programmes available";}
+ void retryStream(){if(exo==null||destroyed)return;if(retryCount>=2){showStatus(streamText(false));return;}retryCount++;showStatus(streamText(true));showControls();final int a=retryCount;ui.postDelayed(()->{if(exo==null||destroyed)return;try{exo.seekToDefaultPosition();exo.prepare();exo.play();}catch(Throwable ignored){}},700L*a);}
+ String streamText(boolean retry){String l=SettingsStore.language(this);if("nl".equals(l))return retry?"Stream opnieuw verbinden…":"Stream tijdelijk niet beschikbaar";return retry?"Reconnecting stream…":"Stream temporarily unavailable";}
+ void updateProgress(){if(exo==null)return;long pos=Math.max(0,exo.getCurrentPosition()),dur=Math.max(0,exo.getDuration());if(!userSeeking&&dur>0)seek.setProgress((int)Math.min(1000,pos*1000/dur));timeText.setText(fmt(pos)+(dur>0?" / "+fmt(dur):""));if(entry!=null&&!"live".equals(entry.type)&&!playingCatchup&&pos>5000)library.saveProgress(entry,pos,dur);updatePlayIcon();}
+ String fmt(long ms){long s=Math.max(0,ms/1000),m=s/60,h=m/60;return h>0?String.format(Locale.ROOT,"%d:%02d:%02d",h,m%60,s%60):String.format(Locale.ROOT,"%02d:%02d",m,s%60);}
+ void updatePlayIcon(){playPause.setText(exo!=null&&exo.isPlaying()?"❚❚":"▶");}void updateFavorite(){if(favorite!=null&&entry!=null)favorite.setText(library.isFavorite(entry)?"♥":"♡");}
+ void showSpeed(){final float[]r={.75f,1f,1.25f,1.5f,2f};String[]l={"0.75×","1.0×","1.25×","1.5×","2.0×"};new AlertDialog.Builder(this).setTitle(T("speed_title")).setItems(l,(d,w)->{playbackSpeed=r[w];if(exo!=null)exo.setPlaybackSpeed(playbackSpeed);speed.setText(l[w]);}).show();}
+ void cycleAspect(){aspectMode=(aspectMode+1)%3;media3View.setResizeMode(aspectMode==0?AspectRatioFrameLayout.RESIZE_MODE_FIT:aspectMode==1?AspectRatioFrameLayout.RESIZE_MODE_FILL:AspectRatioFrameLayout.RESIZE_MODE_ZOOM);}
+ void showTracks(int type){if(exo==null)return;Tracks tr=exo.getCurrentTracks();ArrayList<String>names=new ArrayList<>();ArrayList<TrackSelectionOverride>picks=new ArrayList<>();for(Tracks.Group g:tr.getGroups()){if(g.getType()!=type)continue;for(int i=0;i<g.length;i++){Format f=g.getTrackFormat(i);String n=f.label!=null?f.label:(f.language!=null?SettingsStore.displayLanguage(this,f.language):T(type==C.TRACK_TYPE_AUDIO?"audio":"subtitles"));names.add(n);picks.add(new TrackSelectionOverride(g.getMediaTrackGroup(),Collections.singletonList(i)));}}if(names.isEmpty()){Toast.makeText(this,type==C.TRACK_TYPE_AUDIO?T("no_audio_tracks"):T("no_subtitles"),Toast.LENGTH_SHORT).show();return;}new AlertDialog.Builder(this).setTitle(type==C.TRACK_TYPE_AUDIO?T("audio_track"):T("subtitles")).setItems(names.toArray(new String[0]),(d,w)->{TrackSelectionParameters.Builder pb=exo.getTrackSelectionParameters().buildUpon();pb.setOverrideForType(picks.get(w));exo.setTrackSelectionParameters(pb.build());}).show();}
+ @Override public boolean onKeyDown(int k,KeyEvent e){showControls();if(entry!=null&&"live".equals(entry.type)&&!playingCatchup){if(k==KeyEvent.KEYCODE_DPAD_UP||k==KeyEvent.KEYCODE_CHANNEL_UP){switchChannel(-1);return true;}if(k==KeyEvent.KEYCODE_DPAD_DOWN||k==KeyEvent.KEYCODE_CHANNEL_DOWN){switchChannel(1);return true;}}return super.onKeyDown(k,e);}
+ @Override public void onWindowFocusChanged(boolean h){super.onWindowFocusChanged(h);if(h)hideSystemUi();}
+ @Override protected void onStop(){super.onStop();if(entry!=null&&exo!=null&&!"live".equals(entry.type)&&!playingCatchup)library.saveProgress(entry,Math.max(0,exo.getCurrentPosition()),Math.max(0,exo.getDuration()));}
+ @Override protected void onDestroy(){destroyed=true;ui.removeCallbacksAndMessages(null);bg.shutdownNow();if(exo!=null){exo.release();exo=null;}super.onDestroy();}
+}
+''')
+
+# Settings version.
+settings=app/"src/main/java/com/robertalt/raiptv/SettingsActivity.java"
+sx=settings.read_text().replace('NenoTV Free · 0.12.7','NenoTV Free · 0.12.8').replace('NenoTV Free 0.12.7','NenoTV Free 0.12.8')
+settings.write_text(sx)
+
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.7: provider-order + full background sync")
+print("Prepared NenoTV Free v0.12.8: provider-order + full background sync")
