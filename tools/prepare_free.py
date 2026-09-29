@@ -11,8 +11,8 @@ app=root/"app"
 gradle=app/"build.gradle"
 s=gradle.read_text()
 s=s.replace("applicationId 'com.robertalt.raiptv.light'","applicationId 'com.robertalt.raiptv'")
-s=re.sub(r"versionCode\s+\d+","versionCode 62",s,1)
-s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.6.4'",s,1)
+s=re.sub(r"versionCode\s+\d+","versionCode 63",s,1)
+s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.6.5'",s,1)
 s=s.replace("    dynamicFeatures = [':proextras']\n","")
 s=s.replace("    implementation 'com.google.android.play:feature-delivery:2.1.0'\n","")
 gradle.write_text(s)
@@ -773,7 +773,7 @@ settings=app/"src/main/java/com/robertalt/raiptv/SettingsActivity.java"
 sx=settings.read_text()
 sx=sx.replace('Kies een blok om de Free-instellingen aan te passen.','Kies een onderdeel.')
 sx=sx.replace('Choose a block to change Free settings.','Choose a section.')
-sx=sx.replace('NenoTV Free · 0.12.5','NenoTV Free · 0.12.6.4').replace('NenoTV Free 0.12.5','NenoTV Free 0.12.6.4')
+sx=sx.replace('NenoTV Free · 0.12.5','NenoTV Free · 0.12.6.5').replace('NenoTV Free 0.12.5','NenoTV Free 0.12.6.5')
 settings.write_text(sx)
 
 # TV source: permanent field labels + NenoTV-yellow source selector.
@@ -1023,4 +1023,4 @@ if '{"activate_restore","Aankoop activeren of herstellen"}' not in ux:
 ui.write_text(ux)
 
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.6.4: account localization + Pro/EPG fixes")
+print("Prepared NenoTV Free v0.12.6.5: REST fallback + account localization + Pro/EPG fixes")
