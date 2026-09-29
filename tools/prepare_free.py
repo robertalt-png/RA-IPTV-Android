@@ -1024,3 +1024,5 @@ ui.write_text(ux)
 
 main.write_text(s)
 print("Prepared NenoTV Free v0.12.6.5: REST fallback + account localization + Pro/EPG fixes")
+
+# v0.12.6.7 release rebuild trigger
