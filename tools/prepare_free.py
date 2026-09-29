@@ -11,8 +11,8 @@ app=root/"app"
 gradle=app/"build.gradle"
 s=gradle.read_text()
 s=s.replace("applicationId 'com.robertalt.raiptv.light'","applicationId 'com.robertalt.raiptv'")
-s=re.sub(r"versionCode\s+\d+","versionCode 59",s,1)
-s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.6.1'",s,1)
+s=re.sub(r"versionCode\s+\d+","versionCode 60",s,1)
+s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.6.2'",s,1)
 s=s.replace("    dynamicFeatures = [':proextras']\n","")
 s=s.replace("    implementation 'com.google.android.play:feature-delivery:2.1.0'\n","")
 gradle.write_text(s)
@@ -773,7 +773,7 @@ settings=app/"src/main/java/com/robertalt/raiptv/SettingsActivity.java"
 sx=settings.read_text()
 sx=sx.replace('Kies een blok om de Free-instellingen aan te passen.','Kies een onderdeel.')
 sx=sx.replace('Choose a block to change Free settings.','Choose a section.')
-sx=sx.replace('NenoTV Free · 0.12.5','NenoTV Free · 0.12.6.1').replace('NenoTV Free 0.12.5','NenoTV Free 0.12.6.1')
+sx=sx.replace('NenoTV Free · 0.12.5','NenoTV Free · 0.12.6.2').replace('NenoTV Free 0.12.5','NenoTV Free 0.12.6.2')
 settings.write_text(sx)
 
 # TV source: permanent field labels + NenoTV-yellow source selector.
@@ -880,5 +880,56 @@ if needle in mx:
     mx=mx.replace(needle,repl)
 manifest.write_text(mx)
 
+
+# v0.12.6.2: Free TV-guide crash fix.
+# Free must always use the lightweight EPG list. The advanced grid is a Pro path
+# and was still the default mode in v0.12.6.1 even though its button was hidden.
+s=s.replace('boolean cachePagingActive=false,cachePageLoading=false,autoReindexAfterConnect=false,epgGridMode=true;',
+            'boolean cachePagingActive=false,cachePageLoading=false,autoReindexAfterConnect=false,epgGridMode=false;')
+
+s=s.replace('findViewById(R.id.navEpg).setOnClickListener(v->loadEpg());',
+            'findViewById(R.id.navEpg).setOnClickListener(v->openEpgSafe());')
+
+old_show='void showEpgByMode(List<MediaEntry>channels){if(epgGridMode)renderEpgBoard(channels);else{showEpgList();epgAdapter.configure(provider,profileKey());epgAdapter.set(channels==null?Collections.emptyList():channels);}}'
+new_show='void showEpgByMode(List<MediaEntry>channels){epgGridMode=false;showEpgList();epgAdapter.configure(provider,profileKey());epgAdapter.set(channels==null?Collections.emptyList():channels);}'
+if old_show not in s: raise SystemExit("showEpgByMode marker missing")
+s=s.replace(old_show,new_show,1)
+
+s=s.replace('epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null)epgGridButton.setVisibility(View.GONE);',
+            'epgModeBar.setVisibility(View.GONE);if(epgGridButton!=null)epgGridButton.setVisibility(View.GONE);if(epgListButton!=null)epgListButton.setVisibility(View.GONE);')
+
+if 'void openEpgSafe()' not in s:
+    helper=r'''    void openEpgSafe(){
+        try{
+            epgGridMode=false;
+            loadEpg();
+        }catch(Throwable e){
+            epgGridMode=false;
+            try{
+                section="epg";
+                updateBottomNav("epg");
+                if(epgModeBar!=null)epgModeBar.setVisibility(View.GONE);
+                if(categories!=null)categories.setVisibility(View.VISIBLE);
+                showEpgList();
+                if(epgAdapter!=null){epgAdapter.configure(provider,profileKey());epgAdapter.set(Collections.emptyList());}
+                busy(false,T("epg_error"));
+            }catch(Throwable ignored){}
+            Toast.makeText(this,T("epg_error"),Toast.LENGTH_SHORT).show();
+        }
+    }
+
+'''
+    pos=s.find('    void loadEpg(){')
+    if pos<0: raise SystemExit("loadEpg marker missing")
+    s=s[:pos]+helper+s[pos:]
+
+# Defensive null guards around EPG controls so a layout variant cannot terminate the Activity.
+s=s.replace('epgGridButton.setOnClickListener(v->setEpgMode(true));epgListButton.setOnClickListener(v->setEpgMode(false));',
+            'if(epgGridButton!=null)epgGridButton.setOnClickListener(v->setEpgMode(true));if(epgListButton!=null)epgListButton.setOnClickListener(v->setEpgMode(false));')
+
+s=s.replace('void setEpgMode(boolean gridMode){epgGridMode=gridMode;epgGridButton.setBackgroundTintList',
+            'void setEpgMode(boolean gridMode){epgGridMode=false;if(epgGridButton==null||epgListButton==null){showEpgByMode(all);return;}epgGridButton.setBackgroundTintList')
+
+
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.6.1: v0.12.6 base + website/account integration")
+print("Prepared NenoTV Free v0.12.6.2: v0.12.6.1 integration + Free EPG list crash fix")
