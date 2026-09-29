@@ -74,6 +74,31 @@ public class PlayerActivity extends FragmentActivity {
     SeekBar seek; FrameLayout controls; Handler ui=new Handler(Looper.getMainLooper()); boolean userSeeking=false,destroyed=false; int aspectMode=0; float playbackSpeed=1f;
     String T(String k){return UiText.t(this,k);}
     Runnable tick=new Runnable(){public void run(){if(destroyed)return;updateProgress();ui.postDelayed(this,500);}};
+    Runnable hideControlsTask=()->hideControls();
+
+    void cancelControlsHide(){ui.removeCallbacks(hideControlsTask);}
+    void scheduleControlsHide(){
+        cancelControlsHide();
+        if(exo!=null&&exo.isPlaying())ui.postDelayed(hideControlsTask,3000);
+    }
+    void showControls(){
+        cancelControlsHide();
+        if(controls==null)return;
+        controls.animate().cancel();controls.setAlpha(1f);controls.setVisibility(View.VISIBLE);
+        scheduleControlsHide();
+    }
+    void hideControls(){
+        cancelControlsHide();
+        if(controls==null||controls.getVisibility()!=View.VISIBLE)return;
+        controls.animate().cancel();
+        controls.animate().alpha(0f).setDuration(180).withEndAction(()->{
+            if(controls!=null){controls.setVisibility(View.GONE);controls.setAlpha(1f);}
+        }).start();
+    }
+    void touchControls(){
+        if(controls==null)return;
+        if(controls.getVisibility()==View.VISIBLE)hideControls();else showControls();
+    }
 
     @Override public void onCreate(Bundle b){
         super.onCreate(b);CrashGuard.install(this);getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);getWindow().setStatusBarColor(Color.BLACK);
@@ -81,22 +106,25 @@ public class PlayerActivity extends FragmentActivity {
         media3View=findViewById(R.id.media3View);controls=findViewById(R.id.playerControls);title=findViewById(R.id.playerTitle);status=findViewById(R.id.playerStatus);timeText=findViewById(R.id.timeText);playPause=findViewById(R.id.playPauseButton);rewind=findViewById(R.id.rewindButton);forward=findViewById(R.id.forwardButton);audio=findViewById(R.id.audioButton);subtitle=findViewById(R.id.subtitleButton);pip=findViewById(R.id.pipButton);seek=findViewById(R.id.seekBar);speed=findViewById(R.id.speedButton);aspect=findViewById(R.id.aspectButton);sleep=findViewById(R.id.sleepButton);record=findViewById(R.id.recordButton);favorite=findViewById(R.id.favoriteButton);castButton=findViewById(R.id.castRouteButton);channelPrev=findViewById(R.id.channelPrevButton);channelNext=findViewById(R.id.channelNextButton);
         entry=(MediaEntry)getIntent().getSerializableExtra("media");if(entry==null){finish();return;}title.setText(DisplayText.title(entry));
         record.setVisibility(View.GONE);castButton.setVisibility(View.GONE);channelPrev.setVisibility(View.GONE);channelNext.setVisibility(View.GONE);pip.setVisibility(View.GONE);
-        wire();startPlayer();ui.post(tick);
+        media3View.setUseController(false);
+        media3View.setOnClickListener(v->touchControls());
+        controls.setOnClickListener(v->touchControls());
+        wire();startPlayer();ui.post(tick);showControls();
     }
 
     void wire(){
-        playPause.setOnClickListener(v->{if(exo==null)return;if(exo.isPlaying())exo.pause();else exo.play();updatePlayIcon();});
-        rewind.setOnClickListener(v->{if(exo!=null)exo.seekTo(Math.max(0,exo.getCurrentPosition()-10000));});
-        forward.setOnClickListener(v->{if(exo!=null)exo.seekTo(exo.getCurrentPosition()+10000);});
-        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onStartTrackingTouch(SeekBar b){userSeeking=true;}public void onStopTrackingTouch(SeekBar b){userSeeking=false;if(exo!=null&&exo.getDuration()>0)exo.seekTo((long)(exo.getDuration()*(b.getProgress()/1000f)));}public void onProgressChanged(SeekBar b,int p,boolean u){}});
-        favorite.setOnClickListener(v->{if(entry!=null){library.toggleFavorite(entry);updateFavorite();}});
-        audio.setOnClickListener(v->showTracks(C.TRACK_TYPE_AUDIO));subtitle.setOnClickListener(v->showTracks(C.TRACK_TYPE_TEXT));speed.setOnClickListener(v->showSpeed());aspect.setOnClickListener(v->cycleAspect());sleep.setVisibility(View.GONE);updateFavorite();
+        playPause.setOnClickListener(v->{if(exo==null)return;if(exo.isPlaying()){exo.pause();cancelControlsHide();showControls();}else{exo.play();showControls();}updatePlayIcon();});
+        rewind.setOnClickListener(v->{if(exo!=null)exo.seekTo(Math.max(0,exo.getCurrentPosition()-10000));showControls();});
+        forward.setOnClickListener(v->{if(exo!=null)exo.seekTo(exo.getCurrentPosition()+10000);showControls();});
+        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onStartTrackingTouch(SeekBar b){userSeeking=true;cancelControlsHide();}public void onStopTrackingTouch(SeekBar b){userSeeking=false;if(exo!=null&&exo.getDuration()>0)exo.seekTo((long)(exo.getDuration()*(b.getProgress()/1000f)));showControls();}public void onProgressChanged(SeekBar b,int p,boolean u){}});
+        favorite.setOnClickListener(v->{if(entry!=null){library.toggleFavorite(entry);updateFavorite();}showControls();});
+        audio.setOnClickListener(v->{cancelControlsHide();showTracks(C.TRACK_TYPE_AUDIO);});subtitle.setOnClickListener(v->{cancelControlsHide();showTracks(C.TRACK_TYPE_TEXT);});speed.setOnClickListener(v->{cancelControlsHide();showSpeed();});aspect.setOnClickListener(v->{cycleAspect();showControls();});sleep.setVisibility(View.GONE);updateFavorite();
     }
 
     void startPlayer(){
         ArrayList<String> urls=new ArrayList<>(entry.candidates);if(urls.isEmpty()&&entry.url!=null&&!entry.url.isEmpty())urls.add(entry.url);if(urls.isEmpty()){status.setText(T("no_stream_url"));return;}
         exo=new ExoPlayer.Builder(this).build();media3View.setPlayer(exo);exo.setMediaItem(MediaItem.fromUri(urls.get(0)));long resume=library.progress(entry);exo.prepare();if(resume>10000&&!"live".equals(entry.type))exo.seekTo(resume);exo.play();status.setText("Media3 · "+T("playing"));
-        exo.addListener(new Player.Listener(){@Override public void onPlaybackStateChanged(int state){if(state==Player.STATE_READY)status.setText("Media3 · "+T("playing"));else if(state==Player.STATE_ENDED)finish();}@Override public void onPlayerError(PlaybackException e){status.setText(T("error_prefix")+": "+e.getErrorCodeName());}});
+        exo.addListener(new Player.Listener(){@Override public void onPlaybackStateChanged(int state){if(state==Player.STATE_READY){status.setText("Media3 · "+T("playing"));scheduleControlsHide();}else if(state==Player.STATE_ENDED)finish();}@Override public void onIsPlayingChanged(boolean playing){if(playing)scheduleControlsHide();else{cancelControlsHide();showControls();}}@Override public void onPlayerError(PlaybackException e){cancelControlsHide();showControls();status.setText(T("error_prefix")+": "+e.getErrorCodeName());}});
         updatePlayIcon();
     }
 
