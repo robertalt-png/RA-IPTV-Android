@@ -11,8 +11,8 @@ app=root/"app"
 gradle=app/"build.gradle"
 s=gradle.read_text()
 s=s.replace("applicationId 'com.robertalt.raiptv.light'","applicationId 'com.robertalt.raiptv'")
-s=re.sub(r"versionCode\s+\d+","versionCode 61",s,1)
-s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.6.3'",s,1)
+s=re.sub(r"versionCode\s+\d+","versionCode 62",s,1)
+s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.6.4'",s,1)
 s=s.replace("    dynamicFeatures = [':proextras']\n","")
 s=s.replace("    implementation 'com.google.android.play:feature-delivery:2.1.0'\n","")
 gradle.write_text(s)
@@ -773,7 +773,7 @@ settings=app/"src/main/java/com/robertalt/raiptv/SettingsActivity.java"
 sx=settings.read_text()
 sx=sx.replace('Kies een blok om de Free-instellingen aan te passen.','Kies een onderdeel.')
 sx=sx.replace('Choose a block to change Free settings.','Choose a section.')
-sx=sx.replace('NenoTV Free · 0.12.5','NenoTV Free · 0.12.6.3').replace('NenoTV Free 0.12.5','NenoTV Free 0.12.6.3')
+sx=sx.replace('NenoTV Free · 0.12.5','NenoTV Free · 0.12.6.4').replace('NenoTV Free 0.12.5','NenoTV Free 0.12.6.4')
 settings.write_text(sx)
 
 # TV source: permanent field labels + NenoTV-yellow source selector.
@@ -959,5 +959,68 @@ if 'android:name=".AccountActivity"' not in mx:
     mx=mx.replace(anchor,account_decl+anchor,1)
 manifest.write_text(mx)
 
+
+# v0.12.6.4: complete EN/NL localization for the Account & Pro screen.
+ui=app/"src/main/java/com/robertalt/raiptv/UiText.java"
+ux=ui.read_text()
+
+en_anchor='    private static final Map<String,String> EN=map(new String[][]{'
+en_rows=r'''
+        {"account_and_pro","Account & NenoTV Pro"},
+        {"activate_restore","Activate or restore purchase"},
+        {"email_address","Email address"},
+        {"order_id_optional","Order ID (optional)"},
+        {"activate_pro","Activate / restore Pro"},
+        {"request_trial","Request free trial"},
+        {"view_pro","View NenoTV Pro"},
+        {"refresh_status","Refresh account status"},
+        {"this_device","This device"},
+        {"device_code","Device code"},
+        {"trial_remaining","Trial remaining"},
+        {"days","days"},
+        {"pro_active","Pro is active"},
+        {"devices","devices"},
+        {"free_description","Live TV, movies, series, basic TV guide, search and favorites are available in Free."},
+        {"checking_status","Checking NenoTV account…"},
+        {"status_updated","Account status updated"},
+        {"activation_success","NenoTV Pro activated"},
+        {"activation_failed","Activation failed"},
+        {"server_unavailable","The NenoTV account service is not available yet"},
+        {"email_required","Enter your email address"},
+'''
+if '{"account_and_pro","Account & NenoTV Pro"}' not in ux:
+    if en_anchor not in ux: raise SystemExit("EN localization anchor missing")
+    ux=ux.replace(en_anchor,en_anchor+en_rows,1)
+
+nl_anchor='    private static final Map<String,String> NL=map(new String[][]{'
+nl_rows=r'''
+        {"account_and_pro","Account & NenoTV Pro"},
+        {"activate_restore","Aankoop activeren of herstellen"},
+        {"email_address","E-mailadres"},
+        {"order_id_optional","Bestelnummer (optioneel)"},
+        {"activate_pro","Pro activeren / herstellen"},
+        {"request_trial","Gratis proefperiode aanvragen"},
+        {"view_pro","NenoTV Pro bekijken"},
+        {"refresh_status","Accountstatus vernieuwen"},
+        {"this_device","Dit apparaat"},
+        {"device_code","Apparaatcode"},
+        {"trial_remaining","Resterende proefperiode"},
+        {"days","dagen"},
+        {"pro_active","Pro is actief"},
+        {"devices","apparaten"},
+        {"free_description","Live tv, films, series, basis TV-gids, zoeken en favorieten zijn beschikbaar in Free."},
+        {"checking_status","NenoTV-account controleren…"},
+        {"status_updated","Accountstatus bijgewerkt"},
+        {"activation_success","NenoTV Pro geactiveerd"},
+        {"activation_failed","Activeren mislukt"},
+        {"server_unavailable","De NenoTV-accountdienst is nog niet beschikbaar"},
+        {"email_required","Vul je e-mailadres in"},
+'''
+if '{"activate_restore","Aankoop activeren of herstellen"}' not in ux:
+    if nl_anchor not in ux: raise SystemExit("NL localization anchor missing")
+    ux=ux.replace(nl_anchor,nl_anchor+nl_rows,1)
+
+ui.write_text(ux)
+
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.6.3: Pro/account manifest fix + EPG fix")
+print("Prepared NenoTV Free v0.12.6.4: account localization + Pro/EPG fixes")
