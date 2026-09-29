@@ -976,7 +976,7 @@ jobs:
           ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
           IN="base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk"
           "$AAPT" dump badging "$IN" | tee free-badging.txt
-          grep -q "package: name='com.robertalt.raiptv' versionCode='64' versionName='0.12.6.7'" free-badging.txt
+          grep -q "package: name='com.robertalt.raiptv' versionCode='65' versionName='0.12.6.7'" free-badging.txt
           "$ZIPALIGN" -p -f 4 "$IN" NenoTV-Free-v0.12.6.7-aligned-unsigned.apk
           "$ZIPALIGN" -c -p 4 NenoTV-Free-v0.12.6.7-aligned-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
