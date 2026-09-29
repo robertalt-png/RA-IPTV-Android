@@ -11,8 +11,8 @@ app=root/"app"
 gradle=app/"build.gradle"
 s=gradle.read_text()
 s=s.replace("applicationId 'com.robertalt.raiptv.light'","applicationId 'com.robertalt.raiptv'")
-s=re.sub(r"versionCode\s+\d+","versionCode 51",s,1)
-s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.2'",s,1)
+s=re.sub(r"versionCode\s+\d+","versionCode 52",s,1)
+s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.3'",s,1)
 s=s.replace("    dynamicFeatures = [':proextras']\n","")
 s=s.replace("    implementation 'com.google.android.play:feature-delivery:2.1.0'\n","")
 gradle.write_text(s)
@@ -429,11 +429,11 @@ if ma>=0 and me>ma:
 '''
     s=s[:ma]+menu+s[me:]
 
-# TV guide: one subtle yellow PRO entry for the advanced guide, not the old red lock button.
+# TV guide Free: keep only the normal list view. PRO remains discoverable in header/menu.
 s=s.replace('epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null)epgGridButton.setVisibility(View.GONE);',
-            'epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null){epgGridButton.setVisibility(View.VISIBLE);epgGridButton.setText("PRO");epgGridButton.setTextColor(0xFF0A0A0A);epgGridButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));epgGridButton.setOnClickListener(v->openNenoWebsite("https://nenotv.com"));}')
+            'epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null)epgGridButton.setVisibility(View.GONE);')
 
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.2: resilient full sync + clean language")
+print("Prepared NenoTV Free v0.12.3: resilient full sync + clean language")
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.2: provider-order + full background sync")
+print("Prepared NenoTV Free v0.12.3: provider-order + full background sync")
