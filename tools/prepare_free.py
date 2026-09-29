@@ -1303,7 +1303,7 @@ s=s.replace('String msg=freeUi("library")+" · "+pct+"%\\n"+T("live")+" "+live+"
 if 'String fmtLibraryCount(int n)' not in s:
     anchor='    void showFreeSyncProgress(int done,int total,int live,int films,int series){'
     a=s.find(anchor)
-    if a>=0:s=s[:a]+'    String fmtLibraryCount(int n){try{return java.text.NumberFormat.getIntegerInstance(SettingsStore.appLocale(this)).format(n);}catch(Exception e){return String.valueOf(n);}}\\n'+s[a:]
+    if a>=0:s=s[:a]+'''    String fmtLibraryCount(int n){try{return java.text.NumberFormat.getIntegerInstance(SettingsStore.appLocale(this)).format(n);}catch(Exception e){return String.valueOf(n);}}\n'''+s[a:]
 
 # ---------- Player: fullscreen, auto-hide, consistent yellow/dark controls ----------
 pl=app/"src/main/res/layout/activity_player.xml"
