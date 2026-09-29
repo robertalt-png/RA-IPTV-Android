@@ -11,8 +11,8 @@ app=root/"app"
 gradle=app/"build.gradle"
 s=gradle.read_text()
 s=s.replace("applicationId 'com.robertalt.raiptv.light'","applicationId 'com.robertalt.raiptv'")
-s=re.sub(r"versionCode\s+\d+","versionCode 52",s,1)
-s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.3'",s,1)
+s=re.sub(r"versionCode\s+\d+","versionCode 53",s,1)
+s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.4'",s,1)
 s=s.replace("    dynamicFeatures = [':proextras']\n","")
 s=s.replace("    implementation 'com.google.android.play:feature-delivery:2.1.0'\n","")
 gradle.write_text(s)
@@ -434,6 +434,20 @@ s=s.replace('epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null)epgGr
             'epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null)epgGridButton.setVisibility(View.GONE);')
 
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.3: resilient full sync + clean language")
+print("Prepared NenoTV Free v0.12.4: resilient full sync + clean language")
+
+# v0.12.4: language switching must not recreate the Activity while the library sync is active.
+old='new AlertDialog.Builder(this).setTitle(T("language")).setItems(labels,(d,w)->{SettingsStore.setPrimaryLanguage(this,codes[w]);recreate();}).show();'
+new='new AlertDialog.Builder(this).setTitle(T("language")).setItems(labels,(d,w)->{SettingsStore.setPrimaryLanguage(this,codes[w]);appliedLanguage=SettingsStore.language(this);appliedContentLanguage=SettingsStore.contentLanguage(this);applyStaticLanguage();updateHeaderBadges();restoreFirstSyncBanner();String cur=section;if("home".equals(cur))loadHome();else if("epg".equals(cur))loadEpg();else loadSection(cur);}).show();'
+s=s.replace(old,new)
+
+# Never show internal crash-class names to users.
+s=s.replace('String lastCrash=CrashGuard.consumeLastType(this);busy(false,!lastCrash.isEmpty()?T("stability")+" · "+T("previous_error")+": "+lastCrash:(local.isEmpty()?T("watch_without_search"):""));',
+            'CrashGuard.consumeLastType(this);busy(false,local.isEmpty()?T("watch_without_search"):"");')
+
+# Ensure the EPG PRO button remains hidden in Free, header PRO remains.
+s=s.replace('epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null){epgGridButton.setVisibility(View.VISIBLE);epgGridButton.setText("PRO");epgGridButton.setTextColor(0xFF0A0A0A);epgGridButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));epgGridButton.setOnClickListener(v->openNenoWebsite("https://nenotv.com"));}',
+            'epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null)epgGridButton.setVisibility(View.GONE);')
+
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.3: provider-order + full background sync")
+print("Prepared NenoTV Free v0.12.4: provider-order + full background sync")
