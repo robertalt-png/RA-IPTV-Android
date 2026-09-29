@@ -6,7 +6,7 @@ on:
       source_branch:
         description: Branch whose latest successful NenoTV source build should be tested
         required: false
-        default: nenotv-v0.12.6.6-player-controls-autohide
+        default: nenotv-v0.12.6.7-free-qa-crashfix
       source_run_id:
         description: Optional exact build workflow run ID
         required: false
@@ -28,7 +28,7 @@ permissions:
   actions: read
 
 env:
-  DEFAULT_SOURCE_BRANCH: nenotv-v0.12.6.6-player-controls-autohide
+  DEFAULT_SOURCE_BRANCH: nenotv-v0.12.6.7-free-qa-crashfix
 
 jobs:
   static-and-web:
