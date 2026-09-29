@@ -1,8 +1,8 @@
-name: Build NenoTV Free v0.12.6.6
+name: Build NenoTV Free v0.12.6.7
 
 on:
   push:
-    branches: [ nenotv-v0.12.6.6-player-controls-autohide ]
+    branches: [ nenotv-v0.12.6.7-free-qa-crashfix ]
   workflow_dispatch:
 
 permissions:
@@ -933,12 +933,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tar -czf NenoTV-Free-v0.12.6.6-source.tar.gz -C base RA_IPTV_Android_v0.1
+          tar -czf NenoTV-Free-v0.12.6.7-source.tar.gz -C base RA_IPTV_Android_v0.1
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-Free-v0.12.6.6-source
-          path: NenoTV-Free-v0.12.6.6-source.tar.gz
+          name: NenoTV-Free-v0.12.6.7-source
+          path: NenoTV-Free-v0.12.6.7-source.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -977,16 +977,16 @@ jobs:
           IN="base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk"
           "$AAPT" dump badging "$IN" | tee free-badging.txt
           grep -q "package: name='com.robertalt.raiptv' versionCode='64' versionName='0.12.6.6'" free-badging.txt
-          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-Free-v0.12.6.6-aligned-unsigned.apk
-          "$ZIPALIGN" -c -p 4 NenoTV-Free-v0.12.6.6-aligned-unsigned.apk
+          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-Free-v0.12.6.7-aligned-unsigned.apk
+          "$ZIPALIGN" -c -p 4 NenoTV-Free-v0.12.6.7-aligned-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
-          ls -lh NenoTV-Free-v0.12.6.6-aligned-unsigned.apk
+          ls -lh NenoTV-Free-v0.12.6.7-aligned-unsigned.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-Free-v0.12.6.6-build
+          name: NenoTV-Free-v0.12.6.7-build
           path: |
-            NenoTV-Free-v0.12.6.6-aligned-unsigned.apk
+            NenoTV-Free-v0.12.6.7-aligned-unsigned.apk
             free-badging.txt
             apksigner.jar
 
@@ -994,13 +994,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p build-output/v0.12.6.6
-          cp NenoTV-Free-v0.12.6.6-aligned-unsigned.apk build-output/v0.12.6.6/
-          cp free-badging.txt build-output/v0.12.6.6/
-          cp apksigner.jar build-output/v0.12.6.6/
-          sha256sum build-output/v0.12.6.6/* > build-output/v0.12.6.6/SHA256SUMS.txt
+          mkdir -p build-output/v0.12.6.7
+          cp NenoTV-Free-v0.12.6.7-aligned-unsigned.apk build-output/v0.12.6.7/
+          cp free-badging.txt build-output/v0.12.6.7/
+          cp apksigner.jar build-output/v0.12.6.7/
+          sha256sum build-output/v0.12.6.7/* > build-output/v0.12.6.7/SHA256SUMS.txt
           git config user.name "NenoTV Build Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add build-output/v0.12.6.6
+          git add build-output/v0.12.6.7
           git commit -m "build: publish NenoTV Free v0.12.6.1 handoff [skip ci]"
-          git push origin HEAD:nenotv-v0.12.6.6-rest-fallback
+          git push origin HEAD:nenotv-v0.12.6.7-rest-fallback
