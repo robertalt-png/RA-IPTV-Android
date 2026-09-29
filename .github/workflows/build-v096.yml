@@ -2,7 +2,7 @@ name: Build NenoTV Free v0.12.6.6
 
 on:
   push:
-    branches: [ nenotv-v0.12.6.6-rest-fallback ]
+    branches: [ nenotv-v0.12.6.6-player-controls-autohide ]
   workflow_dispatch:
 
 permissions:
