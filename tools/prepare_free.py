@@ -11,8 +11,8 @@ app=root/"app"
 gradle=app/"build.gradle"
 s=gradle.read_text()
 s=s.replace("applicationId 'com.robertalt.raiptv.light'","applicationId 'com.robertalt.raiptv'")
-s=re.sub(r"versionCode\s+\d+","versionCode 57",s,1)
-s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.8'",s,1)
+s=re.sub(r"versionCode\s+\d+","versionCode 58",s,1)
+s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.9'",s,1)
 s=s.replace("    dynamicFeatures = [':proextras']\n","")
 s=s.replace("    implementation 'com.google.android.play:feature-delivery:2.1.0'\n","")
 gradle.write_text(s)
@@ -434,7 +434,7 @@ s=s.replace('epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null)epgGr
             'epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null)epgGridButton.setVisibility(View.GONE);')
 
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.8: resilient full sync + clean language")
+print("Prepared NenoTV Free v0.12.9: resilient full sync + clean language")
 
 # v0.12.4: language switching must not recreate the Activity while the library sync is active.
 old='new AlertDialog.Builder(this).setTitle(T("language")).setItems(labels,(d,w)->{SettingsStore.setPrimaryLanguage(this,codes[w]);recreate();}).show();'
@@ -1417,5 +1417,128 @@ settings=app/"src/main/java/com/robertalt/raiptv/SettingsActivity.java"
 sx=settings.read_text().replace('NenoTV Free · 0.12.7','NenoTV Free · 0.12.8').replace('NenoTV Free 0.12.7','NenoTV Free 0.12.8')
 settings.write_text(sx)
 
+
+# v0.12.9 final Free polish: season selector, compact EPG, branded dialogs, cleaner episode metadata.
+
+# Keep EPG hero compact even after onResume.
+s=s.replace('if(provider!=null){setHeroHeight(heroHeight());android.content.SharedPreferences sp=SettingsStore.prefs(this);',
+            'if(provider!=null){setHeroHeight("epg".equals(section)?dp(112):heroHeight());android.content.SharedPreferences sp=SettingsStore.prefs(this);')
+
+# Replace Free EPG loader so the header stays compact and only the list is shown.
+epg_load=r'''    void loadEpg(){
+        pauseBackgroundIndexForUi();stopCachePaging();final int token=nextRequest();section="epg";updateBottomNav("epg");autoDefaultGroup=false;SettingsStore.setLastSection(this,"epg");
+        setHeroHeight(dp(112));collapseSearch();seriesEpisodeMode=false;latestSearchQuery="";genreButton.setVisibility(View.GONE);sortButton.setVisibility(View.GONE);filterBar.setVisibility(View.VISIBLE);categories.setVisibility(View.VISIBLE);epgModeBar.setVisibility(View.GONE);search.setHint(T("search_channel"));
+        setHeroDefault(T("epg"),T("now_next"));gridAdapter.set(Collections.emptyList(),true);showEpgByMode(Collections.emptyList());busy(true,T("epg_categories_loading"));
+        exec.execute(()->{try{List<Category>raw=visibleCategories(new ArrayList<>(provider.categories("live")));runOnUiThread(()->{if(!current(token)||!section.equals("epg"))return;currentCategories=raw;setProviderCategorySpinner(raw);if(raw.isEmpty()){busy(false,T("no_live_categories"));return;}Category first=raw.get(0);currentCategoryId=first.id;currentCategoryName=first.name;loadEpgChannels(first.id);});}catch(Exception e){runOnUiThread(()->{if(current(token))busy(false,T("epg_error")+": "+friendly(e));});}});
+    }
+'''
+s=replace_method_final(s,'    void loadEpg(){','\n    void loadEpgChannels(',epg_load)
+
+# Branded EPG details dialog: current programme prominent, upcoming compact, yellow Watch.
+epg_details=r'''    void showEpgDetails(MediaEntry channel){
+        if(channel==null)return;busy(true,T("guide_loading"));
+        exec.execute(()->{try{
+            List<EpgEntry> raw=provider.epgEntries(channel,12);ArrayList<EpgEntry> rows=new ArrayList<>();HashSet<String>seen=new HashSet<>();
+            for(EpgEntry e:raw){if(e==null||e.startEpoch<=0||e.endEpoch<=e.startEpoch)continue;String k=e.startEpoch+"|"+e.endEpoch+"|"+safe(e.title);if(seen.add(k))rows.add(e);}
+            rows.sort((a,b)->Long.compare(a.startEpoch,b.startEpoch));long now=System.currentTimeMillis()/1000L;int current=-1;for(int i=0;i<rows.size();i++){EpgEntry e=rows.get(i);if(e.startEpoch<=now&&now<e.endEpoch){current=i;break;}}
+            final int start=current>=0?current:0;
+            runOnUiThread(()->{if(!isUiAlive())return;busy(false,T("epg"));showGuideDialog(channel,rows,start);});
+        }catch(Exception ex){runOnUiThread(()->busy(false,T("epg_error")+": "+friendly(ex)));}});
+    }
+    void showGuideDialog(MediaEntry channel,List<EpgEntry>rows,int start){
+        final Dialog d=new Dialog(this);LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(18),dp(14),dp(18),dp(16));
+        android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();bg.setColor(0xFF11151B);bg.setCornerRadius(dp(22));bg.setStroke(dp(1),0xFF2A3039);panel.setBackground(bg);
+        LinearLayout top=new LinearLayout(this);top.setGravity(Gravity.CENTER_VERTICAL);TextView title=new TextView(this);title.setText(DisplayText.title(channel));title.setTextColor(Color.WHITE);title.setTextSize(21);title.setTypeface(null,Typeface.BOLD);top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+        Button x=new Button(this);x.setText("×");x.setTextSize(24);x.setTextColor(0xFFF7F8FA);x.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));top.addView(x,new LinearLayout.LayoutParams(dp(48),dp(44)));panel.addView(top);
+        ScrollView sv=new ScrollView(this);LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(0,dp(8),0,dp(8));sv.addView(body);int count=0;
+        for(int i=start;i<rows.size()&&count<4;i++,count++){EpgEntry e=rows.get(i);boolean cur=i==start&&e.startEpoch<=System.currentTimeMillis()/1000L&&System.currentTimeMillis()/1000L<e.endEpoch;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(14),dp(11),dp(14),dp(11));android.graphics.drawable.GradientDrawable cb=new android.graphics.drawable.GradientDrawable();cb.setColor(cur?0xFF202630:0xFF171C23);cb.setCornerRadius(dp(14));if(cur)cb.setStroke(dp(2),0xFFFFD400);card.setBackground(cb);
+            TextView meta=new TextView(this);meta.setText((cur?T("now")+" · ":"")+e.range());meta.setTextColor(cur?0xFFFFD400:0xFFA7AFBC);meta.setTextSize(12);card.addView(meta);
+            TextView h=new TextView(this);h.setText(e.title);h.setTextColor(Color.WHITE);h.setTextSize(cur?18:16);h.setTypeface(null,Typeface.BOLD);h.setPadding(0,dp(3),0,0);card.addView(h);
+            if(e.description!=null&&!e.description.trim().isEmpty()){TextView desc=new TextView(this);desc.setText(e.description);desc.setTextColor(0xFFD7DBE1);desc.setTextSize(13);desc.setMaxLines(cur?5:2);desc.setEllipsize(TextUtils.TruncateAt.END);desc.setPadding(0,dp(5),0,0);card.addView(desc);}
+            LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,-2);cp.bottomMargin=dp(8);body.addView(card,cp);}
+        if(rows.isEmpty()){TextView none=new TextView(this);none.setText(T("no_epg"));none.setTextColor(0xFFA7AFBC);none.setTextSize(14);none.setPadding(0,dp(18),0,dp(18));body.addView(none);}
+        panel.addView(sv,new LinearLayout.LayoutParams(-1,0,1));Button watch=new Button(this);watch.setText("▶  "+T("watch"));watch.setAllCaps(false);watch.setTextColor(0xFF0A0A0A);watch.setTextSize(16);watch.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));panel.addView(watch,new LinearLayout.LayoutParams(-1,dp(50)));
+        d.setContentView(panel);x.setOnClickListener(v->d.dismiss());watch.setOnClickListener(v->{d.dismiss();play(channel);});Window w=d.getWindow();if(w!=null){w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));w.setDimAmount(.55f);w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);}d.show();if(w!=null)w.setLayout((int)(getResources().getDisplayMetrics().widthPixels*.91f),(int)(getResources().getDisplayMetrics().heightPixels*.78f));
+    }
+'''
+s=replace_method_final(s,'    void showEpgDetails(MediaEntry channel){','\n    void scheduleSearch(',epg_details)
+
+# Series detail: explicit Season button, search collapses, episodes filtered by season.
+series_select=r'''    void select(MediaEntry e){
+        if(e.type.equals("series")){
+            stopCachePaging();collapseSearch();filterBar.setVisibility(View.VISIBLE);categories.setVisibility(View.GONE);sortButton.setVisibility(View.GONE);genreButton.setVisibility(View.VISIBLE);
+            final int token=nextRequest();busy(true,T("episodes_loading"));
+            exec.execute(()->{try{
+                List<MediaEntry>raw=provider.seriesEpisodes(e);ArrayList<MediaEntry>x=new ArrayList<>(raw==null?Collections.emptyList():raw);
+                for(MediaEntry ep:x)if(ep.categoryId==null||ep.categoryId.isEmpty())ep.categoryId=e.categoryId;
+                x.sort((a,b)->{int as=a.season>0?a.season:9999,bs=b.season>0?b.season:9999;if(as!=bs)return Integer.compare(as,bs);int ae=a.episode>0?a.episode:9999,be=b.episode>0?b.episode:9999;if(ae!=be)return Integer.compare(ae,be);return safe(a.name).compareToIgnoreCase(safe(b.name));});
+                runOnUiThread(()->{if(current(token)){
+                    seriesEpisodeMode=true;showMediaList();all=x;genreButton.setTag(x);genreButton.setTextColor(0xFF0A0A0A);genreButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));
+                    MediaEntry next=nextEpisodeFor(e,x);int season=next!=null&&next.season>0?next.season:firstSeason(x);showSeasonEpisodes(season,x);
+                    genreButton.setOnClickListener(v->showSeasonPicker());
+                    heroTitle.setText(DisplayText.title(e));
+                    if(next!=null){selectedHero=next;boolean resume=library.progressPercent(next)>0&&library.progressPercent(next)<90;boolean history=hasSeriesHistory(e,x);String action=resume?T("continue"):(history?T("next_episode"):startSeriesLabel());heroSubtitle.setText(action+" · S"+Math.max(1,next.season)+"E"+Math.max(1,next.episode)+" · "+episodeShortTitle(next));heroAction.setText("▶  "+action);heroAction.setVisibility(View.VISIBLE);heroInfo.setVisibility(View.VISIBLE);}
+                    else{selectedHero=e;heroSubtitle.setText(T("no_episodes"));heroAction.setVisibility(View.GONE);heroInfo.setVisibility(View.VISIBLE);}
+                }});
+            }catch(Exception ex){runOnUiThread(()->{if(current(token))busy(false,T("series_error")+": "+friendly(ex));});}});
+            return;
+        }
+        play(e);
+    }
+    int firstSeason(List<MediaEntry>x){int s=9999;for(MediaEntry e:x)if(e.season>0)s=Math.min(s,e.season);return s==9999?1:s;}
+    String seasonWord(){String l=SettingsStore.language(this);if("nl".equals(l))return "Seizoen";if("de".equals(l))return "Staffel";if("fr".equals(l))return "Saison";if("es".equals(l))return "Temporada";if("it".equals(l))return "Stagione";if("pt".equals(l))return "Temporada";if("tr".equals(l))return "Sezon";if("pl".equals(l))return "Sezon";if("ar".equals(l))return "الموسم";return "Season";}
+    void showSeasonEpisodes(int season,List<MediaEntry>full){ArrayList<MediaEntry>out=new ArrayList<>();for(MediaEntry e:full)if((e.season>0?e.season:1)==season)out.add(e);genreButton.setText(seasonWord()+" "+season+" ▾");adapter.set(out);busy(false,seasonWord()+" "+season+" · "+out.size()+" "+T("episodes"));}
+    void showSeasonPicker(){
+        Object tag=genreButton.getTag();if(!(tag instanceof List))return;List<MediaEntry>full=(List<MediaEntry>)tag;TreeSet<Integer>set=new TreeSet<>();for(MediaEntry e:full)set.add(e.season>0?e.season:1);
+        final Dialog d=new Dialog(this);LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);p.setPadding(dp(18),dp(16),dp(18),dp(16));android.graphics.drawable.GradientDrawable g=new android.graphics.drawable.GradientDrawable();g.setColor(0xFF11151B);g.setCornerRadius(dp(20));g.setStroke(dp(1),0xFF2A3039);p.setBackground(g);
+        TextView h=new TextView(this);h.setText(seasonWord());h.setTextColor(Color.WHITE);h.setTextSize(20);h.setTypeface(null,Typeface.BOLD);h.setPadding(0,0,0,dp(10));p.addView(h);
+        for(Integer season:set){Button b=new Button(this);b.setText(seasonWord()+" "+season);b.setAllCaps(false);b.setTextColor(0xFFF7F8FA);b.setTextSize(15);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(50));lp.bottomMargin=dp(7);p.addView(b,lp);b.setOnClickListener(v->{d.dismiss();showSeasonEpisodes(season,full);});}
+        d.setContentView(p);Window w=d.getWindow();if(w!=null){w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));w.setDimAmount(.50f);w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);}d.show();if(w!=null)w.setLayout((int)(getResources().getDisplayMetrics().widthPixels*.80f),ViewGroup.LayoutParams.WRAP_CONTENT);
+    }
+    boolean sameSeries(MediaEntry series,MediaEntry ep){return ep!=null&&"episode".equals(ep.type)&&((series.seriesId!=null&&!series.seriesId.isEmpty()&&series.seriesId.equals(ep.seriesId))||(!safe(series.name).isEmpty()&&safe(series.name).equals(safe(ep.seriesTitle))));}
+    boolean hasSeriesHistory(MediaEntry series,List<MediaEntry>episodes){for(MediaEntry ep:episodes)if(library.progressPercent(ep)>0)return true;for(MediaEntry r:library.recent())if(sameSeries(series,r))return true;return false;}
+    String startSeriesLabel(){String l=SettingsStore.language(this);if("nl".equals(l))return "Start serie";if("de".equals(l))return "Serie starten";if("fr".equals(l))return "Commencer la série";if("es".equals(l))return "Iniciar serie";if("it".equals(l))return "Inizia serie";if("pt".equals(l))return "Iniciar série";if("tr".equals(l))return "Diziyi başlat";if("pl".equals(l))return "Rozpocznij serial";if("ar".equals(l))return "بدء المسلسل";return "Start series";}
+    String episodeShortTitle(MediaEntry ep){String n=DisplayText.title(ep);try{java.util.regex.Matcher m=java.util.regex.Pattern.compile("(?i)S\\\\d{1,2}E\\\\d{1,3}\\\\s*[-–:]?\\\\s*(.*)$").matcher(n);if(m.find()&&m.group(1)!=null&&!m.group(1).trim().isEmpty())return m.group(1).trim();}catch(Exception ignored){}return n;}
+'''
+s=replace_method_final(s,'    void select(MediaEntry e){','\n    MediaEntry nextEpisodeFor(',series_select)
+
+# Ensure season button has enough width to read comfortably.
+layout=app/"src/main/res/layout/activity_main.xml"
+lx=layout.read_text().replace('android:id="@+id/genreButton" android:layout_width="82dp"','android:id="@+id/genreButton" android:layout_width="128dp"')
+layout.write_text(lx)
+
+# Episode cards: no redundant AFLEVERING chip; localized date if provider supplies yyyy-MM-dd.
+media=app/"src/main/java/com/robertalt/raiptv/MediaRowAdapter.java"
+mx=media.read_text()
+mx=mx.replace('h.type.setText(typeLabel(e.type));loadArtwork(', 'h.type.setText(typeLabel(e.type));h.type.setVisibility("episode".equals(e.type)?View.GONE:View.VISIBLE);loadArtwork(')
+old='String episodeMeta(MediaEntry e){ArrayList<String>x=new ArrayList<>();if(e.season>0&&e.episode>0)x.add("S"+e.season+"E"+e.episode);if(e.year!=null&&!e.year.trim().isEmpty())x.add(e.year.trim());if(e.group!=null&&!e.group.trim().isEmpty())x.add(e.group.trim());return android.text.TextUtils.join(" · ",x);}'
+new='String episodeMeta(MediaEntry e){ArrayList<String>x=new ArrayList<>();if(e.season>0&&e.episode>0)x.add("S"+e.season+"E"+e.episode);String y=formatEpisodeDate(e.year);if(!y.isEmpty())x.add(y);return android.text.TextUtils.join(" · ",x);} String formatEpisodeDate(String v){if(v==null)return "";String z=v.trim();if(z.isEmpty())return "";try{if(z.matches("\\\\d{4}-\\\\d{2}-\\\\d{2}")){java.text.SimpleDateFormat inF=new java.text.SimpleDateFormat("yyyy-MM-dd",java.util.Locale.US);java.text.SimpleDateFormat outF=new java.text.SimpleDateFormat("d MMM yyyy",SettingsStore.appLocale(in.getContext()));return outF.format(inF.parse(z));}}catch(Exception ignored){}return z;}'
+mx=mx.replace(old,new)
+media.write_text(mx)
+
+# NenoTV-styled information dialog with close X and compact people blocks.
+details=r'''    void showDetailsDialog(MediaEntry item,MediaDetails d){
+        FrameLayout root=new FrameLayout(this);android.graphics.drawable.GradientDrawable rootBg=new android.graphics.drawable.GradientDrawable();rootBg.setColor(0xFF11151B);rootBg.setCornerRadius(dp(22));root.setBackground(rootBg);
+        ImageView bg=new ImageView(this);bg.setScaleType(ImageView.ScaleType.CENTER_CROP);bg.setAlpha(.24f);root.addView(bg,new FrameLayout.LayoutParams(-1,-1));if(Build.VERSION.SDK_INT>=31)try{bg.setRenderEffect(RenderEffect.createBlurEffect(18f,18f,Shader.TileMode.CLAMP));}catch(Exception ignored){}
+        View shade=new View(this);shade.setBackgroundColor(0xCC080A0E);root.addView(shade,new FrameLayout.LayoutParams(-1,-1));
+        LinearLayout shell=new LinearLayout(this);shell.setOrientation(LinearLayout.VERTICAL);shell.setPadding(dp(20),dp(14),dp(20),dp(16));root.addView(shell,new FrameLayout.LayoutParams(-1,-1));
+        LinearLayout top=new LinearLayout(this);top.setGravity(Gravity.CENTER_VERTICAL);TextView h=new TextView(this);h.setText(DisplayText.cleanTitle(safe(d.title).isEmpty()?item.name:d.title));h.setTextColor(Color.WHITE);h.setTextSize(23);h.setTypeface(null,Typeface.BOLD);top.addView(h,new LinearLayout.LayoutParams(0,-2,1));Button close=new Button(this);close.setText("×");close.setTextSize(24);close.setTextColor(Color.WHITE);close.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));top.addView(close,new LinearLayout.LayoutParams(dp(48),dp(44)));shell.addView(top);
+        ScrollView scroll=new ScrollView(this);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(0,dp(5),0,dp(8));scroll.addView(box);shell.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        String score=d.scoreLabel();if(!score.isEmpty()&&!score.equals("0")&&!score.equals("0.0")&&!score.equals("0,0"))addInfoLine(box,"★ "+score,true);
+        ArrayList<String>f=new ArrayList<>();if(!safe(d.year).isEmpty())f.add(d.year);if(!safe(d.genre).isEmpty())f.add(localizeGenreText(d.genre));if(!safe(d.duration).isEmpty())f.add(d.duration);if(!f.isEmpty())addInfoLine(box,TextUtils.join(" · ",f),false);
+        if(!safe(d.director).isEmpty())addInfoBlock(box,T("director"),d.director);if(!safe(d.cast).isEmpty())addInfoBlockLimited(box,T("cast"),d.cast,4);if(!safe(d.plot).isEmpty())addInfoBlockLimited(box,T("description"),d.plot,10);
+        LinearLayout links=new LinearLayout(this);links.setOrientation(LinearLayout.HORIZONTAL);links.setGravity(Gravity.END);if(d.hasImdb()){Button imdb=new Button(this);imdb.setText("IMDb");imdb.setAllCaps(false);imdb.setTextColor(Color.WHITE);imdb.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));imdb.setOnClickListener(v->openWeb("https://www.imdb.com/title/"+d.imdbId+"/"));links.addView(imdb);}if(d.hasTmdb()){Button tmdb=new Button(this);tmdb.setText("TMDb");tmdb.setAllCaps(false);tmdb.setTextColor(Color.WHITE);tmdb.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));tmdb.setOnClickListener(v->openWeb("https://www.themoviedb.org/"+(("series".equals(item.type)||"episode".equals(item.type))?"tv/":"movie/")+d.tmdbId));links.addView(tmdb);}shell.addView(links);
+        Dialog dialog=new Dialog(this);dialog.setContentView(root);close.setOnClickListener(v->dialog.dismiss());Window w=dialog.getWindow();if(w!=null){w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));w.setDimAmount(.58f);w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);}dialog.show();if(w!=null)w.setLayout((int)(getResources().getDisplayMetrics().widthPixels*.92f),(int)(getResources().getDisplayMetrics().heightPixels*.82f));
+        String u=safe(d.backdrop);if(u.isEmpty())u=safe(item.backdrop);if(u.isEmpty())u=safe(d.poster);if(u.isEmpty())u=safe(item.logo);final String url=u;if(!url.isEmpty())heroExec.execute(()->{Bitmap bm=downloadHero(url);runOnUiThread(()->{if(isUiAlive()&&bm!=null)bg.setImageBitmap(bm);});});
+    }
+    TextView addInfoBlockLimited(LinearLayout b,String l,String x,int max){TextView h=new TextView(this);h.setText(l);h.setTextColor(0xFFFFD400);h.setTextSize(14);h.setTypeface(null,Typeface.BOLD);h.setPadding(0,dp(13),0,dp(3));b.addView(h);TextView v=new TextView(this);v.setText(x);v.setTextColor(0xFFE5E8ED);v.setTextSize(14);v.setMaxLines(max);v.setEllipsize(TextUtils.TruncateAt.END);b.addView(v);return v;}
+'''
+s=replace_method_final(s,'    void showDetailsDialog(MediaEntry item,MediaDetails d){','\nvoid addInfoLine(',details)
+
+# Settings version.
+settings=app/"src/main/java/com/robertalt/raiptv/SettingsActivity.java"
+sx=settings.read_text().replace('NenoTV Free · 0.12.8','NenoTV Free · 0.12.9').replace('NenoTV Free 0.12.8','NenoTV Free 0.12.9')
+settings.write_text(sx)
+
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.8: provider-order + full background sync")
+print("Prepared NenoTV Free v0.12.9: provider-order + full background sync")
