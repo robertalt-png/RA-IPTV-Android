@@ -773,7 +773,7 @@ settings=app/"src/main/java/com/robertalt/raiptv/SettingsActivity.java"
 sx=settings.read_text()
 sx=sx.replace('Kies een blok om de Free-instellingen aan te passen.','Kies een onderdeel.')
 sx=sx.replace('Choose a block to change Free settings.','Choose a section.')
-sx=sx.replace('NenoTV Free · 0.12.5','NenoTV Free · 0.12.6.5').replace('NenoTV Free 0.12.5','NenoTV Free 0.12.6.5')
+sx=sx.replace('NenoTV Free · 0.12.5','NenoTV Free · 0.12.6.7').replace('NenoTV Free 0.12.5','NenoTV Free 0.12.6.7').replace('NenoTV Free · 0.12.6.5','NenoTV Free · 0.12.6.7').replace('NenoTV Free 0.12.6.5','NenoTV Free 0.12.6.7')
 settings.write_text(sx)
 
 # TV source: permanent field labels + NenoTV-yellow source selector.
