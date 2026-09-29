@@ -1088,7 +1088,7 @@ s=s.replace(
 
 old_destroy='''    @Override protected void onDestroy(){requestSerial++;heroSerial++;if(pendingSearch!=null)ui.removeCallbacks(pendingSearch);if(delayedIndexResume!=null)ui.removeCallbacks(delayedIndexResume);Future<?> f=indexFuture;if(f!=null)f.cancel(true);exec.shutdownNow();heroExec.shutdownNow();indexExec.shutdownNow();if(searchIndex!=null)searchIndex.close();if(epgAdapter!=null)epgAdapter.shutdown();if(epgStore!=null)epgStore.close();super.onDestroy();}'''
 new_destroy='''    @Override protected void onDestroy(){freeLifecycleDestroyed=true;activityPaused=true;requestSerial++;heroSerial++;if(pendingSearch!=null)ui.removeCallbacks(pendingSearch);if(delayedIndexResume!=null)ui.removeCallbacks(delayedIndexResume);if(delayedIndexRetry!=null)ui.removeCallbacks(delayedIndexRetry);Future<?> f=indexFuture;if(f!=null)f.cancel(true);indexRefreshRunning=false;exec.shutdownNow();heroExec.shutdownNow();indexExec.shutdownNow();if(searchIndex!=null)searchIndex.close();if(epgAdapter!=null)epgAdapter.shutdown();if(epgStore!=null)epgStore.close();super.onDestroy();}'''
-if old_destroy not in s: throw new Error("onDestroy marker missing");
+if old_destroy not in s: raise SystemExit("onDestroy marker missing")
 s=s.replace(old_destroy,new_destroy,1)
 
 main.write_text(s)
