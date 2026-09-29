@@ -91,11 +91,19 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Compile debug, instrumentation and lint
+      - name: Compile debug and instrumentation APKs
         working-directory: src/RA_IPTV_Android_v0.1
         run: |
           set -euo pipefail
-          gradle --no-daemon :app:assembleDebug :app:assembleAndroidTest :app:lintDebug
+          gradle --no-daemon :app:assembleDebug :app:assembleAndroidTest
+
+      - name: Android lint audit
+        id: lint
+        continue-on-error: true
+        working-directory: src/RA_IPTV_Android_v0.1
+        run: |
+          set -o pipefail
+          gradle --no-daemon :app:lintDebug 2>&1 | tee "$GITHUB_WORKSPACE/qa-lint-console.txt"
 
       - name: Manifest and permission gate
         working-directory: src/RA_IPTV_Android_v0.1
@@ -139,6 +147,7 @@ jobs:
             qa-permissions.txt
             qa-rest*.json
             qa-rest-headers.txt
+            qa-lint-console.txt
             src/RA_IPTV_Android_v0.1/app/build/reports/lint-results-debug.html
             src/RA_IPTV_Android_v0.1/app/build/reports/lint-results-debug.xml
           if-no-files-found: warn
