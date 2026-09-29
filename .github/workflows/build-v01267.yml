@@ -1,0 +1,1006 @@
+name: Build NenoTV Free v0.12.6.7
+
+on:
+  push:
+    branches: [ nenotv-v0.12.6.7-player-controls-autohide ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get base source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p base
+          cd base
+          gh run download 36349587668 --repo robertalt-png/RA-IPTV-Android --name Nivaro-v0.9.5-build
+          tar -xzf Nivaro-v0.9.5-source.tar.gz
+
+      - name: Apply NenoTV changes
+        run: |
+          cd base/RA_IPTV_Android_v0.1
+          for p in build-gradle manifest strings ui-pro-en ui-pro-nl main settings profile player; do
+            git apply "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/plain/$p.patch"
+          done
+          mkdir -p app/src/main/java/com/robertalt/raiptv/entitlement
+          cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/AccountActivity.java" app/src/main/java/com/robertalt/raiptv/
+          cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/ProGate.java" app/src/main/java/com/robertalt/raiptv/
+          cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/EntitlementClient.java" app/src/main/java/com/robertalt/raiptv/entitlement/
+          cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/EntitlementStore.java" app/src/main/java/com/robertalt/raiptv/storage/
+          cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/ic_nenotv_mark.xml" app/src/main/res/drawable/ic_nivaro_mark.xml
+          cp "$GITHUB_WORKSPACE/patches/v0.9.8-free-pro/files/ic_nenotv_launcher.xml" app/src/main/res/drawable/ic_nivaro_launcher.xml
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path("app/src/main")
+          for p in root.rglob("*"):
+              if not p.is_file() or p.suffix.lower() not in {".java",".xml",".html",".txt",".js"}: continue
+              try: s=p.read_text()
+              except UnicodeDecodeError: continue
+              s=s.replace("Nivaro IPTV Player 0.9.5","NenoTV Player 0.11.0")
+              s=s.replace("Nivaro IPTV Player","NenoTV")
+              s=s.replace("About Nivaro","About NenoTV")
+              s=s.replace("Over Nivaro","Over NenoTV")
+              s=s.replace("Welkom bij Nivaro","Welkom bij NenoTV")
+              s=s.replace("Welcome to Nivaro","Welcome to NenoTV")
+              s=s.replace("Nivaro compatibility mode","NenoTV compatibility mode")
+              s=s.replace("Nivaro-compatibiliteitsmodus","NenoTV-compatibiliteitsmodus")
+              s=s.replace("Nivaro does not provide a TV service.","NenoTV does not provide a TV service.")
+              s=s.replace("Nivaro levert zelf geen tv-dienst.","NenoTV levert zelf geen tv-dienst.")
+              s=s.replace('android:text="NIVARO"','android:text="NenoTV"')
+              s=s.replace('android:text="Nivaro"','android:text="NenoTV"')
+              p.write_text(s)
+          PY
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          layout=Path("app/src/main/res/layout/activity_main.xml")
+          s=layout.read_text()
+          start=s.index('  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical"')
+          end=s.index('  <LinearLayout android:id="@+id/indexBanner"')
+          header='''  <LinearLayout android:id="@+id/topBar" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:paddingLeft="14dp" android:paddingRight="14dp" android:paddingTop="8dp" android:paddingBottom="6dp">
+            <LinearLayout android:id="@+id/brandButton" android:layout_width="wrap_content" android:layout_height="44dp" android:gravity="center_vertical" android:orientation="horizontal" android:clickable="false" android:focusable="false" android:contentDescription="NenoTV">
+              <ImageView android:layout_width="30dp" android:layout_height="30dp" android:src="@drawable/ic_nivaro_mark" android:scaleType="fitCenter" android:contentDescription="NenoTV"/>
+              <TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="7dp" android:text="NenoTV" android:textColor="#FFD400" android:textSize="17sp" android:textStyle="bold" android:letterSpacing="0.02" android:singleLine="true" android:maxLines="1" android:includeFontPadding="false"/>
+            </LinearLayout>
+            <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
+            <Button android:id="@+id/menuButton" android:layout_width="48dp" android:layout_height="44dp" android:text="☰" android:textSize="24sp" android:textColor="#FFFFFF" android:backgroundTint="#151A21" android:contentDescription="Menu"/>
+            <Button android:id="@+id/searchToggle" android:layout_width="1dp" android:layout_height="1dp" android:text="⌕" android:visibility="gone"/>
+            <Button android:id="@+id/settingsButton" android:layout_width="1dp" android:layout_height="1dp" android:text="⚙" android:visibility="gone"/>
+            <Button android:id="@+id/tvShareButton" android:layout_width="1dp" android:layout_height="1dp" android:text="TV" android:visibility="gone"/>
+            <Button android:id="@+id/profileButton" android:layout_width="1dp" android:layout_height="1dp" android:text="FREE" android:visibility="gone"/>
+          </LinearLayout>
+          '''
+          layout.write_text(s[:start]+header+s[end:])
+
+          main=Path("app/src/main/java/com/robertalt/raiptv/MainActivity.java")
+          s=main.read_text()
+          s=s.replace(
+              'title.setText("NenoTV");title.setTextSize(13);title.setLetterSpacing(0.04f);title.setTextColor(0xFFFFD400);title.setSingleLine(true);title.setTypeface(null,Typeface.BOLD);',
+              'title.setText("NenoTV");title.setTextSize(17);title.setLetterSpacing(0.02f);title.setTextColor(0xFFFFD400);title.setSingleLine(true);title.setTypeface(null,Typeface.BOLD);'
+          )
+          anchor='        View bottomNav=findViewById(R.id.bottomNav);'
+          inset='''        View topBar=findViewById(R.id.topBar);if(topBar!=null){final int baseTop=dp(8);topBar.setOnApplyWindowInsetsListener((v,insets)->{int top=insets.getSystemWindowInsetTop();v.setPadding(v.getPaddingLeft(),baseTop+top,v.getPaddingRight(),v.getPaddingBottom());return insets;});topBar.requestApplyInsets();}
+          '''
+          if inset.strip() not in s:
+              s=s.replace(anchor,inset+anchor,1)
+          wire='    void wire(){\n'
+          if 'R.id.menuButton' not in s:
+              s=s.replace(wire,wire+'        findViewById(R.id.menuButton).setOnClickListener(v->showNenoMenu());\n',1)
+          s=s.replace('int heroHeight(){String h=SettingsStore.hero(this);int v="small".equals(h)?165:"large".equals(h)?215:185;return dp(v);}',
+                      'int heroHeight(){String h=SettingsStore.hero(this);int v="small".equals(h)?150:"large".equals(h)?195:165;return dp(v);}')
+          s=re.sub(r'String lastCrash=CrashGuard\.consumeLastType\(this\);busy\(false,!lastCrash\.isEmpty\(\)\?T\("stability"\)\+" · "\+T\("previous_error"\)\+": "\+lastCrash:\(local\.isEmpty\(\)\?T\("watch_without_search"\):T\("continue"\)\+" · "\+T\("recent_live"\)\+" · "\+T\("favorites"\)\)\);warmCategories\(\);',
+                   'String lastCrash=CrashGuard.consumeLastType(this);busy(false,!lastCrash.isEmpty()?T("stability")+" · "+T("previous_error")+": "+lastCrash:(local.isEmpty()?T("watch_without_search"):""));warmCategories();',s)
+          menu='''    void showNenoMenu(){
+              final Dialog d=new Dialog(this);
+              final boolean nl="nl".equals(SettingsStore.language(this));
+              LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(14),dp(18),dp(22));
+              android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();bg.setColor(0xFF10141A);bg.setCornerRadii(new float[]{dp(22),dp(22),dp(22),dp(22),0,0,0,0});box.setBackground(bg);
+              TextView head=new TextView(this);head.setText("NenoTV");head.setTextColor(0xFFFFD400);head.setTextSize(22);head.setTypeface(null,Typeface.BOLD);box.addView(head);
+              EntitlementStore ent=new EntitlementStore(this);TextView plan=new TextView(this);plan.setText(ent.statusLabel(this));plan.setTextColor(0xFFA7AFBC);plan.setTextSize(13);plan.setPadding(0,0,0,dp(10));box.addView(plan);
+              addNenoMenuItem(d,box,nl?"Zoeken":"Search",()->{toggleSearch();});
+              addNenoMenuItem(d,box,nl?"Account & Pro":"Account & Pro",()->startActivity(new Intent(this,AccountActivity.class)));
+              addNenoMenuItem(d,box,nl?"TV-bron beheren":"Manage TV source",()->startActivityForResult(new Intent(this,ProfileActivity.class),10));
+              addNenoMenuItem(d,box,nl?"Cast / TV":"Cast / TV",()->{if(ProGate.require(this,T("casting")))showTvShareMenu();});
+              addNenoMenuItem(d,box,nl?"Instellingen":"Settings",()->startActivity(new Intent(this,SettingsActivity.class)));
+              addNenoMenuItem(d,box,nl?"Sluiten":"Close",()->{});
+              d.setContentView(box);
+              Window w=d.getWindow();if(w!=null){w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));w.setGravity(Gravity.BOTTOM);w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);w.setDimAmount(0.45f);}
+              d.show();if(w!=null)w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT);
+          }
+          void addNenoMenuItem(Dialog d,LinearLayout box,String label,Runnable action){
+              Button b=new Button(this);b.setText(label);b.setAllCaps(false);b.setTextColor(0xFFF7F8FA);b.setTextSize(15);b.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL);b.setPadding(dp(14),0,dp(14),0);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));
+              LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(50));lp.bottomMargin=dp(7);box.addView(b,lp);b.setOnClickListener(v->{d.dismiss();action.run();});
+          }
+
+          '''
+          if 'void showNenoMenu()' not in s:
+              s=s.replace('    void showTvShareMenu(){',menu+'    void showTvShareMenu(){',1)
+          main.write_text(s)
+          PY
+
+          # v0.10.1: UI cleanup + faster first results for Films/Series
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          main=Path("app/src/main/java/com/robertalt/raiptv/MainActivity.java")
+          s=main.read_text()
+
+          # Visible brand text: never fall back to old Nivaro wording.
+          s=s.replace('title.setText("NIVARO");title.setTextSize(21);title.setLetterSpacing(0.08f);title.setTextColor(0xFFFFD400);title.setTypeface(null,Typeface.BOLD);',
+                      'title.setText("NenoTV");title.setTextSize(17);title.setLetterSpacing(0.02f);title.setTextColor(0xFFFFD400);title.setSingleLine(true);title.setTypeface(null,Typeface.BOLD);')
+          s=s.replace('profile=profiles.load();title.setText("Nivaro");',
+                      'profile=profiles.load();title.setText("NenoTV");')
+          s=s.replace(':"NIVARO";} String friendly', ':"NenoTV";} String friendly')
+
+          # Primary language is already first: no star prefix, so "Nederlands" fits cleanly.
+          s=s.replace('return ContentLanguage.preferenceCode(code).equals(SettingsStore.contentLanguage(this))?"★ "+n:n;',
+                      'return n;')
+
+          # Smaller first cache page = content appears sooner; more pages are appended on scroll.
+          s=s.replace('static final int CACHE_PAGE_SIZE=600;', 'static final int CACHE_PAGE_SIZE=240;')
+
+          # Active bottom navigation state.
+          nav='''    void updateBottomNav(String active){
+              int on=0xFFFFD400,off=getResources().getColor(R.color.muted);
+              int[] ids={R.id.navHome,R.id.navLive,R.id.navEpg,R.id.navMovies,R.id.navSeries};
+              String[] keys={"home","live","epg","vod","series"};
+              for(int i=0;i<ids.length;i++){Button b=findViewById(ids[i]);if(b==null)continue;boolean selected=keys[i].equals(active);b.setTextColor(selected?on:off);b.setTypeface(null,selected?Typeface.BOLD:Typeface.NORMAL);}
+          }
+
+          '''
+          if 'void updateBottomNav(String active)' not in s:
+              s=s.replace('    void openProfile(){',nav+'    void openProfile(){',1)
+          s=s.replace('section="home";SettingsStore.setLastSection(this,"home");',
+                      'section="home";updateBottomNav("home");SettingsStore.setLastSection(this,"home");')
+          s=s.replace('section=s;autoDefaultGroup=true;SettingsStore.setLastSection(this,s);',
+                      'section=s;updateBottomNav(s);autoDefaultGroup=true;SettingsStore.setLastSection(this,s);')
+          s=s.replace('section="epg";autoDefaultGroup=true;SettingsStore.setLastSection(this,"epg");',
+                      'section="epg";updateBottomNav("epg");autoDefaultGroup=true;SettingsStore.setLastSection(this,"epg");')
+
+          # Only show the background-index banner for the section currently on screen.
+          old='void showIndexBanner(String type,int done,int cats,int titles){if(indexBanner==null||indexBannerText==null)return;String target="vod".equals(type)?T("movies"):T("series");String prefix="nl".equals(SettingsStore.primaryLanguage(this))?"Nog even geduld — ":"";String msg=prefix+T("loading")+" "+target+" · "+Math.max(0,done)+"/"+Math.max(1,cats)+" "+T("categories")+" · "+Math.max(0,titles)+" "+T("titles");indexBannerText.setText(msg);indexBanner.setTag(type);indexBanner.setVisibility(View.VISIBLE);}'
+          new='void showIndexBanner(String type,int done,int cats,int titles){if(indexBanner==null||indexBannerText==null||!type.equals(section))return;String target="vod".equals(type)?T("movies"):T("series");String msg=target+" · "+Math.max(0,done)+"/"+Math.max(1,cats)+" "+T("categories")+" · "+Math.max(0,titles)+" "+T("titles");indexBannerText.setText(msg);indexBanner.setTag(type);indexBanner.setVisibility(View.VISIBLE);}'
+          s=s.replace(old,new)
+          s=s.replace('busy(true,total+" "+T("results")+" · "+T("index_building"));',
+                      'busy(false,total+" "+T("results"));')
+
+          # Fetch only the selected language categories, max 3 at a time.
+          # The first completed category is rendered immediately while the rest finish.
+          a=s.index('    void loadLanguageGroup(String tag,boolean fromRefresh){')
+          b=s.index('\n    void loadOtherGroup(boolean fromRefresh){',a)
+          faster='''    void loadLanguageGroup(String tag,boolean fromRefresh){
+              final String requested="epg".equals(section)?"live":section;final String normalized=ContentLanguage.normalizeTag(tag);if(normalized.isEmpty()){if("epg".equals(section))loadEpgChannels("all");else loadItems("all");return;}
+              stopCachePaging();final int token=nextRequest();final boolean epg="epg".equals(section);final String wantedId="multi".equals(normalized)?"multi":"lang:"+normalized;currentCategoryId=wantedId;currentCategoryName=groupLabel(wantedId);final List<Category>matches=matchingLanguageCategories(normalized);
+              if(epg){showEpgByMode(Collections.emptyList());busy(true,currentCategoryName+" · "+T("channels_loading"));}else{showMediaGrid("live".equals(requested));gridAdapter.set(Collections.emptyList(),"live".equals(requested));busy(true,currentCategoryName+" · "+T("library_opening"));}
+              exec.execute(()->{
+                  ExecutorService fast=null;
+                  try{
+                      int count=searchIndex.countLanguage(profileKey(),requested,normalized);
+                      if(count>0){
+                          final int ready=count;
+                          runOnUiThread(()->{if(!current(token)||!wantedId.equals(currentCategoryId))return;if(epg){List<MediaEntry>x=sortItems(visibleItems(searchIndex.languagePage(profileKey(),requested,normalized,0,Math.min(250,ready),SettingsStore.sort(this))));all=x;showEpgByMode(x);busy(false,x.size()+" "+T("channels")+" · "+currentCategoryName);}else loadCachedLanguage(requested,token,normalized,ready);});
+                          return;
+                      }
+                      if(!matches.isEmpty()){
+                          fullLibraryToken=token;
+                          int workers=Math.max(1,Math.min(3,matches.size()));
+                          fast=Executors.newFixedThreadPool(workers);
+                          CompletionService<List<MediaEntry>> cs=new ExecutorCompletionService<>(fast);
+                          for(Category c:matches)cs.submit(()->{
+                              List<MediaEntry>batch=provider.items(requested,c.id);
+                              for(MediaEntry e:batch)if(e!=null&&(e.group==null||e.group.trim().isEmpty()))e.group=c.name;
+                              return batch;
+                          });
+                          boolean firstShown=false;
+                          for(int i=0;i<matches.size();i++){
+                              if(!current(token)||Thread.currentThread().isInterrupted())break;
+                              List<MediaEntry>batch;
+                              try{batch=cs.take().get();}catch(Exception one){continue;}
+                              if(!firstShown&&!epg){
+                                  List<MediaEntry>first=sortItems(visibleItems(batch));
+                                  if(!first.isEmpty()){
+                                      final ArrayList<MediaEntry>show=new ArrayList<>(first);
+                                      final int done=i+1;
+                                      runOnUiThread(()->{if(!current(token)||!wantedId.equals(currentCategoryId))return;all=new ArrayList<>(show);showMediaGrid("live".equals(requested));gridAdapter.set(show,"live".equals(requested));if(selectedHero==null)previewAuto(show.get(0));busy(true,show.size()+" "+T("results")+" · "+done+"/"+matches.size()+" "+T("categories"));});
+                                      firstShown=true;
+                                  }
+                              }
+                              try{searchIndex.upsert(profileKey(),batch);}catch(Exception ignored){}
+                          }
+                          count=searchIndex.countLanguage(profileKey(),requested,normalized);
+                      }
+                      final int readyCount=count;final boolean complete=searchIndex.isComplete(profileKey(),requested);
+                      fullLibraryToken=0;
+                      runOnUiThread(()->{if(!current(token)||!wantedId.equals(currentCategoryId))return;if(readyCount>0){if(epg){List<MediaEntry>x=sortItems(visibleItems(searchIndex.languagePage(profileKey(),requested,normalized,0,Math.min(250,readyCount),SettingsStore.sort(this))));all=x;showEpgByMode(x);busy(false,x.size()+" "+T("channels")+" · "+currentCategoryName);}else loadCachedLanguage(requested,token,normalized,readyCount);return;}if(!complete){busy(true,currentCategoryName+" · "+T("index_building"));if(!indexRefreshRunning)refreshSearchIndex(false);}else busy(false,T("no_results"));});
+                  }catch(Throwable ex){runOnUiThread(()->{if(current(token))busy(false,T("error_prefix")+": "+friendlyThrowable(ex));});}
+                  finally{if(fast!=null)fast.shutdownNow();if(fullLibraryToken==token)fullLibraryToken=0;}
+              });
+          }
+          '''
+          s=s[:a]+faster+s[b:]
+          main.write_text(s)
+
+          # Compact background index banner and give the language selector more room.
+          layout=Path("app/src/main/res/layout/activity_main.xml")
+          x=layout.read_text()
+          x=re.sub(r'(<LinearLayout android:id="@\+id/indexBanner"[^>]*android:layout_height=")42dp(")',r'\g<1>32dp\2',x)
+          x=x.replace('android:id="@+id/indexBannerText" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:paddingLeft="9dp" android:textColor="@color/text" android:textSize="11.5sp"',
+                      'android:id="@+id/indexBannerText" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:paddingLeft="9dp" android:textColor="@color/muted" android:textSize="10.5sp"')
+          x=x.replace('android:id="@+id/genreButton" android:layout_width="92dp"', 'android:id="@+id/genreButton" android:layout_width="82dp"')
+          x=x.replace('android:id="@+id/sortButton" android:layout_width="76dp"', 'android:id="@+id/sortButton" android:layout_width="68dp"')
+          x=x.replace('android:id="@+id/heroAction" android:layout_width="wrap_content" android:layout_height="36dp" android:minHeight="0dp" android:text="▶ Afspelen" android:textAllCaps="false" android:textColor="#FFFFFFFF" android:backgroundTint="@color/accent"',
+                      'android:id="@+id/heroAction" android:layout_width="wrap_content" android:layout_height="36dp" android:minHeight="0dp" android:text="▶ Afspelen" android:textAllCaps="false" android:textColor="#FF0A0A0A" android:backgroundTint="#FFD400"')
+          layout.write_text(x)
+
+          # Ratings: 4.929 -> 4,9 / 4.9 depending on device locale.
+          entry=Path("app/src/main/java/com/robertalt/raiptv/model/MediaEntry.java")
+          x=entry.read_text()
+          x=x.replace('s.append("★ ").append(rating);','s.append("★ ").append(formatRating(rating));')
+          if 'String formatRating(String value)' not in x:
+              x=x.replace('    public String meta(){',
+          ('    public static String formatRating(String value){\n'
+           '        if(value==null)return "";\n'
+           '        String v=value.trim();if(v.isEmpty())return "";\n'
+           '        try{double d=Double.parseDouble(v.replace(",", "."));return new java.text.DecimalFormat("0.#").format(d);}catch(Exception ignored){return v;}\n'
+           '    }\n'
+           '    public String meta(){'))
+          entry.write_text(x)
+
+          # Faster visible poster loading + branded placeholder for missing artwork.
+          row=Path("app/src/main/java/com/robertalt/raiptv/MediaRowAdapter.java")
+          x=row.read_text()
+          x=x.replace('Executors.newFixedThreadPool(2)', 'Executors.newFixedThreadPool(4)')
+          x=x.replace('new LruCache<String,Bitmap>(8*1024)', 'new LruCache<String,Bitmap>(16*1024)')
+          x=x.replace('c.setRequestProperty("User-Agent","Nivaro/0.5.5");', 'c.setRequestProperty("User-Agent","NenoTV/0.10.1");')
+          x=x.replace('c.setRequestProperty("Connection","close");', 'c.setRequestProperty("Connection","keep-alive");')
+          p=x.index('    public static void loadArtwork(')
+          q=x.index('\n    private static byte[] readLimited',p)
+          method=('    public static void loadArtwork(ImageView image,String url,String label,int targetW,int targetH){\n'
+              '        image.setBackgroundColor(0xFF151A21);image.setContentDescription(label);image.setTag(url);\n'
+              '        image.setPadding(0,0,0,0);\n'
+              '        if(url==null||url.trim().isEmpty()){\n'
+              '            int pad=(int)(14*image.getResources().getDisplayMetrics().density);\n'
+              '            image.setPadding(pad,pad,pad,pad);image.setScaleType(ImageView.ScaleType.CENTER_INSIDE);image.setImageResource(R.drawable.ic_nivaro_mark);return;\n'
+              '        }\n'
+              '        image.setImageDrawable(null);\n'
+              '        Bitmap cached=cache.get(url);if(cached!=null){image.setImageBitmap(cached);return;}\n'
+              '        images.execute(()->{HttpURLConnection c=null;try{\n'
+              '            c=(HttpURLConnection)new URL(url).openConnection();c.setConnectTimeout(4000);c.setReadTimeout(5500);c.setUseCaches(true);c.setInstanceFollowRedirects(true);\n'
+              '            c.setRequestProperty("User-Agent","NenoTV/0.10.1");c.setRequestProperty("Connection","keep-alive");c.setRequestProperty("Accept","image/*,*/*;q=0.8");c.setRequestProperty("Accept-Encoding","identity");\n'
+              '            int code=c.getResponseCode();if(code<200||code>=300)return;byte[]data=readLimited(c.getInputStream());if(data.length==0)return;Bitmap bm=decodeScaled(data,targetW,targetH);if(bm==null)return;cache.put(url,bm);\n'
+              '            image.post(()->{Object tag=image.getTag();if(tag!=null&&tag.equals(url)){image.setPadding(0,0,0,0);image.setImageBitmap(bm);}});\n'
+              '        }catch(Exception ignored){}finally{if(c!=null)c.disconnect();}});\n'
+              '    }\n')
+          x=x[:p]+method+x[q:]
+          row.write_text(x)
+          PY
+
+          # v0.10.2: foreground-first loading + full language consistency
+          python3 - <<'PY'
+          from pathlib import Path
+
+          main=Path("app/src/main/java/com/robertalt/raiptv/MainActivity.java")
+          s=main.read_text()
+
+          # Foreground navigation gets absolute priority over background indexing.
+          s=s.replace(
+              'Handler ui=new Handler(Looper.getMainLooper()); Runnable pendingSearch; MediaEntry selectedHero;',
+              'Handler ui=new Handler(Looper.getMainLooper()); Runnable pendingSearch,delayedIndexResume; MediaEntry selectedHero;'
+          )
+
+          anchor='    int nextRequest(){return ++requestSerial;} boolean current(int token){return token==requestSerial&&!isFinishing()&&!isDestroyed();}\n'
+          helper='''    void pauseBackgroundIndexForUi(){
+              if(delayedIndexResume!=null)ui.removeCallbacks(delayedIndexResume);
+              Future<?> f=indexFuture;if(f!=null&&!f.isDone())f.cancel(true);
+              hideIndexBanner("");
+          }
+          void scheduleBackgroundIndex(){
+              if(provider==null||profile==null||activityPaused)return;
+              if(delayedIndexResume!=null)ui.removeCallbacks(delayedIndexResume);
+              delayedIndexResume=()->{
+                  if(!isUiAlive()||provider==null||activityPaused)return;
+                  if(indexRefreshRunning){ui.postDelayed(delayedIndexResume,900);return;}
+                  refreshSearchIndex(false);
+              };
+              ui.postDelayed(delayedIndexResume,4500);
+          }
+
+          '''
+          if 'void pauseBackgroundIndexForUi()' not in s:
+              s=s.replace(anchor,anchor+helper)
+
+          # Every main navigation action cancels unrelated background work first.
+          s=s.replace('    void loadHome(){\n        stopCachePaging();',
+                      '    void loadHome(){\n        pauseBackgroundIndexForUi();stopCachePaging();')
+          s=s.replace('    void loadSection(String s){\n        stopCachePaging();',
+                      '    void loadSection(String s){\n        pauseBackgroundIndexForUi();stopCachePaging();')
+          s=s.replace('    void loadEpg(){\n        stopCachePaging();',
+                      '    void loadEpg(){\n        pauseBackgroundIndexForUi();stopCachePaging();')
+
+          # After foreground content has started loading, resume maintenance only after idle time.
+          s=s.replace('busy(false,!lastCrash.isEmpty()?T("stability")+" · "+T("previous_error")+": "+lastCrash:(local.isEmpty()?T("watch_without_search"):""));warmCategories();',
+                      'busy(false,!lastCrash.isEmpty()?T("stability")+" · "+T("previous_error")+": "+lastCrash:(local.isEmpty()?T("watch_without_search"):""));warmCategories();scheduleBackgroundIndex();')
+          s=s.replace('else loadItems("all");});}catch(Exception e){runOnUiThread(()->{if(current(token))busy(false,T("error_prefix")+": "+friendly(e));});}});\n    }',
+                      'else loadItems("all");scheduleBackgroundIndex();});}catch(Exception e){runOnUiThread(()->{if(current(token))busy(false,T("error_prefix")+": "+friendly(e));});}});\n    }',1)
+          s=s.replace('else loadEpgChannels("all");});}catch(Exception e){runOnUiThread(()->{if(current(token))busy(false,T("epg_error")+": "+friendly(e));});}});\n    }',
+                      'else loadEpgChannels("all");scheduleBackgroundIndex();});}catch(Exception e){runOnUiThread(()->{if(current(token))busy(false,T("epg_error")+": "+friendly(e));});}});\n    }',1)
+
+          # Never overlay background-index progress over the screen the user is operating.
+          a=s.find('    void showIndexBanner(String type,int done,int cats,int titles){')
+          if a>=0:
+              b=s.find('\n    void hideIndexBanner(',a)
+              if b>0:
+                  s=s[:a]+'    void showIndexBanner(String type,int done,int cats,int titles){if(indexBanner!=null)indexBanner.setVisibility(View.GONE);}\n'+s[b:]
+
+          # EPG: do not aggregate every matching language category first. Use cache if available,
+          # otherwise use only the first matching category so the guide becomes interactive quickly.
+          needle='''    void loadLanguageGroup(String tag,boolean fromRefresh){
+              final String requested="epg".equals(section)?"live":section;'''
+          if needle in s:
+              replacement='''    void loadLanguageGroup(String tag,boolean fromRefresh){
+              final String requested="epg".equals(section)?"live":section;'''
+              s=s.replace(needle,replacement,1)
+              epg_marker='''              if(epg){showEpgByMode(Collections.emptyList());busy(true,currentCategoryName+" · "+T("channels_loading"));}else{showMediaGrid("live".equals(requested));gridAdapter.set(Collections.emptyList(),"live".equals(requested));busy(true,currentCategoryName+" · "+T("library_opening"));}
+              exec.execute(()->{'''
+              epg_repl='''              if(epg){
+                  int cached=searchIndex.countLanguage(profileKey(),"live",normalized);
+                  if(cached>0){List<MediaEntry>x=sortItems(visibleItems(searchIndex.languagePage(profileKey(),"live",normalized,0,Math.min(120,cached),SettingsStore.sort(this))));all=x;showEpgByMode(x);busy(false,x.size()+" "+T("channels"));scheduleBackgroundIndex();return;}
+                  showEpgByMode(Collections.emptyList());busy(true,currentCategoryName+" · "+T("channels_loading"));
+                  if(!matches.isEmpty()){final Category first=matches.get(0);exec.execute(()->{try{List<MediaEntry>x=sortItems(visibleItems(provider.items("live",first.id)));try{for(MediaEntry e:x)if(e!=null&&(e.group==null||e.group.trim().isEmpty()))e.group=first.name;searchIndex.upsert(profileKey(),x);}catch(Exception ignored){}runOnUiThread(()->{if(!current(token)||!"epg".equals(section))return;all=x;showEpgByMode(x);busy(false,x.size()+" "+T("channels"));scheduleBackgroundIndex();});}catch(Exception ex){runOnUiThread(()->{if(current(token))busy(false,T("epg_channels_failed")+": "+friendly(ex));});}});return;}
+              }else{showMediaGrid("live".equals(requested));gridAdapter.set(Collections.emptyList(),"live".equals(requested));busy(true,currentCategoryName+" · "+T("library_opening"));}
+              exec.execute(()->{'''
+              s=s.replace(epg_marker,epg_repl,1)
+
+          # Menu labels always use the selected app language.
+          s=s.replace('final boolean nl="nl".equals(SettingsStore.language(this));\n','')
+          s=s.replace('addNenoMenuItem(d,box,nl?"Zoeken":"Search",()->{toggleSearch();});',
+                      'addNenoMenuItem(d,box,T("search_everywhere"),()->{toggleSearch();});')
+          s=s.replace('addNenoMenuItem(d,box,nl?"Account & Pro":"Account & Pro",()->startActivity(new Intent(this,AccountActivity.class)));',
+                      'addNenoMenuItem(d,box,T("account_and_pro"),()->startActivity(new Intent(this,AccountActivity.class)));')
+          s=s.replace('addNenoMenuItem(d,box,nl?"TV-bron beheren":"Manage TV source",()->startActivityForResult(new Intent(this,ProfileActivity.class),10));',
+                      'addNenoMenuItem(d,box,T("manage_source"),()->startActivityForResult(new Intent(this,ProfileActivity.class),10));')
+          s=s.replace('addNenoMenuItem(d,box,nl?"Cast / TV":"Cast / TV",()->{if(ProGate.require(this,T("casting")))showTvShareMenu();});',
+                      'addNenoMenuItem(d,box,T("casting"),()->{if(ProGate.require(this,T("casting")))showTvShareMenu();});')
+          s=s.replace('addNenoMenuItem(d,box,nl?"Instellingen":"Settings",()->startActivity(new Intent(this,SettingsActivity.class)));',
+                      'addNenoMenuItem(d,box,T("settings"),()->startActivity(new Intent(this,SettingsActivity.class)));')
+          s=s.replace('addNenoMenuItem(d,box,nl?"Sluiten":"Close",()->{});',
+                      'addNenoMenuItem(d,box,T("close"),()->{});')
+
+          # Cleanup callbacks.
+          s=s.replace('if(pendingSearch!=null)ui.removeCallbacks(pendingSearch);Future<?> f=indexFuture;',
+                      'if(pendingSearch!=null)ui.removeCallbacks(pendingSearch);if(delayedIndexResume!=null)ui.removeCallbacks(delayedIndexResume);Future<?> f=indexFuture;')
+
+          main.write_text(s)
+
+          # Add complete account/Pro terminology to every supported language.
+          ui=Path("app/src/main/java/com/robertalt/raiptv/UiText.java")
+          x=ui.read_text()
+          packs={
+          'ES':[
+          ('account_and_pro','Cuenta y NenoTV Pro'),('nenotv_free','NenoTV Free'),('nenotv_pro_trial','NenoTV Pro · Prueba'),('nenotv_pro','NenoTV Pro'),
+          ('activate_restore','Activar o restaurar compra'),('email_address','Correo electrónico'),('order_id_optional','ID de pedido (opcional)'),('activate_pro','Activar / restaurar Pro'),('request_trial','Solicitar prueba gratis'),('refresh_status','Actualizar estado de la cuenta'),('this_device','Este dispositivo'),('device_code','Código del dispositivo'),('trial_remaining','Prueba restante'),('days','días'),('pro_active','Pro está activo'),('devices','dispositivos'),('free_description','TV en directo, películas, series, guía TV básica, búsqueda y favoritos están disponibles en Free.'),('checking_status','Comprobando cuenta de NenoTV…'),('status_updated','Estado de la cuenta actualizado'),('activation_success','NenoTV Pro activado'),('activation_failed','La activación ha fallado'),('server_unavailable','El servicio de cuenta de NenoTV aún no está disponible'),('email_required','Introduce tu correo electrónico'),('pro_required','NenoTV Pro'),('pro_unlock_message','está disponible con NenoTV Pro o durante la prueba Pro.'),('view_pro','Ver NenoTV Pro'),('not_now','Ahora no'),('this_feature','Esta función'),('advanced_epg','Guía TV avanzada'),('recording','Grabación'),('casting','Enviar a TV'),('parental_controls','Control parental'),('advanced_subtitles','Subtítulos externos'),('manage_source','Gestionar fuente de TV')],
+          'DE':[
+          ('account_and_pro','Konto & NenoTV Pro'),('nenotv_free','NenoTV Free'),('nenotv_pro_trial','NenoTV Pro · Testphase'),('nenotv_pro','NenoTV Pro'),('activate_restore','Kauf aktivieren oder wiederherstellen'),('email_address','E-Mail-Adresse'),('order_id_optional','Bestell-ID (optional)'),('activate_pro','Pro aktivieren / wiederherstellen'),('request_trial','Kostenlose Testphase starten'),('refresh_status','Kontostatus aktualisieren'),('this_device','Dieses Gerät'),('device_code','Gerätecode'),('trial_remaining','Verbleibende Testphase'),('days','Tage'),('pro_active','Pro ist aktiv'),('devices','Geräte'),('free_description','Live-TV, Filme, Serien, einfache TV-Übersicht, Suche und Favoriten sind in Free verfügbar.'),('checking_status','NenoTV-Konto wird geprüft…'),('status_updated','Kontostatus aktualisiert'),('activation_success','NenoTV Pro aktiviert'),('activation_failed','Aktivierung fehlgeschlagen'),('server_unavailable','Der NenoTV-Kontodienst ist noch nicht verfügbar'),('email_required','E-Mail-Adresse eingeben'),('pro_required','NenoTV Pro'),('pro_unlock_message','ist mit NenoTV Pro oder während der Pro-Testphase verfügbar.'),('view_pro','NenoTV Pro ansehen'),('not_now','Nicht jetzt'),('this_feature','Diese Funktion'),('advanced_epg','Erweiterte TV-Übersicht'),('recording','Aufnahme'),('casting','Auf TV übertragen'),('parental_controls','Jugendschutz'),('advanced_subtitles','Externe Untertitel'),('manage_source','TV-Quelle verwalten')],
+          'FR':[
+          ('account_and_pro','Compte et NenoTV Pro'),('nenotv_free','NenoTV Free'),('nenotv_pro_trial','NenoTV Pro · Essai'),('nenotv_pro','NenoTV Pro'),('activate_restore','Activer ou restaurer un achat'),('email_address','Adresse e-mail'),('order_id_optional','N° de commande (facultatif)'),('activate_pro','Activer / restaurer Pro'),('request_trial','Demander un essai gratuit'),('refresh_status','Actualiser le statut du compte'),('this_device','Cet appareil'),('device_code','Code appareil'),('trial_remaining','Essai restant'),('days','jours'),('pro_active','Pro est actif'),('devices','appareils'),('free_description','TV en direct, films, séries, guide TV de base, recherche et favoris sont disponibles dans Free.'),('checking_status','Vérification du compte NenoTV…'),('status_updated','Statut du compte actualisé'),('activation_success','NenoTV Pro activé'),('activation_failed','Échec de l’activation'),('server_unavailable','Le service de compte NenoTV n’est pas encore disponible'),('email_required','Saisissez votre adresse e-mail'),('pro_required','NenoTV Pro'),('pro_unlock_message','est disponible avec NenoTV Pro ou pendant votre essai Pro.'),('view_pro','Voir NenoTV Pro'),('not_now','Pas maintenant'),('this_feature','Cette fonction'),('advanced_epg','Guide TV avancé'),('recording','Enregistrement'),('casting','Diffuser sur TV'),('parental_controls','Contrôle parental'),('advanced_subtitles','Sous-titres externes'),('manage_source','Gérer la source TV')],
+          'IT':[
+          ('account_and_pro','Account e NenoTV Pro'),('nenotv_free','NenoTV Free'),('nenotv_pro_trial','NenoTV Pro · Prova'),('nenotv_pro','NenoTV Pro'),('activate_restore','Attiva o ripristina acquisto'),('email_address','Indirizzo e-mail'),('order_id_optional','ID ordine (opzionale)'),('activate_pro','Attiva / ripristina Pro'),('request_trial','Richiedi prova gratuita'),('refresh_status','Aggiorna stato account'),('this_device','Questo dispositivo'),('device_code','Codice dispositivo'),('trial_remaining','Prova rimanente'),('days','giorni'),('pro_active','Pro è attivo'),('devices','dispositivi'),('free_description','TV in diretta, film, serie, guida TV base, ricerca e preferiti sono disponibili in Free.'),('checking_status','Controllo account NenoTV…'),('status_updated','Stato account aggiornato'),('activation_success','NenoTV Pro attivato'),('activation_failed','Attivazione non riuscita'),('server_unavailable','Il servizio account NenoTV non è ancora disponibile'),('email_required','Inserisci il tuo indirizzo e-mail'),('pro_required','NenoTV Pro'),('pro_unlock_message','è disponibile con NenoTV Pro o durante la prova Pro.'),('view_pro','Visualizza NenoTV Pro'),('not_now','Non ora'),('this_feature','Questa funzione'),('advanced_epg','Guida TV avanzata'),('recording','Registrazione'),('casting','Trasmetti alla TV'),('parental_controls','Controllo genitori'),('advanced_subtitles','Sottotitoli esterni'),('manage_source','Gestisci sorgente TV')],
+          'PT':[
+          ('account_and_pro','Conta e NenoTV Pro'),('nenotv_free','NenoTV Free'),('nenotv_pro_trial','NenoTV Pro · Teste'),('nenotv_pro','NenoTV Pro'),('activate_restore','Ativar ou restaurar compra'),('email_address','Endereço de e-mail'),('order_id_optional','ID da encomenda (opcional)'),('activate_pro','Ativar / restaurar Pro'),('request_trial','Pedir teste gratuito'),('refresh_status','Atualizar estado da conta'),('this_device','Este dispositivo'),('device_code','Código do dispositivo'),('trial_remaining','Teste restante'),('days','dias'),('pro_active','Pro está ativo'),('devices','dispositivos'),('free_description','TV em direto, filmes, séries, guia TV básico, pesquisa e favoritos estão disponíveis no Free.'),('checking_status','A verificar conta NenoTV…'),('status_updated','Estado da conta atualizado'),('activation_success','NenoTV Pro ativado'),('activation_failed','Falha na ativação'),('server_unavailable','O serviço de conta NenoTV ainda não está disponível'),('email_required','Introduza o seu e-mail'),('pro_required','NenoTV Pro'),('pro_unlock_message','está disponível com NenoTV Pro ou durante o teste Pro.'),('view_pro','Ver NenoTV Pro'),('not_now','Agora não'),('this_feature','Esta função'),('advanced_epg','Guia TV avançado'),('recording','Gravação'),('casting','Transmitir para TV'),('parental_controls','Controlo parental'),('advanced_subtitles','Legendas externas'),('manage_source','Gerir fonte de TV')],
+          'TR':[
+          ('account_and_pro','Hesap ve NenoTV Pro'),('nenotv_free','NenoTV Free'),('nenotv_pro_trial','NenoTV Pro · Deneme'),('nenotv_pro','NenoTV Pro'),('activate_restore','Satın almayı etkinleştir veya geri yükle'),('email_address','E-posta adresi'),('order_id_optional','Sipariş no (isteğe bağlı)'),('activate_pro','Pro’yu etkinleştir / geri yükle'),('request_trial','Ücretsiz deneme iste'),('refresh_status','Hesap durumunu yenile'),('this_device','Bu cihaz'),('device_code','Cihaz kodu'),('trial_remaining','Kalan deneme'),('days','gün'),('pro_active','Pro etkin'),('devices','cihaz'),('free_description','Canlı TV, filmler, diziler, temel TV rehberi, arama ve favoriler Free sürümünde kullanılabilir.'),('checking_status','NenoTV hesabı kontrol ediliyor…'),('status_updated','Hesap durumu güncellendi'),('activation_success','NenoTV Pro etkinleştirildi'),('activation_failed','Etkinleştirme başarısız'),('server_unavailable','NenoTV hesap hizmeti henüz kullanılamıyor'),('email_required','E-posta adresinizi girin'),('pro_required','NenoTV Pro'),('pro_unlock_message','NenoTV Pro ile veya Pro deneme süresinde kullanılabilir.'),('view_pro','NenoTV Pro’yu görüntüle'),('not_now','Şimdi değil'),('this_feature','Bu özellik'),('advanced_epg','Gelişmiş TV rehberi'),('recording','Kayıt'),('casting','TV’ye aktar'),('parental_controls','Ebeveyn denetimleri'),('advanced_subtitles','Harici altyazılar'),('manage_source','TV kaynağını yönet')],
+          'PL':[
+          ('account_and_pro','Konto i NenoTV Pro'),('nenotv_free','NenoTV Free'),('nenotv_pro_trial','NenoTV Pro · Okres próbny'),('nenotv_pro','NenoTV Pro'),('activate_restore','Aktywuj lub przywróć zakup'),('email_address','Adres e-mail'),('order_id_optional','ID zamówienia (opcjonalne)'),('activate_pro','Aktywuj / przywróć Pro'),('request_trial','Poproś o bezpłatny okres próbny'),('refresh_status','Odśwież stan konta'),('this_device','To urządzenie'),('device_code','Kod urządzenia'),('trial_remaining','Pozostały okres próbny'),('days','dni'),('pro_active','Pro jest aktywne'),('devices','urządzenia'),('free_description','Telewizja na żywo, filmy, seriale, podstawowy program TV, wyszukiwanie i ulubione są dostępne w Free.'),('checking_status','Sprawdzanie konta NenoTV…'),('status_updated','Stan konta zaktualizowany'),('activation_success','NenoTV Pro aktywowane'),('activation_failed','Aktywacja nie powiodła się'),('server_unavailable','Usługa konta NenoTV nie jest jeszcze dostępna'),('email_required','Wpisz adres e-mail'),('pro_required','NenoTV Pro'),('pro_unlock_message','jest dostępne w NenoTV Pro lub podczas okresu próbnego Pro.'),('view_pro','Zobacz NenoTV Pro'),('not_now','Nie teraz'),('this_feature','Ta funkcja'),('advanced_epg','Zaawansowany program TV'),('recording','Nagrywanie'),('casting','Przesyłanie na TV'),('parental_controls','Kontrola rodzicielska'),('advanced_subtitles','Zewnętrzne napisy'),('manage_source','Zarządzaj źródłem TV')],
+          'AR':[
+          ('account_and_pro','الحساب و NenoTV Pro'),('nenotv_free','NenoTV Free'),('nenotv_pro_trial','NenoTV Pro · تجربة'),('nenotv_pro','NenoTV Pro'),('activate_restore','تفعيل الشراء أو استعادته'),('email_address','البريد الإلكتروني'),('order_id_optional','رقم الطلب (اختياري)'),('activate_pro','تفعيل / استعادة Pro'),('request_trial','طلب تجربة مجانية'),('refresh_status','تحديث حالة الحساب'),('this_device','هذا الجهاز'),('device_code','رمز الجهاز'),('trial_remaining','المتبقي من التجربة'),('days','أيام'),('pro_active','Pro مفعّل'),('devices','أجهزة'),('free_description','البث المباشر والأفلام والمسلسلات ودليل التلفاز الأساسي والبحث والمفضلة متاحة في Free.'),('checking_status','جارٍ التحقق من حساب NenoTV…'),('status_updated','تم تحديث حالة الحساب'),('activation_success','تم تفعيل NenoTV Pro'),('activation_failed','فشل التفعيل'),('server_unavailable','خدمة حساب NenoTV غير متاحة بعد'),('email_required','أدخل بريدك الإلكتروني'),('pro_required','NenoTV Pro'),('pro_unlock_message','متاحة مع NenoTV Pro أو أثناء تجربة Pro.'),('view_pro','عرض NenoTV Pro'),('not_now','ليس الآن'),('this_feature','هذه الميزة'),('advanced_epg','دليل تلفاز متقدم'),('recording','تسجيل'),('casting','البث إلى التلفاز'),('parental_controls','الرقابة الأبوية'),('advanced_subtitles','ترجمات خارجية'),('manage_source','إدارة مصدر التلفاز')]
+          }
+          for name,items in packs.items():
+              marker='private static final Map<String,String> '+name+'=map(new String[][]{'
+              pos=x.find(marker)
+              if pos<0: continue
+              pos=x.find('\n',pos)+1
+              existing=x[pos:pos+4000]
+              lines=[]
+              for k,v in items:
+                  if ('{"'+k+'",') not in existing:
+                      v=v.replace('\\','\\\\').replace('"','\\"')
+                      lines.append('        {"%s","%s"},' % (k,v))
+              if lines:x=x[:pos]+'\n'.join(lines)+'\n'+x[pos:]
+          ui.write_text(x)
+          PY
+          # v0.10.3: first-sync progress + language/plan badges + clearer Pro locks
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          layout=Path("app/src/main/res/layout/activity_main.xml")
+          x=layout.read_text()
+          # Header language and plan badges
+          x=x.replace('<Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>',
+          '''<Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
+            <Button android:id="@+id/languageBadge" android:layout_width="48dp" android:layout_height="36dp" android:text="NL" android:textAllCaps="false" android:textColor="#FFF7F8FA" android:textSize="11sp" android:backgroundTint="#151A21" android:contentDescription="Language"/>
+            <Button android:id="@+id/planBadge" android:layout_width="58dp" android:layout_height="36dp" android:layout_marginLeft="5dp" android:text="FREE" android:textAllCaps="false" android:textStyle="bold" android:textColor="#FF0A0A0A" android:textSize="10sp" android:backgroundTint="#FFD400" android:contentDescription="Plan"/>''',1)
+
+          # First sync banner: localized message + determinate progress
+          start=x.find('  <LinearLayout android:id="@+id/indexBanner"')
+          end=x.find('  <FrameLayout android:id="@+id/heroContainer"',start)
+          if start>=0 and end>start:
+              banner='''  <LinearLayout android:id="@+id/indexBanner" android:layout_width="match_parent" android:layout_height="66dp" android:layout_marginLeft="14dp" android:layout_marginRight="14dp" android:layout_marginBottom="5dp" android:orientation="vertical" android:gravity="center_vertical" android:paddingLeft="12dp" android:paddingRight="12dp" android:paddingTop="7dp" android:paddingBottom="7dp" android:background="@drawable/bg_search" android:visibility="gone">
+            <TextView android:id="@+id/indexBannerText" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/text" android:textSize="11sp" android:maxLines="2" android:ellipsize="end"/>
+            <ProgressBar android:id="@+id/indexBannerProgress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="7dp" android:layout_marginTop="6dp" android:max="100" android:progress="0" android:indeterminate="false" android:progressTint="#FFD400" android:progressBackgroundTint="#303640"/>
+          </LinearLayout>
+          '''
+              x=x[:start]+banner+x[end:]
+          layout.write_text(x)
+
+          main=Path("app/src/main/java/com/robertalt/raiptv/MainActivity.java")
+          s=main.read_text()
+          s=s.replace('Spinner categories; ListView list; GridView grid; EditText search; TextView status,title,heroTitle,heroSubtitle,indexBannerText; ImageView heroImage; Button heroAction,heroInfo,genreButton,sortButton,searchToggle,settingsButton,tvShareButton,epgGridButton,epgListButton; ProgressBar progress;',
+                      'Spinner categories; ListView list; GridView grid; EditText search; TextView status,title,heroTitle,heroSubtitle,indexBannerText; ImageView heroImage; Button heroAction,heroInfo,genreButton,sortButton,searchToggle,settingsButton,tvShareButton,epgGridButton,epgListButton,languageBadge,planBadge; ProgressBar progress,indexBannerProgress;')
+          s=s.replace('indexBanner=findViewById(R.id.indexBanner);indexBannerText=findViewById(R.id.indexBannerText);',
+                      'indexBanner=findViewById(R.id.indexBanner);indexBannerText=findViewById(R.id.indexBannerText);indexBannerProgress=findViewById(R.id.indexBannerProgress);languageBadge=findViewById(R.id.languageBadge);planBadge=findViewById(R.id.planBadge);')
+
+          # wire header badges
+          wire='    void wire(){\n'
+          extra='''        if(languageBadge!=null)languageBadge.setOnClickListener(v->showLanguageQuickMenu());
+                  if(planBadge!=null)planBadge.setOnClickListener(v->startActivity(new Intent(this,AccountActivity.class)));
+          '''
+          if 'showLanguageQuickMenu()' not in s:
+              s=s.replace(wire,wire+extra,1)
+
+          # replace hidden progress method with first-run progress
+          a=s.find('    void showIndexBanner(String type,int done,int cats,int titles){')
+          b=s.find('\n    void hideIndexBanner(',a)
+          if a>=0 and b>0:
+              method='''    void showIndexBanner(String type,int done,int cats,int titles){
+                  if(indexBanner==null||indexBannerText==null)return;
+                  android.content.SharedPreferences sp=SettingsStore.prefs(this);
+                  String key="first_sync_done_"+profileKey();
+                  if(sp.getBoolean(key,false)){indexBanner.setVisibility(View.GONE);return;}
+                  int pct=cats<=0?0:Math.max(0,Math.min(100,(done*100)/Math.max(1,cats)));
+                  String target="vod".equals(type)?T("movies"):("series".equals(type)?T("series"):T("live_tv"));
+                  indexBannerText.setText(T("first_sync_wait")+" · "+target+" "+done+"/"+Math.max(1,cats)+" · "+titles+" "+T("titles"));
+                  if(indexBannerProgress!=null){indexBannerProgress.setIndeterminate(false);indexBannerProgress.setProgress(pct);}
+                  indexBanner.setTag(type);indexBanner.setVisibility(View.VISIBLE);
+              }
+          '''
+              s=s[:a]+method+s[b:]
+
+          # mark full sync once all main sections are complete
+          done_marker='if(!Thread.currentThread().isInterrupted()){int count=searchIndex.countSection(key,type);if(count>0){searchIndex.markSection(key,type,count);SettingsStore.prefs(this).edit().remove(cacheCursorKey(type)).apply();reloadIndexedSectionWhenReady(type);}'
+          done_repl=done_marker+'if(searchIndex.isComplete(key,"vod")&&searchIndex.isComplete(key,"series")&&searchIndex.isComplete(key,"live"))SettingsStore.prefs(this).edit().putBoolean("first_sync_done_"+key,true).apply();'
+          s=s.replace(done_marker,done_repl)
+
+          # Update badges whenever returning to app
+          s=s.replace('@Override protected void onResume(){super.onResume();activityPaused=false;',
+                      '@Override protected void onResume(){super.onResume();activityPaused=false;updateHeaderBadges();')
+
+          helpers='''    void updateHeaderBadges(){
+                  if(languageBadge!=null)languageBadge.setText(SettingsStore.primaryLanguage(this).toUpperCase(Locale.ROOT));
+                  if(planBadge!=null){EntitlementStore e=new EntitlementStore(this);String b=e.shortBadge();if(e.isTrial())b="TRIAL · "+e.trialDaysRemaining()+"d";planBadge.setText(b);planBadge.setTextColor(0xFF0A0A0A);planBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));}
+              }
+              void showLanguageQuickMenu(){
+                  final String[] codes={"nl","en","de","fr","es","it","pt","tr","pl","ar"};
+                  String[] labels=new String[codes.length];for(int i=0;i<codes.length;i++)labels[i]=SettingsStore.displayLanguage(this,codes[i]);
+                  new AlertDialog.Builder(this).setTitle(T("language")).setItems(labels,(d,w)->{SettingsStore.setPrimaryLanguage(this,codes[w]);recreate();}).show();
+              }
+
+          '''
+          if 'void updateHeaderBadges()' not in s:
+              s=s.replace('    void openProfile(){',helpers+'    void openProfile(){',1)
+
+          # Call once after initial setup
+          s=s.replace('appliedLanguage=SettingsStore.language(this);appliedContentLanguage=SettingsStore.contentLanguage(this);applyStaticLanguage();wire();',
+                      'appliedLanguage=SettingsStore.language(this);appliedContentLanguage=SettingsStore.contentLanguage(this);applyStaticLanguage();wire();updateHeaderBadges();')
+
+          # clearer Pro labels in UI
+          s=s.replace('epgGridButton.setText("EPG");','epgGridButton.setText("🔒 PRO · "+T("advanced_epg"));')
+          s=s.replace('epgGridButton.setOnClickListener(v->{epgGridMode=true;SettingsStore.prefs(this).edit().putBoolean("epg_grid",true).apply();showEpgByMode(all);});',
+                      'epgGridButton.setOnClickListener(v->{if(!ProGate.require(this,T("advanced_epg")))return;epgGridMode=true;SettingsStore.prefs(this).edit().putBoolean("epg_grid",true).apply();showEpgByMode(all);});')
+
+          main.write_text(s)
+
+          # Settings: show locks and explain Pro-only options
+          settings=Path("app/src/main/java/com/robertalt/raiptv/SettingsActivity.java")
+          x=settings.read_text()
+          x=x.replace('sec(T("parental"));Switch parental=new Switch(this);parental.setText(T("hide_adult"));',
+                      'sec("🔒 PRO · "+T("parental_controls"));Switch parental=new Switch(this);parental.setText("🔒 "+T("hide_adult"));')
+          x=x.replace('parental.setOnCheckedChangeListener((v,on)->{',
+                      'parental.setOnCheckedChangeListener((v,on)->{if(on&&!ProGate.require(this,T("parental_controls"))){v.setChecked(false);return;}')
+          x=x.replace('sec(T("playback"));', 'sec(T("playback"));TextView proHint=t("🔒 PRO · "+T("picture_in_picture")+" · "+T("advanced_subtitles"),12);proHint.setTextColor(0xFFFFD400);box.addView(proHint);')
+          settings.write_text(x)
+
+          # Add localized first-sync and Pro benefit strings to all languages that already exist.
+          ui=Path("app/src/main/java/com/robertalt/raiptv/UiText.java")
+          x=ui.read_text()
+          packs={
+          'EN':{'first_sync_wait':'Preparing your library. Please wait while NenoTV processes your complete TV list. You can keep using the app.','picture_in_picture':'Picture-in-Picture','pro_benefit_casting':'Cast live TV, movies and series to a supported TV.','pro_benefit_epg':'See multiple channels and programmes together in an advanced timeline guide.','pro_benefit_recording':'Record live programmes when your device and storage support it.','pro_benefit_parental':'Protect categories and content with a PIN.','pro_benefit_subtitles':'Use external subtitles and additional subtitle options.','pro_benefit_pip':'Keep watching in a small window while using other apps.','pro_benefit_sources':'Add and switch between multiple TV sources.'},
+          'NL':{'first_sync_wait':'Bibliotheek voorbereiden. Even geduld terwijl NenoTV je volledige TV-lijst verwerkt. Je kunt de app ondertussen gewoon gebruiken.','picture_in_picture':'Beeld-in-beeld','pro_benefit_casting':'Stuur Live TV, films en series naar een ondersteunde TV.','pro_benefit_epg':'Bekijk meerdere zenders en programma’s tegelijk in een uitgebreide tijdlijn.','pro_benefit_recording':'Neem live-programma’s op wanneer je apparaat en opslag dit ondersteunen.','pro_benefit_parental':'Beveilig categorieën en content met een pincode.','pro_benefit_subtitles':'Gebruik externe ondertitels en extra ondertitelopties.','pro_benefit_pip':'Blijf kijken in een klein venster terwijl je andere apps gebruikt.','pro_benefit_sources':'Voeg meerdere TV-bronnen toe en wissel eenvoudig.'},
+          'DE':{'first_sync_wait':'Mediathek wird vorbereitet. Bitte warten Sie, während NenoTV Ihre vollständige TV-Liste verarbeitet. Die App kann weiter benutzt werden.','picture_in_picture':'Bild-im-Bild','pro_benefit_casting':'Live-TV, Filme und Serien auf einen unterstützten Fernseher übertragen.','pro_benefit_epg':'Mehrere Sender und Programme gleichzeitig in einer erweiterten Zeitleiste sehen.','pro_benefit_recording':'Live-Sendungen aufnehmen, wenn Gerät und Speicher dies unterstützen.','pro_benefit_parental':'Kategorien und Inhalte mit einer PIN schützen.','pro_benefit_subtitles':'Externe Untertitel und zusätzliche Untertiteloptionen verwenden.','pro_benefit_pip':'In einem kleinen Fenster weiterschauen, während andere Apps genutzt werden.','pro_benefit_sources':'Mehrere TV-Quellen hinzufügen und einfach wechseln.'},
+          'FR':{'first_sync_wait':'Préparation de la bibliothèque. Veuillez patienter pendant que NenoTV traite votre liste TV complète. Vous pouvez continuer à utiliser l’application.','picture_in_picture':'Image dans l’image','pro_benefit_casting':'Diffusez la TV en direct, les films et les séries vers un téléviseur compatible.','pro_benefit_epg':'Affichez plusieurs chaînes et programmes dans une grille chronologique avancée.','pro_benefit_recording':'Enregistrez les programmes en direct si votre appareil et votre stockage le permettent.','pro_benefit_parental':'Protégez les catégories et le contenu avec un code PIN.','pro_benefit_subtitles':'Utilisez des sous-titres externes et des options supplémentaires.','pro_benefit_pip':'Continuez à regarder dans une petite fenêtre pendant l’utilisation d’autres applications.','pro_benefit_sources':'Ajoutez plusieurs sources TV et passez facilement de l’une à l’autre.'},
+          'ES':{'first_sync_wait':'Preparando la biblioteca. Espera mientras NenoTV procesa tu lista de TV completa. Puedes seguir usando la app.','picture_in_picture':'Imagen en imagen','pro_benefit_casting':'Envía TV en directo, películas y series a un televisor compatible.','pro_benefit_epg':'Consulta varios canales y programas a la vez en una guía cronológica avanzada.','pro_benefit_recording':'Graba programas en directo si el dispositivo y el almacenamiento lo permiten.','pro_benefit_parental':'Protege categorías y contenido con un PIN.','pro_benefit_subtitles':'Usa subtítulos externos y opciones adicionales.','pro_benefit_pip':'Sigue viendo en una ventana pequeña mientras usas otras apps.','pro_benefit_sources':'Añade varias fuentes de TV y cambia fácilmente entre ellas.'},
+          'IT':{'first_sync_wait':'Preparazione della libreria. Attendi mentre NenoTV elabora l’intero elenco TV. Puoi continuare a usare l’app.','picture_in_picture':'Picture-in-Picture','pro_benefit_casting':'Trasmetti TV in diretta, film e serie a una TV supportata.','pro_benefit_epg':'Visualizza più canali e programmi insieme in una guida temporale avanzata.','pro_benefit_recording':'Registra programmi in diretta quando dispositivo e memoria lo consentono.','pro_benefit_parental':'Proteggi categorie e contenuti con un PIN.','pro_benefit_subtitles':'Usa sottotitoli esterni e opzioni aggiuntive.','pro_benefit_pip':'Continua a guardare in una piccola finestra mentre usi altre app.','pro_benefit_sources':'Aggiungi più sorgenti TV e passa facilmente da una all’altra.'},
+          'PT':{'first_sync_wait':'A preparar a biblioteca. Aguarde enquanto o NenoTV processa a sua lista de TV completa. Pode continuar a usar a aplicação.','picture_in_picture':'Imagem em imagem','pro_benefit_casting':'Transmita TV em direto, filmes e séries para uma TV compatível.','pro_benefit_epg':'Veja vários canais e programas numa grelha temporal avançada.','pro_benefit_recording':'Grave programas em direto quando o dispositivo e o armazenamento suportarem.','pro_benefit_parental':'Proteja categorias e conteúdos com PIN.','pro_benefit_subtitles':'Use legendas externas e opções adicionais.','pro_benefit_pip':'Continue a ver numa pequena janela enquanto utiliza outras aplicações.','pro_benefit_sources':'Adicione várias fontes de TV e alterne facilmente.'},
+          'TR':{'first_sync_wait':'Kütüphane hazırlanıyor. NenoTV tüm TV listenizi işlerken lütfen bekleyin. Uygulamayı kullanmaya devam edebilirsiniz.','picture_in_picture':'Resim içinde resim','pro_benefit_casting':'Canlı TV, film ve dizileri desteklenen bir TV’ye aktarın.','pro_benefit_epg':'Birden fazla kanal ve programı gelişmiş zaman çizelgesinde birlikte görün.','pro_benefit_recording':'Cihaz ve depolama destekliyorsa canlı programları kaydedin.','pro_benefit_parental':'Kategorileri ve içeriği PIN ile koruyun.','pro_benefit_subtitles':'Harici altyazıları ve ek altyazı seçeneklerini kullanın.','pro_benefit_pip':'Diğer uygulamaları kullanırken küçük bir pencerede izlemeye devam edin.','pro_benefit_sources':'Birden fazla TV kaynağı ekleyin ve kolayca geçiş yapın.'},
+          'PL':{'first_sync_wait':'Przygotowywanie biblioteki. Poczekaj, aż NenoTV przetworzy pełną listę TV. Możesz nadal korzystać z aplikacji.','picture_in_picture':'Obraz w obrazie','pro_benefit_casting':'Przesyłaj telewizję na żywo, filmy i seriale na obsługiwany telewizor.','pro_benefit_epg':'Zobacz wiele kanałów i programów w zaawansowanej osi czasu.','pro_benefit_recording':'Nagrywaj programy na żywo, jeśli urządzenie i pamięć na to pozwalają.','pro_benefit_parental':'Chroń kategorie i treści kodem PIN.','pro_benefit_subtitles':'Używaj zewnętrznych napisów i dodatkowych opcji napisów.','pro_benefit_pip':'Oglądaj dalej w małym oknie podczas korzystania z innych aplikacji.','pro_benefit_sources':'Dodaj wiele źródeł TV i łatwo się między nimi przełączaj.'},
+          'AR':{'first_sync_wait':'جارٍ تجهيز المكتبة. يُرجى الانتظار بينما يعالج NenoTV قائمة التلفاز الكاملة. يمكنك متابعة استخدام التطبيق.','picture_in_picture':'صورة داخل صورة','pro_benefit_casting':'اعرض البث المباشر والأفلام والمسلسلات على تلفاز مدعوم.','pro_benefit_epg':'اعرض عدة قنوات وبرامج معًا في دليل زمني متقدم.','pro_benefit_recording':'سجّل البرامج المباشرة عندما يدعم الجهاز والتخزين ذلك.','pro_benefit_parental':'احمِ الفئات والمحتوى برمز PIN.','pro_benefit_subtitles':'استخدم ترجمات خارجية وخيارات إضافية للترجمة.','pro_benefit_pip':'واصل المشاهدة في نافذة صغيرة أثناء استخدام تطبيقات أخرى.','pro_benefit_sources':'أضف عدة مصادر تلفاز وانتقل بينها بسهولة.'}
+          }
+          for name,items in packs.items():
+              marker='private static final Map<String,String> '+name+'=map(new String[][]{'
+              pos=x.find(marker)
+              if pos<0: continue
+              pos=x.find('\n',pos)+1
+              existing=x[pos:pos+5000]
+              lines=[]
+              for k,v in items.items():
+                  if ('{"'+k+'",') not in existing:
+                      v=v.replace('\\','\\\\').replace('"','\\"')
+                      lines.append('        {"%s","%s"},' % (k,v))
+              if lines:x=x[:pos]+'\n'.join(lines)+'\n'+x[pos:]
+          ui.write_text(x)
+          PY
+          # v0.10.4: robust language indexing + reliable first-sync progress
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # Provider category language recognition: support "PL - ...", "ES | ...", country names, etc.
+          lang=Path("app/src/main/java/com/robertalt/raiptv/ContentLanguage.java")
+          x=lang.read_text()
+          x=x.replace('alias("de","de","deu","ger","german","deutsch","deutschsprachig");',
+                      'alias("de","de","deu","ger","german","deutsch","deutschsprachig","deutschland","germany");')
+          x=x.replace('alias("fr","fr","fra","fre","french","francais","français");',
+                      'alias("fr","fr","fra","fre","french","francais","français","france");')
+          x=x.replace('alias("es","es","spa","spanish","espanol","español");',
+                      'alias("es","es","spa","spanish","espanol","español","espana","españa","spain");')
+          x=x.replace('alias("it","it","ita","italian","italiano");',
+                      'alias("it","it","ita","italian","italiano","italia","italy");')
+          x=x.replace('alias("pt","pt","por","portuguese","portugues","português");',
+                      'alias("pt","pt","por","portuguese","portugues","português","portugal");')
+          x=x.replace('alias("tr","tr","tur","turkish","turkce","türkçe");',
+                      'alias("tr","tr","tur","turkish","turkce","türkçe","turkiye","türkiye","turkey");')
+          x=x.replace('alias("pl","pl","pol","polish","polski");',
+                      'alias("pl","pl","pol","polish","polski","polska","poland");')
+          old='''        else {int j=s.indexOf(':');if(j>0&&j<=12)x=s.substring(0,j);}
+                  return normToken(x);'''
+          new='''        else {
+                      int best=-1;
+                      for(char sep:new char[]{':','-','·','|','/'}){int j=s.indexOf(sep);if(j>0&&j<=16&&(best<0||j<best))best=j;}
+                      if(best>0)x=s.substring(0,best);
+                  }
+                  return normToken(x);'''
+          x=x.replace(old,new)
+          old2='''        if(raw!=null){String s=raw.trim(),head="";if(s.startsWith("|")){int j=s.indexOf('|',1);if(j>1)head=s.substring(1,j);}else if(s.startsWith("[")){int j=s.indexOf(']');if(j>1)head=s.substring(1,j);}else if(s.startsWith("(")){int j=s.indexOf(')');if(j>1)head=s.substring(1,j);}else{int j=s.indexOf(':');if(j>0&&j<=16)head=s.substring(0,j);}'''
+          new2='''        if(raw!=null){String s=raw.trim(),head="";if(s.startsWith("|")){int j=s.indexOf('|',1);if(j>1)head=s.substring(1,j);}else if(s.startsWith("[")){int j=s.indexOf(']');if(j>1)head=s.substring(1,j);}else if(s.startsWith("(")){int j=s.indexOf(')');if(j>1)head=s.substring(1,j);}else{int best=-1;for(char sep:new char[]{':','-','·','|','/'}){int j=s.indexOf(sep);if(j>0&&j<=16&&(best<0||j<best))best=j;}if(best>0)head=s.substring(0,best);}'''
+          x=x.replace(old2,new2)
+          lang.write_text(x)
+
+          main=Path("app/src/main/java/com/robertalt/raiptv/MainActivity.java")
+          s=main.read_text()
+
+          # Category is authoritative for language classification during provider indexing.
+          s=s.replace('for(MediaEntry e:x)if(e!=null&&(e.group==null||e.group.trim().isEmpty()))e.group=c.name;',
+                      'for(MediaEntry e:x)if(e!=null)e.group=c.name;')
+          s=s.replace('for(MediaEntry e:batch)if(e!=null&&(e.group==null||e.group.trim().isEmpty()))e.group=c.name;',
+                      'for(MediaEntry e:batch)if(e!=null)e.group=c.name;')
+          s=s.replace('for(MediaEntry e:x)if(e!=null&&(e.group==null||e.group.trim().isEmpty()))e.group=first.name;',
+                      'for(MediaEntry e:x)if(e!=null)e.group=first.name;')
+
+          # Foreground use may pause indexing, but the first-sync progress must remain visible.
+          s=s.replace('Future<?> f=indexFuture;if(f!=null&&!f.isDone())f.cancel(true);\n              hideIndexBanner("");',
+                      'Future<?> f=indexFuture;if(f!=null&&!f.isDone())f.cancel(true);\n              restoreFirstSyncBanner();')
+
+          # Reliable global first-sync banner; persisted so it survives tab switches/recreates.
+          a=s.find('    void showIndexBanner(String type,int done,int cats,int titles){')
+          b=s.find('\n    void hideIndexBanner(',a)
+          if a>=0 and b>0:
+              method='''    void showIndexBanner(String type,int done,int cats,int titles){
+                  if(indexBanner==null||indexBannerText==null)return;
+                  android.content.SharedPreferences sp=SettingsStore.prefs(this);
+                  String key=profileKey();
+                  if(sp.getBoolean("first_sync_done_"+key,false)){indexBanner.setVisibility(View.GONE);return;}
+                  int total=Math.max(1,cats),finished=Math.max(0,Math.min(done,total));
+                  int pct=Math.max(0,Math.min(100,(finished*100)/total));
+                  sp.edit().putInt("first_sync_done_count_"+key,finished).putInt("first_sync_total_count_"+key,total).putInt("first_sync_titles_"+key,Math.max(0,titles)).apply();
+                  indexBannerText.setText(T("first_sync_wait")+" · "+pct+"% · "+finished+"/"+total+" "+T("categories")+" · "+Math.max(0,titles)+" "+T("titles"));
+                  if(indexBannerProgress!=null){indexBannerProgress.setIndeterminate(false);indexBannerProgress.setMax(100);indexBannerProgress.setProgress(pct);}
+                  indexBanner.setVisibility(View.VISIBLE);
+              }
+              void restoreFirstSyncBanner(){
+                  if(indexBanner==null||profile==null)return;
+                  android.content.SharedPreferences sp=SettingsStore.prefs(this);String key=profileKey();
+                  if(sp.getBoolean("first_sync_done_"+key,false)){indexBanner.setVisibility(View.GONE);return;}
+                  int total=sp.getInt("first_sync_total_count_"+key,0);
+                  int done=sp.getInt("first_sync_done_count_"+key,0);
+                  int titles=sp.getInt("first_sync_titles_"+key,0);
+                  if(total>0)showIndexBanner("",done,total,titles);
+              }
+          '''
+              s=s[:a]+method+s[b:]
+
+          # Replace background indexer with global category progress and one-time v0.10.4 rebuild.
+          a=s.find('    void refreshSearchIndex(boolean force){')
+          b=s.find('\n    void waitWhilePaused()',a)
+          if a>=0 and b>0:
+              refresh='''    void refreshSearchIndex(boolean force){
+                  if(provider==null||profile==null||indexRefreshRunning)return;
+                  indexRefreshRunning=true;final String key=profileKey();final boolean requestedForce=force;
+                  indexFuture=indexExec.submit(()->{
+            boolean allComplete=false;
+            try{
+                android.content.SharedPreferences sp=SettingsStore.prefs(this);
+                final int schema=4;
+                boolean migration=sp.getInt("language_index_version_"+key,0)<schema;
+                if(migration&&!sp.getBoolean("language_index_rebuild_started_"+key,false)){
+                    try{searchIndex.clearAll();}catch(Exception ignored){}
+                    sp.edit().putBoolean("language_index_rebuild_started_"+key,true).putBoolean("first_sync_done_"+key,false)
+                      .remove(cacheCursorKey("vod")).remove(cacheCursorKey("series")).remove(cacheCursorKey("live"))
+                      .putInt("first_sync_done_count_"+key,0).putInt("first_sync_total_count_"+key,0).putInt("first_sync_titles_"+key,0).apply();
+                }
+                if(profile.type==Profile.Type.M3U){
+                    List<MediaEntry>x=provider.items("live","all");searchIndex.replaceSection(key,"live",x);
+                    allComplete=true;
+                }else{
+                    final String[] baseTypes={"vod","series","live"};
+                    LinkedHashMap<String,List<Category>> catMap=new LinkedHashMap<>();
+                    int globalTotal=0;
+                    final String preferred=SettingsStore.contentLanguage(this);
+                    for(String type:baseTypes){
+                        List<Category> cats=new ArrayList<>(provider.categories(type));
+                        cats.sort((ca,cb)->{int z=Integer.compare(ContentLanguage.rankText(ca.name,preferred),ContentLanguage.rankText(cb.name,preferred));return z!=0?z:safe(ca.name).compareToIgnoreCase(safe(cb.name));});
+                        catMap.put(type,cats);globalTotal+=cats.size();
+                    }
+                    ArrayList<String> order=new ArrayList<>();if(section.equals("live")||section.equals("vod")||section.equals("series"))order.add(section);for(String t:baseTypes)if(!order.contains(t))order.add(t);
+                    int globalDone=0;
+                    for(String type:baseTypes){
+                        List<Category> cats=catMap.get(type);
+                        if(!migration&&!requestedForce&&searchIndex.isFresh(key,type,SEARCH_INDEX_TTL_MS)){globalDone+=cats.size();continue;}
+                        String cursor=SettingsStore.prefs(this).getString(cacheCursorKey(type),"");
+                        int startAt=0;if(cursor!=null&&!cursor.isEmpty()){for(int ci=0;ci<cats.size();ci++)if(cursor.equals(cats.get(ci).id)){startAt=ci+1;break;}if(startAt>=cats.size())startAt=0;}
+                        globalDone+=startAt;
+                    }
+                    final int initialDone=globalDone,grandTotal=Math.max(1,globalTotal),initialTitles=searchIndex.count(key);
+                    if(isUiAlive())runOnUiThread(()->showIndexBanner("",initialDone,grandTotal,initialTitles));
+                    for(String type:order){
+                        if(Thread.currentThread().isInterrupted())break;
+                        List<Category> cats=catMap.get(type);
+                        if(!migration&&!requestedForce&&searchIndex.isFresh(key,type,SEARCH_INDEX_TTL_MS))continue;
+                        int startAt=0;String cursor=requestedForce?"":SettingsStore.prefs(this).getString(cacheCursorKey(type),"");
+                        if(cursor!=null&&!cursor.isEmpty()){for(int ci=0;ci<cats.size();ci++)if(cursor.equals(cats.get(ci).id)){startAt=ci+1;break;}if(startAt>=cats.size())startAt=0;}
+                        for(int ci=startAt;ci<cats.size();ci++){
+                            Category cat=cats.get(ci);if(Thread.currentThread().isInterrupted())break;
+                            waitWhilePaused();waitForLibraryLoad();if(activityPaused||Thread.currentThread().isInterrupted())break;
+                            boolean indexed=false;List<MediaEntry>items=Collections.emptyList();indexCategoryBusy=true;
+                            try{
+                                items=provider.items(type,cat.id);if(activityPaused||Thread.currentThread().isInterrupted())break;
+                                for(MediaEntry e:items)if(e!=null)e.group=cat.name;
+                                searchIndex.upsert(key,items);if(Thread.currentThread().isInterrupted())break;
+                                indexed=true;publishIndexedTop(type);
+                            }catch(Exception ignored){}finally{indexCategoryBusy=false;}
+                            if(!indexed){if(activityPaused||Thread.currentThread().isInterrupted())break;continue;}
+                            try{SettingsStore.prefs(this).edit().putString(cacheCursorKey(type),safe(cat.id)).apply();}catch(Exception ignored){}
+                            globalDone++;final int gd=globalDone,gt=grandTotal,ti=searchIndex.count(key);
+                            if(isUiAlive())runOnUiThread(()->showIndexBanner("",gd,gt,ti));
+                            String q=latestSearchQuery;if(q!=null&&!q.isEmpty()&&isUiAlive())runOnUiThread(()->{if(isUiAlive())searchEverywhere(q);});
+                        }
+                        if(!Thread.currentThread().isInterrupted()){
+                            int count=searchIndex.countSection(key,type);
+                            if(count>0){searchIndex.markSection(key,type,count);SettingsStore.prefs(this).edit().remove(cacheCursorKey(type)).apply();reloadIndexedSectionWhenReady(type);}
+                        }
+                    }
+                    allComplete=searchIndex.isComplete(key,"vod")&&searchIndex.isComplete(key,"series")&&searchIndex.isComplete(key,"live");
+                    if(allComplete){
+                        sp.edit().putInt("language_index_version_"+key,schema).putBoolean("language_index_rebuild_started_"+key,false)
+                          .putBoolean("first_sync_done_"+key,true).putInt("first_sync_done_count_"+key,grandTotal).putInt("first_sync_total_count_"+key,grandTotal).apply();
+                    }
+                }
+            }catch(Exception ignored){}finally{
+                indexCategoryBusy=false;indexRefreshRunning=false;indexFuture=null;final boolean done=allComplete;
+                runOnUiThread(()->{if(!isUiAlive())return;if(done)hideIndexBanner("");else restoreFirstSyncBanner();});
+            }
+                  });
+              }
+          '''
+              s=s[:a]+refresh+s[b:]
+
+          # Don't claim "no results" while selected language is still being built.
+          s=s.replace('if(!complete){busy(true,currentCategoryName+" · "+T("index_building"));if(!indexRefreshRunning)refreshSearchIndex(false);}else busy(false,T("no_results"));',
+                      'if(!complete||!SettingsStore.prefs(this).getBoolean("first_sync_done_"+profileKey(),false)){busy(true,T("first_sync_wait"));restoreFirstSyncBanner();if(!indexRefreshRunning)scheduleBackgroundIndex();}else busy(false,T("no_results"));')
+
+          # Restore first-sync bar after recreation / language switch.
+          s=s.replace('appliedLanguage=SettingsStore.language(this);appliedContentLanguage=SettingsStore.contentLanguage(this);applyStaticLanguage();wire();updateHeaderBadges();',
+                      'appliedLanguage=SettingsStore.language(this);appliedContentLanguage=SettingsStore.contentLanguage(this);applyStaticLanguage();wire();updateHeaderBadges();restoreFirstSyncBanner();')
+          s=s.replace('@Override protected void onResume(){super.onResume();activityPaused=false;updateHeaderBadges();',
+                      '@Override protected void onResume(){super.onResume();activityPaused=false;updateHeaderBadges();restoreFirstSyncBanner();')
+
+          # FREE is intentionally subdued; TRIAL/PRO remain yellow.
+          old='if(planBadge!=null){EntitlementStore e=new EntitlementStore(this);String b=e.shortBadge();if(e.isTrial())b="TRIAL · "+e.trialDaysRemaining()+"d";planBadge.setText(b);planBadge.setTextColor(0xFF0A0A0A);planBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));}'
+          new='if(planBadge!=null){EntitlementStore e=new EntitlementStore(this);String b=e.shortBadge();if(e.isTrial())b="TRIAL · "+e.trialDaysRemaining()+"d";planBadge.setText(b);boolean premium=e.isPro();planBadge.setTextColor(premium?0xFF0A0A0A:0xFFA7AFBC);planBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(premium?0xFFFFD400:0xFF1B2028));}'
+          s=s.replace(old,new)
+
+          main.write_text(s)
+          PY
+          # v0.10.5: performance-only pass — keep UI responsive while indexing/EPG load
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # --- Search database: WAL + short write transactions, never scan/rewrite language hints on UI reads.
+          p=Path("app/src/main/java/com/robertalt/raiptv/storage/SearchIndexStore.java")
+          x=p.read_text()
+          x=x.replace('public SearchIndexStore(Context c){ super(c,DB,null,VERSION); }',
+                      'public SearchIndexStore(Context c){ super(c,DB,null,VERSION); try{setWriteAheadLoggingEnabled(true);}catch(Exception ignored){} }')
+          a=x.index('    public synchronized void upsert(String profile,List<MediaEntry> items){')
+          b=x.index('\n    private void upsertInternal',a)
+          x=x[:a]+'''    public void upsert(String profile,List<MediaEntry> items){
+              if(items==null||items.isEmpty())return;
+              SQLiteDatabase db=getWritableDatabase();
+              final int chunk=80;
+              for(int start=0;start<items.size()&&!Thread.currentThread().isInterrupted();start+=chunk){
+                  int end=Math.min(items.size(),start+chunk);boolean complete=true;
+                  db.beginTransaction();
+                  try{
+                      for(int i=start;i<end;i++){if(Thread.currentThread().isInterrupted()){complete=false;break;}upsertInternal(db,profile,items.get(i));}
+                      if(complete)db.setTransactionSuccessful();
+                  }finally{db.endTransaction();}
+                  if(!complete)break;
+                  Thread.yield();
+              }
+          }
+          '''+x[b:]
+          a=x.index('    private void ensureLanguageHints(SQLiteDatabase db,String profile,String section){')
+          b=x.index('\n    public synchronized List<MediaEntry> sectionPage',a)
+          x=x[:a]+'''    private void ensureLanguageHints(SQLiteDatabase db,String profile,String section){
+              // v0.10.5: new index rows already contain language tags.
+              // Never perform a full decode/write migration from a foreground read.
+          }
+          '''+x[b:]
+          p.write_text(x)
+
+          # --- Main screen: fast foreground loads, separate EPG workers, quieter background indexing.
+          p=Path("app/src/main/java/com/robertalt/raiptv/MainActivity.java")
+          s=p.read_text()
+          s=s.replace('ExecutorService exec=Executors.newFixedThreadPool(4), heroExec=Executors.newSingleThreadExecutor(), indexExec=Executors.newSingleThreadExecutor();',
+                      'ExecutorService exec=Executors.newFixedThreadPool(3), heroExec=Executors.newSingleThreadExecutor(), indexExec=Executors.newSingleThreadExecutor(); ThreadPoolExecutor epgExec=(ThreadPoolExecutor)Executors.newFixedThreadPool(2); volatile int epgRequestSerial=0;')
+          s=s.replace('ui.postDelayed(delayedIndexResume,4500);','ui.postDelayed(delayedIndexResume,8000);')
+          s=s.replace('Future<?> f=indexFuture;if(f!=null&&!f.isDone())f.cancel(true);\n              restoreFirstSyncBanner();',
+                      'Future<?> f=indexFuture;if(f!=null&&!f.isDone())f.cancel(true);epgRequestSerial++;try{epgExec.getQueue().clear();}catch(Exception ignored){}\n              restoreFirstSyncBanner();')
+
+          # Films/Series: if the selected language is not cached yet, fetch only enough to paint the screen.
+          a=s.index('    void loadLanguageGroup(String tag,boolean fromRefresh){')
+          b=s.index('\n    void loadOtherGroup(boolean fromRefresh){',a)
+          fast='''    void loadLanguageGroup(String tag,boolean fromRefresh){
+              final String requested="epg".equals(section)?"live":section;
+              final String normalized=ContentLanguage.normalizeTag(tag);
+              if(normalized.isEmpty()){if("epg".equals(section))loadEpgChannels("all");else loadItems("all");return;}
+              stopCachePaging();final int token=nextRequest();final boolean epg="epg".equals(section);
+              final String wantedId="multi".equals(normalized)?"multi":"lang:"+normalized;
+              currentCategoryId=wantedId;currentCategoryName=groupLabel(wantedId);
+              final List<Category>matches=matchingLanguageCategories(normalized);
+
+              int cached=searchIndex.countLanguage(profileKey(),requested,normalized);
+              if(cached>0){
+                  if(epg){
+                      List<MediaEntry>x=sortItems(visibleItems(searchIndex.languagePage(profileKey(),requested,normalized,0,Math.min(80,cached),SettingsStore.sort(this))));
+                      all=x;showEpgByMode(x);busy(false,x.size()+" "+T("channels"));scheduleBackgroundIndex();
+                  }else{
+                      loadCachedLanguage(requested,token,normalized,cached);scheduleBackgroundIndex();
+                  }
+                  return;
+              }
+
+              if(epg){
+                  showEpgByMode(Collections.emptyList());busy(true,currentCategoryName+" · "+T("channels_loading"));
+              }else{
+                  showMediaGrid("live".equals(requested));gridAdapter.set(Collections.emptyList(),"live".equals(requested));busy(true,T("library_opening"));
+              }
+              if(matches.isEmpty()){busy(false,T("no_results"));scheduleBackgroundIndex();return;}
+
+              exec.execute(()->{
+                  try{
+                      List<MediaEntry>ready=Collections.emptyList();
+                      int attempts=Math.min(3,matches.size());
+                      for(int i=0;i<attempts&&!Thread.currentThread().isInterrupted();i++){
+                          Category cat=matches.get(i);
+                          List<MediaEntry>batch=provider.items(requested,cat.id);
+                          for(MediaEntry e:batch)if(e!=null)e.group=cat.name;
+                          try{searchIndex.upsert(profileKey(),batch);}catch(Exception ignored){}
+                          List<MediaEntry>visible=sortItems(visibleItems(batch));
+                          if(!visible.isEmpty()){ready=visible;break;}
+                      }
+                      final ArrayList<MediaEntry>shown=new ArrayList<>(ready);
+                      runOnUiThread(()->{
+                          if(!current(token)||!wantedId.equals(currentCategoryId))return;
+                          if(shown.isEmpty()){busy(true,T("first_sync_wait"));restoreFirstSyncBanner();}
+                          else if(epg){all=shown;showEpgByMode(shown);busy(false,shown.size()+" "+T("channels"));}
+                          else{all=new ArrayList<>(shown);showMediaGrid("live".equals(requested));gridAdapter.set(shown,"live".equals(requested));if(selectedHero==null)previewAuto(shown.get(0));busy(false,shown.size()+" "+T("results"));}
+                          scheduleBackgroundIndex();
+                      });
+                  }catch(Throwable ex){runOnUiThread(()->{if(current(token)){busy(false,T("error_prefix")+": "+friendlyThrowable(ex));scheduleBackgroundIndex();}});}
+              });
+          }
+          '''
+          s=s[:a]+fast+s[b:]
+
+          # First-sync UI updates are cheap; persistence happens on index thread.
+          a=s.index('    void showIndexBanner(String type,int done,int cats,int titles){')
+          b=s.index('\n    void restoreFirstSyncBanner()',a)
+          method='''    void showIndexBanner(String type,int done,int cats,int titles){
+              if(indexBanner==null||indexBannerText==null)return;
+              android.content.SharedPreferences sp=SettingsStore.prefs(this);String key=profileKey();
+              if(sp.getBoolean("first_sync_done_"+key,false)){indexBanner.setVisibility(View.GONE);return;}
+              int total=Math.max(1,cats),finished=Math.max(0,Math.min(done,total));
+              int pct=Math.max(0,Math.min(100,(finished*100)/total));
+              indexBannerText.setText(T("first_sync_wait")+" · "+pct+"% · "+finished+"/"+total+" "+T("categories")+" · "+Math.max(0,titles)+" "+T("titles"));
+              if(indexBannerProgress!=null){indexBannerProgress.setIndeterminate(false);indexBannerProgress.setMax(100);indexBannerProgress.setProgress(pct);}
+              indexBanner.setVisibility(View.VISIBLE);
+          }
+          '''
+          s=s[:a]+method+s[b:]
+
+          s=s.replace('searchIndex.upsert(key,items);if(Thread.currentThread().isInterrupted())break;\n                                indexed=true;publishIndexedTop(type);',
+                      'searchIndex.upsert(key,items);if(Thread.currentThread().isInterrupted())break;\n                                indexed=true;')
+          s=s.replace('globalDone++;final int gd=globalDone,gt=grandTotal,ti=searchIndex.count(key);\n                            if(isUiAlive())runOnUiThread(()->showIndexBanner("",gd,gt,ti));',
+                      'globalDone++;final int gd=globalDone,gt=grandTotal,ti=searchIndex.count(key);sp.edit().putInt("first_sync_done_count_"+key,gd).putInt("first_sync_total_count_"+key,gt).putInt("first_sync_titles_"+key,ti).apply();\n                            if(isUiAlive()&&(gd==gt||gd%5==0))runOnUiThread(()->showIndexBanner("",gd,gt,ti));\n                            try{Thread.sleep(120);}catch(InterruptedException ie){Thread.currentThread().interrupt();break;}')
+          s=s.replace('final int initialDone=globalDone,grandTotal=Math.max(1,globalTotal),initialTitles=searchIndex.count(key);\n                    if(isUiAlive())runOnUiThread(()->showIndexBanner("",initialDone,grandTotal,initialTitles));',
+                      'final int initialDone=globalDone,grandTotal=Math.max(1,globalTotal),initialTitles=searchIndex.count(key);sp.edit().putInt("first_sync_done_count_"+key,initialDone).putInt("first_sync_total_count_"+key,grandTotal).putInt("first_sync_titles_"+key,initialTitles).apply();\n                    if(isUiAlive())runOnUiThread(()->showIndexBanner("",initialDone,grandTotal,initialTitles));')
+
+          # EPG grid: separate queue, fewer visible rows, no per-program ML translation while scrolling.
+          a=s.index('    void renderEpgBoard(List<MediaEntry>channels){')
+          b=s.index('\n    boolean isRadioChannel',a)
+          render='''    void renderEpgBoard(List<MediaEntry>channels){
+              epgRequestSerial++;try{epgExec.getQueue().clear();}catch(Exception ignored){}
+              hideContentViews();epgBoard.setVisibility(View.VISIBLE);epgBoardContainer.removeAllViews();
+              List<MediaEntry>src=new ArrayList<>(channels==null?Collections.emptyList():channels);
+              src.sort((a,b)->{int ar=isRadioChannel(a)?1:0,br=isRadioChannel(b)?1:0;return ar!=br?Integer.compare(ar,br):0;});
+              epgBaseEpoch=(System.currentTimeMillis()/1000L/1800L)*1800L;addEpgTimelineHeader();
+              int cap=getResources().getConfiguration().screenWidthDp>=600?18:10;
+              int n=Math.min(cap,src.size());for(int i=0;i<n;i++)addEpgBoardRow(src.get(i));
+              if(src.size()>n){TextView more=new TextView(this);more.setText("+ "+(src.size()-n)+" "+T("channels")+" · "+T("list"));more.setTextColor(getResources().getColor(R.color.muted));more.setTextSize(12);more.setGravity(Gravity.CENTER);more.setPadding(dp(8),dp(14),dp(8),dp(18));more.setOnClickListener(v->setEpgMode(false));epgBoardContainer.addView(more);}
+          }
+          '''
+          s=s[:a]+render+s[b:]
+
+          a=s.index('    void addEpgBoardRow(MediaEntry ch){')
+          b=s.index('\n    TextView epgTimelineCard',a)
+          row='''    void addEpgBoardRow(MediaEntry ch){
+              LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(3),dp(2),dp(3),dp(2));
+              TextView name=new TextView(this);name.setText(DisplayText.title(ch));name.setTextColor(getResources().getColor(R.color.text));name.setTextSize(10.5f);name.setTypeface(null,Typeface.BOLD);name.setMaxLines(2);name.setEllipsize(TextUtils.TruncateAt.END);name.setGravity(Gravity.CENTER_VERTICAL);row.addView(name,new LinearLayout.LayoutParams(dp(105),dp(66)));
+              FrameLayout timeline=new FrameLayout(this);timeline.setBackgroundColor(0xFF10141C);int timelineDp=epgTimelineWidth();row.addView(timeline,new LinearLayout.LayoutParams(dp(timelineDp),dp(66)));row.setOnClickListener(v->play(ch));epgBoardContainer.addView(row,new LinearLayout.LayoutParams(-1,dp(70)));
+              TextView loading=epgTimelineCard(T("epg_loading"),false);FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(-1,-1);loading.setLayoutParams(lp);timeline.addView(loading);
+              final long base=epgBaseEpoch;final int request=epgRequestSerial;
+              epgExec.execute(()->{try{
+                  if(request!=epgRequestSerial)return;
+                  List<EpgEntry>events=provider.epgEntries(ch,6);
+                  runOnUiThread(()->{
+                      if(!isUiAlive()||!"epg".equals(section)||base!=epgBaseEpoch||request!=epgRequestSerial)return;
+                      timeline.removeAllViews();long horizon=base+7200L;int added=0;
+                      for(EpgEntry e:events){long st=e.startEpoch>0?e.startEpoch:base,en=e.endEpoch>st?e.endEpoch:st+1800L;if(en<=base||st>=horizon)continue;long visStart=Math.max(base,st),visEnd=Math.min(horizon,en);int left=(int)Math.round((visStart-base)*timelineDp/7200.0),width=Math.max(46,(int)Math.round((visEnd-visStart)*timelineDp/7200.0));String range=e.range();TextView card=epgTimelineCard((range.isEmpty()?"":range+"\\n")+e.title,e.isNow());FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(dp(width),dp(62));cp.leftMargin=dp(left);cp.topMargin=dp(2);card.setLayoutParams(cp);timeline.addView(card);added++;}
+                      if(added==0){TextView none=epgTimelineCard(T("no_epg"),false);FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(-1,-1);none.setLayoutParams(np);timeline.addView(none);}
+                  });
+              }catch(Exception ignored){runOnUiThread(()->{if(isUiAlive()&&"epg".equals(section)&&request==epgRequestSerial){timeline.removeAllViews();TextView none=epgTimelineCard(T("no_epg"),false);FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(-1,-1);none.setLayoutParams(np);timeline.addView(none);}});}});
+          }
+          '''
+          s=s[:a]+row+s[b:]
+          p.write_text(s)
+
+          # EPG list: max 2 fetches, keep translations on-demand/detail only.
+          p=Path("app/src/main/java/com/robertalt/raiptv/EpgAdapter.java")
+          x=p.read_text()
+          x=x.replace('private final ExecutorService exec=Executors.newFixedThreadPool(4);','private final ExecutorService exec=Executors.newFixedThreadPool(2);')
+          import re
+          x=re.sub(r'InfoTranslator\.translate\(a\.title,SettingsStore\.primaryLanguage\(context\),out->ui\.post\(\(\)->\{if\(key\.equals\(h\.now\.getTag\(\)\)\)h\.now\.setText\(nowPrefix\+out\);\}\)\);','',x)
+          x=re.sub(r'InfoTranslator\.translate\(b\.title,SettingsStore\.primaryLanguage\(context\),out->ui\.post\(\(\)->\{if\(key\.equals\(h\.next\.getTag\(\)\)\)h\.next\.setText\(nextPrefix\+out\);\}\)\);','',x)
+          p.write_text(x)
+
+          # Live grid: do not start ML translation jobs for every visible EPG title.
+          p=Path("app/src/main/java/com/robertalt/raiptv/MediaGridAdapter.java")
+          x=p.read_text()
+          x=x.replace('private static final ExecutorService epgExec=Executors.newFixedThreadPool(2);','private static final ExecutorService epgExec=Executors.newSingleThreadExecutor();')
+          a=x.index('    private void bindLive(TextView meta,MediaEntry e,String base,List<EpgEntry>rows){')
+          b=x.index('\n}',a)
+          bind='''    private void bindLive(TextView meta,MediaEntry e,String base,List<EpgEntry>rows){
+              if(rows==null||rows.isEmpty())return;
+              long n=System.currentTimeMillis()/1000L;EpgEntry cur=rows.get(0);
+              for(EpgEntry q:rows)if(q.startEpoch>0&&q.endEpoch>0&&q.startEpoch<=n&&n<q.endEpoch){cur=q;break;}
+              String prefix=(base==null||base.isEmpty()?"":base+" · ")+UiText.t(context,"live")+": ";
+              Object tag=meta.getTag();if(tag!=null&&tag.equals(e.uniqueKey()))meta.setText(prefix+cur.title);
+          }
+          '''
+          x=x[:a]+bind+x[b:]
+          p.write_text(x)
+          PY
+          sed -i 's/BuildConfig.NENOTV_API_BASE.trim()/"https:\/\/nenotv.com"/' app/src/main/java/com/robertalt/raiptv/entitlement/EntitlementClient.java
+          sed -i "s/versionCode 37/versionCode 48/" app/build.gradle
+          sed -i "s/versionName '0.9.5'/versionName '0.11.0'/" app/build.gradle
+
+      - name: Prepare NenoTV Free core
+        run: |
+          set -euo pipefail
+          cd base/RA_IPTV_Android_v0.1
+          python3 "$GITHUB_WORKSPACE/tools/prepare_free.py"
+
+      - name: Archive generated v0.12.6.1 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf NenoTV-Free-v0.12.6.7-source.tar.gz -C base RA_IPTV_Android_v0.1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NenoTV-Free-v0.12.6.7-source
+          path: NenoTV-Free-v0.12.6.7-source.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Android SDK
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Show Free source version
+        run: |
+          grep -n "applicationId\|versionCode\|versionName" base/RA_IPTV_Android_v0.1/app/build.gradle || true
+          grep -n "libvlc\|mlkit:translate\|language-id" base/RA_IPTV_Android_v0.1/app/build.gradle || true
+
+      - name: Build NenoTV Free APK
+        working-directory: base/RA_IPTV_Android_v0.1
+        run: |
+          set -euo pipefail
+          rm -rf app/build build .gradle
+          gradle --no-daemon --no-build-cache --rerun-tasks clean assembleRelease
+
+      - name: Verify and align Free APK
+        run: |
+          set -euo pipefail
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
+          IN="base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk"
+          "$AAPT" dump badging "$IN" | tee free-badging.txt
+          grep -q "package: name='com.robertalt.raiptv' versionCode='64' versionName='0.12.6.7'" free-badging.txt
+          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-Free-v0.12.6.7-aligned-unsigned.apk
+          "$ZIPALIGN" -c -p 4 NenoTV-Free-v0.12.6.7-aligned-unsigned.apk
+          cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
+          ls -lh NenoTV-Free-v0.12.6.7-aligned-unsigned.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NenoTV-Free-v0.12.6.7-build
+          path: |
+            NenoTV-Free-v0.12.6.7-aligned-unsigned.apk
+            free-badging.txt
+            apksigner.jar
+
+      - name: Publish unsigned build handoff to branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build-output/v0.12.6.7
+          cp NenoTV-Free-v0.12.6.7-aligned-unsigned.apk build-output/v0.12.6.7/
+          cp free-badging.txt build-output/v0.12.6.7/
+          cp apksigner.jar build-output/v0.12.6.7/
+          sha256sum build-output/v0.12.6.7/* > build-output/v0.12.6.7/SHA256SUMS.txt
+          git config user.name "NenoTV Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add build-output/v0.12.6.7
+          git commit -m "build: publish NenoTV Free v0.12.6.1 handoff [skip ci]"
+          git push origin HEAD:nenotv-v0.12.6.7-rest-fallback
