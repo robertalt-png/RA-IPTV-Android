@@ -2,7 +2,7 @@ name: Build NenoTV Free v0.12.6.7
 
 on:
   push:
-    branches: [ nenotv-v0.12.6.7-player-controls-autohide ]
+    branches: [ nenotv-v0.12.6.7-lifecycle-fix ]
   workflow_dispatch:
 
 permissions:
