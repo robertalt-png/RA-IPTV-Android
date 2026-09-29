@@ -11,8 +11,8 @@ app=root/"app"
 gradle=app/"build.gradle"
 s=gradle.read_text()
 s=s.replace("applicationId 'com.robertalt.raiptv.light'","applicationId 'com.robertalt.raiptv'")
-s=re.sub(r"versionCode\s+\d+","versionCode 55",s,1)
-s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.6'",s,1)
+s=re.sub(r"versionCode\s+\d+","versionCode 59",s,1)
+s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.6.1'",s,1)
 s=s.replace("    dynamicFeatures = [':proextras']\n","")
 s=s.replace("    implementation 'com.google.android.play:feature-delivery:2.1.0'\n","")
 gradle.write_text(s)
@@ -247,7 +247,7 @@ if ma>=0 and mb>ma:
         addNenoMenuItem(d,box,T("manage_source"),()->startActivityForResult(new Intent(this,ProfileActivity.class),10));
         addNenoMenuItem(d,box,T("settings"),()->startActivity(new Intent(this,SettingsActivity.class)));
         addNenoMenuItem(d,box,"🌐 NenoTV.com",()->openNenoWebsite("https://nenotv.com"));
-        addNenoMenuItem(d,box,"NenoTV Pro",()->openNenoWebsite("https://nenotv.com"));
+        addNenoMenuItem(d,box,"NenoTV Pro",()->startActivity(new Intent(this,AccountActivity.class)));
         addNenoMenuItem(d,box,T("close"),()->{});
         d.setContentView(box);Window w=d.getWindow();if(w!=null){w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));w.setGravity(Gravity.BOTTOM);w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);w.setDimAmount(0.45f);}d.show();if(w!=null)w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT);
     }
@@ -402,7 +402,7 @@ s=s.replace('languageBadge,planBadge; ProgressBar','languageBadge,planBadge,proH
 s=s.replace('languageBadge=findViewById(R.id.languageBadge);','languageBadge=findViewById(R.id.languageBadge);proHintButton=findViewById(R.id.proHintButton);')
 wire='    void wire(){\n'
 if 'proHintButton.setOnClickListener' not in s:
-    s=s.replace(wire,wire+'        if(proHintButton!=null)proHintButton.setOnClickListener(v->openNenoWebsite("https://nenotv.com"));\n',1)
+    s=s.replace(wire,wire+'        if(proHintButton!=null)proHintButton.setOnClickListener(v->startActivity(new Intent(this,AccountActivity.class)));\n',1)
 
 # Free menu: clean localized labels, website and Pro; no raw keys/account/casting rows.
 ma=s.find('    void showNenoMenu(){')
@@ -416,7 +416,7 @@ if ma>=0 and me>ma:
         addNenoMenuItem(d,box,freeUi("source"),()->startActivityForResult(new Intent(this,ProfileActivity.class),10));
         addNenoMenuItem(d,box,freeUi("settings"),()->startActivity(new Intent(this,SettingsActivity.class)));
         addNenoMenuItem(d,box,"🌐 NenoTV.com",()->openNenoWebsite("https://nenotv.com"));
-        addNenoMenuItem(d,box,"★ NenoTV Pro",()->openNenoWebsite("https://nenotv.com"));
+        addNenoMenuItem(d,box,"★ NenoTV Pro",()->startActivity(new Intent(this,AccountActivity.class)));
         addNenoMenuItem(d,box,freeUi("close"),()->{});
         d.setContentView(box);Window w=d.getWindow();if(w!=null){w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));w.setGravity(Gravity.BOTTOM);w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);w.setDimAmount(0.45f);}d.show();if(w!=null)w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT);
     }
@@ -773,7 +773,7 @@ settings=app/"src/main/java/com/robertalt/raiptv/SettingsActivity.java"
 sx=settings.read_text()
 sx=sx.replace('Kies een blok om de Free-instellingen aan te passen.','Kies een onderdeel.')
 sx=sx.replace('Choose a block to change Free settings.','Choose a section.')
-sx=sx.replace('NenoTV Free · 0.12.5','NenoTV Free · 0.12.6').replace('NenoTV Free 0.12.5','NenoTV Free 0.12.6')
+sx=sx.replace('NenoTV Free · 0.12.5','NenoTV Free · 0.12.6.1').replace('NenoTV Free 0.12.5','NenoTV Free 0.12.6.1')
 settings.write_text(sx)
 
 # TV source: permanent field labels + NenoTV-yellow source selector.
@@ -836,5 +836,49 @@ if 'void retryStream()' not in px:
     void updateProgress(){''')
 player.write_text(px)
 
+
+# v0.12.6.1: website/account integration maintenance rebuild.
+# Pro entry opens the local account screen and entitlement status refreshes quietly
+# against the existing nenotv.com App Bridge at most once every six hours.
+if 'void refreshEntitlementQuietly()' not in s:
+    helper=r'''    void refreshEntitlementQuietly(){
+        try{
+            android.content.SharedPreferences p=getSharedPreferences("nenotv_entitlement_sync",MODE_PRIVATE);
+            long now=System.currentTimeMillis(),last=p.getLong("last_refresh",0L);
+            if(now-last<6L*60L*60L*1000L)return;
+            p.edit().putLong("last_refresh",now).apply();
+            exec.execute(()->{try{new com.robertalt.raiptv.entitlement.EntitlementClient(this).refresh();}catch(Throwable ignored){}});
+        }catch(Throwable ignored){}
+    }
+
+'''
+    menuPos=s.find('    void showNenoMenu(){')
+    if menuPos<0: raise SystemExit("showNenoMenu marker missing for entitlement helper")
+    s=s[:menuPos]+helper+s[menuPos:]
+
+wire_anchor='        wire();'
+wi=s.find(wire_anchor)
+if wi>=0:
+    nearby=s[wi:wi+220]
+    if 'refreshEntitlementQuietly();' not in nearby:
+        s=s[:wi+len(wire_anchor)]+'\n        refreshEntitlementQuietly();'+s[wi+len(wire_anchor):]
+
+# Account activation can return by custom URI now and by HTTPS later.
+account=app/"src/main/java/com/robertalt/raiptv/AccountActivity.java"
+ax=account.read_text()
+old='if(u==null||!"nenotv".equalsIgnoreCase(u.getScheme())||!"activate".equalsIgnoreCase(u.getHost()))return;'
+new='if(u==null)return;boolean custom="nenotv".equalsIgnoreCase(u.getScheme())&&"activate".equalsIgnoreCase(u.getHost());boolean web="https".equalsIgnoreCase(u.getScheme())&&"nenotv.com".equalsIgnoreCase(u.getHost())&&"/activate".equalsIgnoreCase(u.getPath());if(!custom&&!web)return;'
+if old in ax: ax=ax.replace(old,new)
+account.write_text(ax)
+
+# Add HTTPS /activate alongside nenotv://activate.
+manifest=app/"src/main/AndroidManifest.xml"
+mx=manifest.read_text()
+needle='<activity android:name=".AccountActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="nenotv" android:host="activate"/></intent-filter></activity>'
+if needle in mx:
+    repl='<activity android:name=".AccountActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="nenotv" android:host="activate"/></intent-filter><intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="https" android:host="nenotv.com" android:pathPrefix="/activate"/></intent-filter></activity>'
+    mx=mx.replace(needle,repl)
+manifest.write_text(mx)
+
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.6: provider-order + full background sync")
+print("Prepared NenoTV Free v0.12.6.1: v0.12.6 base + website/account integration")
