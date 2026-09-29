@@ -36,9 +36,36 @@ public final class EntitlementClient {
         body.put("device_key",store.deviceKey());
         body.put("platform","android");
         body.put("app_version",BuildConfig.VERSION_NAME);
+
         String base=BuildConfig.NENOTV_API_BASE.trim();
         while(base.endsWith("/"))base=base.substring(0,base.length()-1);
-        HttpURLConnection c=(HttpURLConnection)new URL(base+"/wp-json/nenotv/v1/"+path).openConnection();
+
+        Exception firstError=null;
+        JSONObject out=null;
+        try{
+            out=postUrl(base+"/wp-json/nenotv/v1/"+path,body);
+        }catch(Exception e){
+            firstError=e;
+        }
+
+        if(out==null){
+            try{
+                out=postUrl(base+"/index.php?rest_route=/nenotv/v1/"+path,body);
+            }catch(Exception e){
+                String m=e.getMessage();
+                if(m==null||m.trim().isEmpty())m=firstError==null?null:firstError.getMessage();
+                throw new IOException(m==null||m.trim().isEmpty()?"NenoTV account service unavailable":m);
+            }
+        }
+
+        JSONObject entitlement=out.optJSONObject("entitlement");
+        store.applyServer(entitlement==null?out:entitlement);
+        return out;
+    }
+
+    private JSONObject postUrl(String url,JSONObject body) throws Exception {
+        HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();
+        c.setInstanceFollowRedirects(false);
         c.setConnectTimeout(9000);
         c.setReadTimeout(12000);
         c.setRequestMethod("POST");
@@ -49,14 +76,27 @@ public final class EntitlementClient {
         byte[] bytes=body.toString().getBytes(StandardCharsets.UTF_8);
         c.setFixedLengthStreamingMode(bytes.length);
         try(OutputStream os=c.getOutputStream()){os.write(bytes);}
+
         int code=c.getResponseCode();
         InputStream in=code>=200&&code<300?c.getInputStream():c.getErrorStream();
         String text=read(in);
-        if(text.trim().isEmpty())throw new IOException("HTTP "+code);
-        JSONObject out=new JSONObject(text);
-        if(code<200||code>=300||!out.optBoolean("ok",true))throw new IOException(out.optString("message",out.optString("error","HTTP "+code)));
-        JSONObject entitlement=out.optJSONObject("entitlement");
-        store.applyServer(entitlement==null?out:entitlement);
+        String trimmed=text==null?"":text.trim();
+        String contentType=c.getHeaderField("Content-Type");
+
+        if(code>=300&&code<400)throw new IOException("REST redirect");
+        if(trimmed.isEmpty())throw new IOException("HTTP "+code);
+        if(trimmed.startsWith("<")||(contentType!=null&&contentType.toLowerCase(java.util.Locale.ROOT).contains("text/html")))
+            throw new IOException("Unexpected HTML response");
+
+        JSONObject out;
+        try{
+            out=new JSONObject(trimmed);
+        }catch(Exception e){
+            throw new IOException("Unexpected server response");
+        }
+
+        if(code<200||code>=300||!out.optBoolean("ok",true))
+            throw new IOException(out.optString("message",out.optString("error","HTTP "+code)));
         return out;
     }
 
