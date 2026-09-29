@@ -11,8 +11,8 @@ app=root/"app"
 gradle=app/"build.gradle"
 s=gradle.read_text()
 s=s.replace("applicationId 'com.robertalt.raiptv.light'","applicationId 'com.robertalt.raiptv'")
-s=re.sub(r"versionCode\s+\d+","versionCode 63",s,1)
-s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.6.5'",s,1)
+s=re.sub(r"versionCode\s+\d+","versionCode 64",s,1)
+s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.6.6'",s,1)
 s=s.replace("    dynamicFeatures = [':proextras']\n","")
 s=s.replace("    implementation 'com.google.android.play:feature-delivery:2.1.0'\n","")
 gradle.write_text(s)
