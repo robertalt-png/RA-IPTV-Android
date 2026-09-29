@@ -68,7 +68,7 @@ import com.robertalt.raiptv.storage.LibraryStore;
 import com.robertalt.raiptv.storage.SettingsStore;
 import java.util.*;
 
-public class PlayerActivity extends FragmentActivity {
+@androidx.media3.common.util.UnstableApi\npublic class PlayerActivity extends FragmentActivity {
     PlayerView media3View; ExoPlayer exo; MediaEntry entry; LibraryStore library;
     TextView title,status,timeText; Button playPause,rewind,forward,audio,subtitle,pip,speed,aspect,sleep,record,favorite,castButton,channelPrev,channelNext;
     SeekBar seek; FrameLayout controls; Handler ui=new Handler(Looper.getMainLooper()); boolean userSeeking=false,destroyed=false; int aspectMode=0; float playbackSpeed=1f;
