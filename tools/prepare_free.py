@@ -1091,5 +1091,43 @@ new_destroy='''    @Override protected void onDestroy(){freeLifecycleDestroyed=t
 if old_destroy not in s: raise SystemExit("onDestroy marker missing")
 s=s.replace(old_destroy,new_destroy,1)
 
+# Android 13+ predictive-back support while preserving the existing navigation behavior.
+if 'void handleBackNavigation()' not in s:
+    s=s.replace(
+        '        setContentView(R.layout.activity_main);UiText.applyDirection(this);',
+        '        setContentView(R.layout.activity_main);UiText.applyDirection(this);if(Build.VERSION.SDK_INT>=33)getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,()->handleBackNavigation());',
+        1
+    )
+    s=s.replace(
+        '    @Override public void onBackPressed(){if(seriesEpisodeMode){loadSection("series");}else super.onBackPressed();}',
+        '    void handleBackNavigation(){if(seriesEpisodeMode){loadSection("series");}else finish();}\n    @android.annotation.SuppressLint("GestureBackNavigation") @Override public void onBackPressed(){handleBackNavigation();}',
+        1
+    )
+
+# First-run language screen deliberately blocks Back until a language is chosen.
+language_setup=app/"src/main/java/com/robertalt/raiptv/LanguageSetupActivity.java"
+lsx=language_setup.read_text()
+lsx=lsx.replace(
+    '@Override public void onCreate(Bundle b){super.onCreate(b);build();}',
+    '@Override public void onCreate(Bundle b){super.onCreate(b);if(Build.VERSION.SDK_INT>=33)getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,()->{});build();}',
+    1
+)
+lsx=lsx.replace(
+    '@Override public void onBackPressed(){}',
+    '@android.annotation.SuppressLint("GestureBackNavigation") @Override public void onBackPressed(){}',
+    1
+)
+language_setup.write_text(lsx)
+
+# URLEncoder.encode(String, Charset) requires newer Android. Use the API-1 String overload.
+xu=app/"src/main/java/com/robertalt/raiptv/core/XtreamUrls.java"
+xux=xu.read_text()
+xux=xux.replace(
+    'public static String enc(String s){ return URLEncoder.encode(s == null ? "" : s, StandardCharsets.UTF_8); }',
+    'public static String enc(String s){try{return URLEncoder.encode(s==null?"":s,"UTF-8");}catch(java.io.UnsupportedEncodingException e){return "";}}',
+    1
+)
+xu.write_text(xux)
+
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.6.7: lifecycle-safe background sync + player controls fix")
+print("Prepared NenoTV Free v0.12.6.7: lifecycle-safe background sync + player controls + lint fixes")
