@@ -11,8 +11,8 @@ app=root/"app"
 gradle=app/"build.gradle"
 s=gradle.read_text()
 s=s.replace("applicationId 'com.robertalt.raiptv.light'","applicationId 'com.robertalt.raiptv'")
-s=re.sub(r"versionCode\s+\d+","versionCode 60",s,1)
-s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.6.2'",s,1)
+s=re.sub(r"versionCode\s+\d+","versionCode 61",s,1)
+s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.6.3'",s,1)
 s=s.replace("    dynamicFeatures = [':proextras']\n","")
 s=s.replace("    implementation 'com.google.android.play:feature-delivery:2.1.0'\n","")
 gradle.write_text(s)
@@ -773,7 +773,7 @@ settings=app/"src/main/java/com/robertalt/raiptv/SettingsActivity.java"
 sx=settings.read_text()
 sx=sx.replace('Kies een blok om de Free-instellingen aan te passen.','Kies een onderdeel.')
 sx=sx.replace('Choose a block to change Free settings.','Choose a section.')
-sx=sx.replace('NenoTV Free · 0.12.5','NenoTV Free · 0.12.6.2').replace('NenoTV Free 0.12.5','NenoTV Free 0.12.6.2')
+sx=sx.replace('NenoTV Free · 0.12.5','NenoTV Free · 0.12.6.3').replace('NenoTV Free 0.12.5','NenoTV Free 0.12.6.3')
 settings.write_text(sx)
 
 # TV source: permanent field labels + NenoTV-yellow source selector.
@@ -931,5 +931,33 @@ s=s.replace('void setEpgMode(boolean gridMode){epgGridMode=gridMode;epgGridButto
             'void setEpgMode(boolean gridMode){epgGridMode=false;if(epgGridButton==null||epgListButton==null){showEpgByMode(all);return;}epgGridButton.setBackgroundTintList')
 
 
+
+# v0.12.6.3: Pro/account crash fix.
+# AccountActivity exists in source but must also be registered in the final manifest.
+manifest=app/"src/main/AndroidManifest.xml"
+mx=manifest.read_text()
+account_decl='''        <activity
+            android:name=".AccountActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="nenotv" android:host="activate"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="nenotv.com" android:pathPrefix="/activate"/>
+            </intent-filter>
+        </activity>
+'''
+if 'android:name=".AccountActivity"' not in mx:
+    anchor='        <activity android:name=".ProfileActivity" android:exported="false" />'
+    if anchor not in mx: raise SystemExit("ProfileActivity manifest anchor missing")
+    mx=mx.replace(anchor,account_decl+anchor,1)
+manifest.write_text(mx)
+
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.6.2: v0.12.6.1 integration + Free EPG list crash fix")
+print("Prepared NenoTV Free v0.12.6.3: Pro/account manifest fix + EPG fix")
