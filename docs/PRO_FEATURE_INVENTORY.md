@@ -99,3 +99,28 @@ NenoTV should remain **one Android application ID: com.robertalt.raiptv**.
 6. Add automated Pro feature tests.
 7. Port/verify advanced EPG, parental, PiP, recording, cast and external subtitles one bounded feature group at a time.
 8. Implement multiple-source management as new work instead of treating it as recovered functionality.
+
+
+## First modular build result — dev1
+
+GitHub Actions run **36580961513** completed successfully.
+
+Measured Android App Bundle:
+
+- Total AAB: **123.43 MiB**. This is the store upload artifact and still contains all supported ABIs.
+- Base module: **6.18 MiB compressed**.
+- Pro Media Pack: **116.95 MiB compressed** in the AAB because it contains four ABI variants.
+- Heavy VLC/ML Kit libraries in base module: **0**. The size gate passed.
+
+Approximate delivered Pro Media Pack per CPU architecture, based on compressed module entries:
+
+| ABI | Pro Media Pack |
+|---|---:|
+| arm64-v8a | **30.89 MiB** |
+| armeabi-v7a | **26.52 MiB** |
+| x86 | **29.30 MiB** |
+| x86_64 | **32.95 MiB** |
+
+For a normal modern arm64 device the expected delivered combination is therefore roughly **6.18 MiB base + 30.89 MiB optional Pro Media Pack**, before Play delivery overhead/optimization.
+
+This validates the architecture: the previous ~273 MiB universal APK does not need to be shipped to every user.
