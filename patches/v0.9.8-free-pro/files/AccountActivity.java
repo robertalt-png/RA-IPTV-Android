@@ -148,7 +148,7 @@ public class AccountActivity extends Activity {
                 new EntitlementClient(this).claim(e,o);
                 runOnUiThread(()->{busy(false);serverText.setText(T("status_updated"));refreshUi();});
             }catch(Exception ex){
-                runOnUiThread(()->{busy(false);serverText.setText(T("activation_failed")+": "+safe(ex));});
+                runOnUiThread(()->{busy(false);serverText.setText(T("activation_failed"));});
             }
         });
     }
@@ -160,7 +160,7 @@ public class AccountActivity extends Activity {
                 new EntitlementClient(this).refresh();
                 runOnUiThread(()->{busy(false);serverText.setText(T("status_updated"));refreshUi();});
             }catch(Exception ex){
-                runOnUiThread(()->{busy(false);serverText.setText(T("server_unavailable")+" · "+safe(ex));});
+                runOnUiThread(()->{busy(false);serverText.setText(T("server_unavailable"));});
             }
         });
     }
