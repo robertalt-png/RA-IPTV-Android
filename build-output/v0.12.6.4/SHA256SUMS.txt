@@ -1,0 +1,3 @@
+daa31c7ddc46426c0c806fb45b62b3fa51ba5c219d7e08f058040d65e3f1aee8  build-output/v0.12.6.4/NenoTV-Free-v0.12.6.4-aligned-unsigned.apk
+3716d9311e55d2b0918a2fd9d54ba9e406c5f6abeea700b287f11259bc163dec  build-output/v0.12.6.4/apksigner.jar
+53635c14db2cba82455ce6556bca730bf96fc3512bd39f6c81e77f628dee08e0  build-output/v0.12.6.4/free-badging.txt
