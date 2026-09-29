@@ -94,9 +94,11 @@ dependencies {
 </manifest>
 """)
 
-(mod / "src/main/res/values/strings.xml").write_text(
-    '<resources><string name="title_proextras">NenoTV Pro Media Pack</string></resources>\n'
-)
+# dist:title MUST resolve from the base application's resource table.
+# prepare_light.py already placed title_proextras in app/src/main/res/values/feature_strings.xml.
+feature_strings = mod / "src/main/res/values/strings.xml"
+if feature_strings.exists():
+    feature_strings.unlink()
 (mod / "src/main/res/layout/activity_pro_player.xml").write_text(full_player_layout)
 
 # Full donor player becomes the Pro media player in the dynamic feature.
