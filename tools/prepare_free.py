@@ -11,8 +11,8 @@ app=root/"app"
 gradle=app/"build.gradle"
 s=gradle.read_text()
 s=s.replace("applicationId 'com.robertalt.raiptv.light'","applicationId 'com.robertalt.raiptv'")
-s=re.sub(r"versionCode\s+\d+","versionCode 53",s,1)
-s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.4'",s,1)
+s=re.sub(r"versionCode\s+\d+","versionCode 54",s,1)
+s=re.sub(r"versionName\s+'[^']+'","versionName '0.12.5'",s,1)
 s=s.replace("    dynamicFeatures = [':proextras']\n","")
 s=s.replace("    implementation 'com.google.android.play:feature-delivery:2.1.0'\n","")
 gradle.write_text(s)
@@ -434,7 +434,7 @@ s=s.replace('epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null)epgGr
             'epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null)epgGridButton.setVisibility(View.GONE);')
 
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.4: resilient full sync + clean language")
+print("Prepared NenoTV Free v0.12.5: resilient full sync + clean language")
 
 # v0.12.4: language switching must not recreate the Activity while the library sync is active.
 old='new AlertDialog.Builder(this).setTitle(T("language")).setItems(labels,(d,w)->{SettingsStore.setPrimaryLanguage(this,codes[w]);recreate();}).show();'
@@ -449,5 +449,258 @@ s=s.replace('String lastCrash=CrashGuard.consumeLastType(this);busy(false,!lastC
 s=s.replace('epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null){epgGridButton.setVisibility(View.VISIBLE);epgGridButton.setText("PRO");epgGridButton.setTextColor(0xFF0A0A0A);epgGridButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));epgGridButton.setOnClickListener(v->openNenoWebsite("https://nenotv.com"));}',
             'epgModeBar.setVisibility(View.VISIBLE);if(epgGridButton!=null)epgGridButton.setVisibility(View.GONE);')
 
+
+# v0.12.5: final Free cleanup + compact card/tile settings dashboard.
+
+# Progress: title and counters on separate lines so Series never wraps awkwardly.
+s=s.replace('String msg=freeUi("library")+" · "+pct+"%  ·  "+T("live")+" "+live+"  ·  "+T("movies")+" "+films+"  ·  "+T("series")+" "+series;',
+            'String msg=freeUi("library")+" · "+pct+"%\\n"+T("live")+" "+live+"  ·  "+T("movies")+" "+films+"  ·  "+T("series")+" "+series;')
+
+# If language was changed from Settings, refresh MainActivity in place; never recreate it.
+old='String nowLang=SettingsStore.language(this);if(appliedLanguage!=null&&!appliedLanguage.isEmpty()&&!appliedLanguage.equals(nowLang)){recreate();return;}'
+new='String nowLang=SettingsStore.language(this);if(appliedLanguage!=null&&!appliedLanguage.isEmpty()&&!appliedLanguage.equals(nowLang)){appliedLanguage=nowLang;appliedContentLanguage=SettingsStore.contentLanguage(this);applyStaticLanguage();updateHeaderBadges();restoreFirstSyncBanner();if(provider!=null){if("home".equals(section)||"local".equals(section))loadHome();else if("epg".equals(section))loadEpg();else loadSection(section);}return;}'
+s=s.replace(old,new)
+
+# A forced Free refresh must really restart all category completion state.
+needle='final String completeKey="free_full_sync_done_v122_"+key;'
+repl='''final String completeKey="free_full_sync_done_v122_"+key;
+        if(force){sp.edit().remove(completeKey).remove("free_sync_donecats_live_"+key).remove("free_sync_donecats_vod_"+key).remove("free_sync_donecats_series_"+key).putInt("free_sync_live_"+key,0).putInt("free_sync_vod_"+key,0).putInt("free_sync_series_"+key,0).apply();}'''
+s=s.replace(needle,repl)
+
+# Free settings: 2-column cards instead of one long settings list.
+settings=app/"src/main/java/com/robertalt/raiptv/SettingsActivity.java"
+settings.write_text(r'''package com.robertalt.raiptv;
+
+import android.app.*;
+import android.os.*;
+import android.content.*;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.view.*;
+import android.widget.*;
+import com.robertalt.raiptv.storage.*;
+
+public class SettingsActivity extends Activity{
+    LinearLayout box; android.content.SharedPreferences p;
+    int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
+    String T(String k){return UiText.t(this,k);}
+    String lang(){String l=SettingsStore.language(this);return l==null?"en":l.toLowerCase(java.util.Locale.ROOT);}
+    TextView tv(String x,int sp,int color){TextView v=new TextView(this);v.setText(x);v.setTextSize(sp);v.setTextColor(color);return v;}
+    GradientDrawable bg(int color,int radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(radius));g.setStroke(dp(1),0xFF282E38);return g;}
+    Button btn(String x){Button b=new Button(this);b.setText(x);b.setAllCaps(false);b.setTextColor(0xFFF7F8FA);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));return b;}
+
+    @Override public void onCreate(Bundle b){super.onCreate(b);SettingsStore.migrateLanguagePreferences(this);p=SettingsStore.prefs(this);build();UiText.applyDirection(this);}
+
+    void build(){
+        ScrollView sv=new ScrollView(this);sv.setBackgroundColor(0xFF07090D);
+        sv.setOnApplyWindowInsetsListener((v,insets)->{v.setPadding(0,insets.getSystemWindowInsetTop(),0,insets.getSystemWindowInsetBottom());return insets;});sv.requestApplyInsets();
+        box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(14),dp(18),dp(30));sv.addView(box);
+        LinearLayout head=new LinearLayout(this);head.setGravity(Gravity.CENTER_VERTICAL);
+        TextView title=tv(T("settings"),28,0xFFF7F8FA);title.setTypeface(null,Typeface.BOLD);head.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+        Button close=btn(T("close"));close.setOnClickListener(v->finish());head.addView(close,new LinearLayout.LayoutParams(dp(96),dp(48)));box.addView(head);
+        TextView intro=tv(local("Kies een blok om de Free-instellingen aan te passen.","Choose a block to change Free settings."),13,0xFF8D96A4);intro.setPadding(0,dp(10),0,dp(14));box.addView(intro);
+
+        LinearLayout r1=row();
+        r1.addView(tile(local("Taal","Language"),SettingsStore.displayLanguage(this,SettingsStore.language(this)),()->languageDialog()),tileLp(true));
+        r1.addView(tile(local("Weergave","Display"),displaySummary(),()->displayDialog()),tileLp(false));
+        box.addView(r1);
+
+        LinearLayout r2=row();
+        r2.addView(tile(local("Afspelen","Playback"),playbackSummary(),()->playbackDialog()),tileLp(true));
+        r2.addView(tile(local("Onderhoud","Maintenance"),local("Bibliotheek en cache","Library and cache"),()->maintenanceDialog()),tileLp(false));
+        box.addView(r2);
+
+        LinearLayout about=tile(local("Over NenoTV","About NenoTV"),"NenoTV Free · 0.12.5",()->aboutDialog());
+        LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(-1,dp(112));ap.topMargin=dp(10);box.addView(about,ap);
+        setContentView(sv);
+    }
+
+    LinearLayout row(){LinearLayout r=new LinearLayout(this);r.setOrientation(LinearLayout.HORIZONTAL);r.setWeightSum(2f);return r;}
+    LinearLayout.LayoutParams tileLp(boolean left){LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(132),1f);lp.topMargin=dp(10);if(left)lp.rightMargin=dp(5);else lp.leftMargin=dp(5);return lp;}
+    LinearLayout tile(String title,String sub,Runnable action){
+        LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setGravity(Gravity.CENTER_VERTICAL);c.setPadding(dp(16),dp(14),dp(16),dp(14));c.setBackground(bg(0xFF12161D,18));c.setClickable(true);c.setFocusable(true);
+        TextView t=tv(title,17,0xFFFFD400);t.setTypeface(null,Typeface.BOLD);c.addView(t);
+        TextView s=tv(sub,12,0xFFA7AFBC);s.setPadding(0,dp(7),0,0);s.setMaxLines(3);c.addView(s);
+        c.setOnClickListener(v->action.run());return c;
+    }
+
+    LinearLayout panel(){LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);p.setPadding(dp(18),dp(6),dp(18),dp(4));return p;}
+    String local(String nl,String en){
+        String l=lang();
+        if("nl".equals(l))return nl;if("de".equals(l))return en.equals("Language")?"Sprache":en.equals("Display")?"Anzeige":en.equals("Playback")?"Wiedergabe":en.equals("Maintenance")?"Wartung":en.equals("About NenoTV")?"Über NenoTV":en;
+        if("fr".equals(l))return en.equals("Language")?"Langue":en.equals("Display")?"Affichage":en.equals("Playback")?"Lecture":en.equals("Maintenance")?"Entretien":en.equals("About NenoTV")?"À propos de NenoTV":en;
+        if("es".equals(l))return en.equals("Language")?"Idioma":en.equals("Display")?"Pantalla":en.equals("Playback")?"Reproducción":en.equals("Maintenance")?"Mantenimiento":en.equals("About NenoTV")?"Acerca de NenoTV":en;
+        if("it".equals(l))return en.equals("Language")?"Lingua":en.equals("Display")?"Visualizzazione":en.equals("Playback")?"Riproduzione":en.equals("Maintenance")?"Manutenzione":en.equals("About NenoTV")?"Informazioni su NenoTV":en;
+        if("pt".equals(l))return en.equals("Language")?"Idioma":en.equals("Display")?"Visualização":en.equals("Playback")?"Reprodução":en.equals("Maintenance")?"Manutenção":en.equals("About NenoTV")?"Sobre o NenoTV":en;
+        if("tr".equals(l))return en.equals("Language")?"Dil":en.equals("Display")?"Görünüm":en.equals("Playback")?"Oynatma":en.equals("Maintenance")?"Bakım":en.equals("About NenoTV")?"NenoTV hakkında":en;
+        if("pl".equals(l))return en.equals("Language")?"Język":en.equals("Display")?"Wygląd":en.equals("Playback")?"Odtwarzanie":en.equals("Maintenance")?"Konserwacja":en.equals("About NenoTV")?"O NenoTV":en;
+        if("ar".equals(l))return en.equals("Language")?"اللغة":en.equals("Display")?"العرض":en.equals("Playback")?"التشغيل":en.equals("Maintenance")?"الصيانة":en.equals("About NenoTV")?"حول NenoTV":en;
+        return en;
+    }
+    String freeText(String key){
+        String l=lang();
+        if("nl".equals(l)){
+            if("display".equals(key))return "Startscherm en formaat";
+            if("playback".equals(key))return "Buffer, audio en ondertitels";
+            if("language_help".equals(key))return "De taal verandert de interface. Free houdt zenders, films en series in de volgorde van de provider.";
+            if("track_help".equals(key))return "Audio en ondertitels gebruiken alleen tracks die door de provider of stream zijn meegeleverd.";
+            if("resync".equals(key))return "Bibliotheek opnieuw ophalen";
+            if("resync_msg".equals(key))return "De volledige providerbibliotheek wordt opnieuw opgehaald zodra je teruggaat naar NenoTV.";
+            if("about".equals(key))return "NenoTV Free toont de IPTV-bibliotheek in provider-volgorde. Audio en ondertitels gebruiken alleen wat de provider of stream meelevert. Extra mogelijkheden vind je in NenoTV Pro.";
+        }else if("de".equals(l)){
+            if("language_help".equals(key))return "Die Sprache ändert die Oberfläche. Free behält Sender, Filme und Serien in der Reihenfolge des Anbieters.";
+            if("track_help".equals(key))return "Audio und Untertitel verwenden nur Spuren, die der Anbieter oder Stream mitliefert.";
+            if("resync".equals(key))return "Bibliothek neu laden";
+            if("resync_msg".equals(key))return "Die vollständige Anbieterbibliothek wird nach der Rückkehr zu NenoTV neu geladen.";
+            if("about".equals(key))return "NenoTV Free zeigt die IPTV-Bibliothek in Anbieterreihenfolge. Audio und Untertitel stammen nur vom Anbieter oder Stream.";
+        }else if("fr".equals(l)){
+            if("language_help".equals(key))return "La langue modifie l’interface. Free conserve l’ordre des chaînes, films et séries fourni par le fournisseur.";
+            if("track_help".equals(key))return "L’audio et les sous-titres utilisent uniquement les pistes fournies par le fournisseur ou le flux.";
+            if("resync".equals(key))return "Recharger la bibliothèque";
+            if("resync_msg".equals(key))return "La bibliothèque complète du fournisseur sera rechargée au retour dans NenoTV.";
+            if("about".equals(key))return "NenoTV Free affiche la bibliothèque IPTV dans l’ordre du fournisseur et utilise uniquement les pistes audio et sous-titres fournies.";
+        }else if("es".equals(l)){
+            if("language_help".equals(key))return "El idioma cambia la interfaz. Free mantiene canales, películas y series en el orden del proveedor.";
+            if("track_help".equals(key))return "El audio y los subtítulos usan únicamente las pistas incluidas por el proveedor o el stream.";
+            if("resync".equals(key))return "Volver a cargar la biblioteca";
+            if("resync_msg".equals(key))return "La biblioteca completa del proveedor se volverá a cargar al regresar a NenoTV.";
+            if("about".equals(key))return "NenoTV Free muestra la biblioteca IPTV en el orden del proveedor y solo usa audio y subtítulos incluidos.";
+        }else if("it".equals(l)){
+            if("language_help".equals(key))return "La lingua cambia l’interfaccia. Free mantiene canali, film e serie nell’ordine del provider.";
+            if("track_help".equals(key))return "Audio e sottotitoli usano solo le tracce fornite dal provider o dallo stream.";
+            if("resync".equals(key))return "Ricarica libreria";
+            if("resync_msg".equals(key))return "L’intera libreria del provider verrà ricaricata tornando a NenoTV.";
+            if("about".equals(key))return "NenoTV Free mostra la libreria IPTV nell’ordine del provider e usa solo audio e sottotitoli forniti.";
+        }else if("pt".equals(l)){
+            if("language_help".equals(key))return "O idioma altera a interface. Free mantém canais, filmes e séries na ordem do fornecedor.";
+            if("track_help".equals(key))return "Áudio e legendas usam apenas faixas fornecidas pelo fornecedor ou stream.";
+            if("resync".equals(key))return "Recarregar biblioteca";
+            if("resync_msg".equals(key))return "A biblioteca completa do fornecedor será recarregada ao voltar ao NenoTV.";
+            if("about".equals(key))return "NenoTV Free mostra a biblioteca IPTV na ordem do fornecedor e usa apenas áudio e legendas fornecidos.";
+        }else if("tr".equals(l)){
+            if("language_help".equals(key))return "Dil arayüzü değiştirir. Free kanal, film ve dizileri sağlayıcının sırasıyla tutar.";
+            if("track_help".equals(key))return "Ses ve altyazılar yalnızca sağlayıcı veya yayın tarafından sunulan parçaları kullanır.";
+            if("resync".equals(key))return "Kütüphaneyi yeniden yükle";
+            if("resync_msg".equals(key))return "NenoTV’ye döndüğünüzde tüm sağlayıcı kütüphanesi yeniden yüklenir.";
+            if("about".equals(key))return "NenoTV Free IPTV kütüphanesini sağlayıcı sırasıyla gösterir ve yalnızca sağlanan ses ve altyazıları kullanır.";
+        }else if("pl".equals(l)){
+            if("language_help".equals(key))return "Język zmienia interfejs. Free zachowuje kanały, filmy i seriale w kolejności dostawcy.";
+            if("track_help".equals(key))return "Dźwięk i napisy korzystają wyłącznie ze ścieżek dostarczonych przez dostawcę lub strumień.";
+            if("resync".equals(key))return "Pobierz bibliotekę ponownie";
+            if("resync_msg".equals(key))return "Pełna biblioteka dostawcy zostanie pobrana ponownie po powrocie do NenoTV.";
+            if("about".equals(key))return "NenoTV Free pokazuje bibliotekę IPTV w kolejności dostawcy i używa tylko dostarczonego dźwięku i napisów.";
+        }else if("ar".equals(l)){
+            if("language_help".equals(key))return "تغيّر اللغة واجهة التطبيق. يحافظ الإصدار المجاني على ترتيب القنوات والأفلام والمسلسلات كما يقدمه المزود.";
+            if("track_help".equals(key))return "يستخدم الصوت والترجمة فقط المسارات التي يوفرها المزود أو البث.";
+            if("resync".equals(key))return "إعادة تحميل المكتبة";
+            if("resync_msg".equals(key))return "ستتم إعادة تحميل مكتبة المزود كاملة عند العودة إلى NenoTV.";
+            if("about".equals(key))return "يعرض NenoTV Free مكتبة IPTV بترتيب المزود ويستخدم فقط الصوت والترجمة المتاحة من المصدر.";
+        }
+        if("display".equals(key))return "Start screen and layout";
+        if("playback".equals(key))return "Buffer, audio and subtitles";
+        if("language_help".equals(key))return "Language changes the interface. Free keeps channels, movies and series in provider order.";
+        if("track_help".equals(key))return "Audio and subtitles use only tracks supplied by the provider or stream.";
+        if("resync".equals(key))return "Reload library";
+        if("resync_msg".equals(key))return "The complete provider library will be reloaded when you return to NenoTV.";
+        if("about".equals(key))return "NenoTV Free shows the IPTV library in provider order and uses only audio and subtitle tracks supplied by the provider or stream.";
+        return key;
+    }
+    String displaySummary(){return freeText("display");}
+    String playbackSummary(){return freeText("playback");}
+
+    void languageDialog(){
+        final String[] codes={"nl","en","de","fr","es","it","pt","tr","pl","ar"};
+        String[] labels=new String[codes.length];int checked=0;String cur=SettingsStore.language(this);
+        for(int i=0;i<codes.length;i++){labels[i]=SettingsStore.displayLanguage(this,codes[i]);if(codes[i].equals(cur))checked=i;}
+        new AlertDialog.Builder(this).setTitle(local("Taal","Language")).setSingleChoiceItems(labels,checked,(d,w)->{SettingsStore.setPrimaryLanguage(this,codes[w]);d.dismiss();build();UiText.applyDirection(this);})
+          .setMessage(freeText("language_help")).setNegativeButton(T("close"),null).show();
+    }
+
+    void displayDialog(){
+        LinearLayout v=panel();
+        addToggle(v,T("compact"),"compact",true);
+        addSpinner(v,T("hero_size"),"hero_size",new String[]{T("small"),T("normal"),T("large")},new String[]{"small","normal","large"});
+        addSpinner(v,T("start_screen"),"start_screen",new String[]{T("home"),T("last_tab"),T("live_tv"),T("epg"),T("movies"),T("series")},new String[]{"home","last","live","epg","vod","series"});
+        new AlertDialog.Builder(this).setTitle(local("Weergave","Display")).setView(v).setPositiveButton(T("close"),null).show();
+    }
+
+    void playbackDialog(){
+        LinearLayout v=panel();
+        TextView info=tv(freeText("track_help"),12,0xFF8D96A4);info.setPadding(0,0,0,dp(8));v.addView(info);
+        addSpinner(v,T("buffer"),"buffer",new String[]{T("fast"),T("stable"),T("maximum")},new String[]{"normal","stable","max"});
+        addSpinner(v,T("audio_pref"),"audio",audioLanguageLabels(),new String[]{"auto","original","nl","en","de","fr","es","it","pt","tr","pl","ar"});
+        addSpinner(v,T("subtitle_pref"),"subtitles",subtitleLanguageLabels(),new String[]{"auto","off","nl","en","de","fr","es","it","pt","tr","pl","ar"});
+        addToggle(v,T("autoplay"),"autoplay_next",true);
+        new AlertDialog.Builder(this).setTitle(local("Afspelen","Playback")).setView(v).setPositiveButton(T("close"),null).show();
+    }
+
+    void maintenanceDialog(){
+        LinearLayout v=panel();
+        Button reload=btn(freeText("resync"));reload.setOnClickListener(x->{p.edit().putBoolean("force_reindex",true).apply();Toast.makeText(this,freeText("resync_msg"),Toast.LENGTH_LONG).show();});
+        v.addView(reload,new LinearLayout.LayoutParams(-1,dp(52)));
+        Button cache=btn(T("clear_cache"));LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(52));cp.topMargin=dp(8);v.addView(cache,cp);
+        cache.setOnClickListener(x->{MediaRowAdapter.clearArtworkCache();MainActivity.clearHeroCache();Toast.makeText(this,T("cache_cleared"),Toast.LENGTH_SHORT).show();});
+        new AlertDialog.Builder(this).setTitle(local("Onderhoud","Maintenance")).setView(v).setPositiveButton(T("close"),null).show();
+    }
+
+    void aboutDialog(){
+        TextView v=tv("NenoTV Free 0.12.5\\n\\n"+freeText("about")+"\\n\\nnenotv.com",14,0xFFF7F8FA);v.setPadding(dp(20),dp(10),dp(20),dp(10));
+        new AlertDialog.Builder(this).setTitle(local("Over NenoTV","About NenoTV")).setView(v).setPositiveButton(T("close"),null).show();
+    }
+
+    void addToggle(LinearLayout parent,String label,String key,boolean def){
+        Switch s=new Switch(this);s.setText(label);s.setTextColor(0xFFF7F8FA);s.setChecked(p.getBoolean(key,def));s.setOnCheckedChangeListener((v,on)->p.edit().putBoolean(key,on).apply());parent.addView(s,new LinearLayout.LayoutParams(-1,dp(54)));
+    }
+    void addSpinner(LinearLayout parent,String label,String key,String[] labels,String[] vals){
+        TextView l=tv(label,12,0xFFA7AFBC);l.setPadding(0,dp(8),0,0);parent.addView(l);
+        Spinner sp=new Spinner(this);ArrayAdapter<String> ad=new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,labels){
+            @Override public View getDropDownView(int p,View v,ViewGroup g){TextView x=(TextView)super.getDropDownView(p,v,g);x.setTextColor(0xFFF7F8FA);x.setBackgroundColor(0xFF181C22);x.setPadding(dp(16),dp(14),dp(16),dp(14));return x;}};
+        ad.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);sp.setAdapter(ad);String cur=p.getString(key,vals[0]);int n=0;for(int i=0;i<vals.length;i++)if(vals[i].equals(cur))n=i;sp.setSelection(n,false);
+        final boolean[] ready={false};sp.post(()->ready[0]=true);sp.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){public void onNothingSelected(AdapterView<?>x){}public void onItemSelected(AdapterView<?>x,View v,int q,long id){if(!ready[0])return;p.edit().putString(key,vals[q]).apply();}});
+        parent.addView(sp,new LinearLayout.LayoutParams(-1,dp(48)));
+    }
+    String[] audioLanguageLabels(){return new String[]{T("follow_app_language"),T("original"),SettingsStore.displayLanguage(this,"nl"),SettingsStore.displayLanguage(this,"en"),SettingsStore.displayLanguage(this,"de"),SettingsStore.displayLanguage(this,"fr"),SettingsStore.displayLanguage(this,"es"),SettingsStore.displayLanguage(this,"it"),SettingsStore.displayLanguage(this,"pt"),SettingsStore.displayLanguage(this,"tr"),SettingsStore.displayLanguage(this,"pl"),SettingsStore.displayLanguage(this,"ar")};}
+    String[] subtitleLanguageLabels(){return new String[]{T("follow_app_language"),T("off"),SettingsStore.displayLanguage(this,"nl"),SettingsStore.displayLanguage(this,"en"),SettingsStore.displayLanguage(this,"de"),SettingsStore.displayLanguage(this,"fr"),SettingsStore.displayLanguage(this,"es"),SettingsStore.displayLanguage(this,"it"),SettingsStore.displayLanguage(this,"pt"),SettingsStore.displayLanguage(this,"tr"),SettingsStore.displayLanguage(this,"pl"),SettingsStore.displayLanguage(this,"ar")};}
+}
+''')
+
+# Free TV source screen: no NAS bridge, no "Profiel", only fields relevant to selected source type.
+profile=app/"src/main/java/com/robertalt/raiptv/ProfileActivity.java"
+profile.write_text(r'''package com.robertalt.raiptv;
+
+import android.app.*;import android.os.*;import android.view.*;import android.widget.*;
+import com.robertalt.raiptv.model.Profile;import com.robertalt.raiptv.provider.*;import com.robertalt.raiptv.storage.*;
+import java.util.concurrent.*;
+
+public class ProfileActivity extends Activity{
+    String T(String k){return UiText.t(this,k);}int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
+    EditText name,server,user,pass,m3u,epg,bridge,bridgeToken;RadioButton xtream,m3uRadio;TextView status;SecureProfileStore store;ExecutorService exec=Executors.newSingleThreadExecutor();
+    String lang(){String l=SettingsStore.language(this);return l==null?"en":l.toLowerCase(java.util.Locale.ROOT);}
+    String tx(String key){
+        String l=lang();
+        if("source".equals(key)){if("nl".equals(l))return "TV-bron";if("de".equals(l))return "TV-Quelle";if("fr".equals(l))return "Source TV";if("es".equals(l))return "Fuente TV";if("it".equals(l))return "Sorgente TV";if("pt".equals(l))return "Fonte TV";if("tr".equals(l))return "TV kaynağı";if("pl".equals(l))return "Źródło TV";if("ar".equals(l))return "مصدر التلفاز";return "TV source";}
+        if("name".equals(key)){if("nl".equals(l))return "Naam van TV-bron";if("de".equals(l))return "Name der TV-Quelle";if("fr".equals(l))return "Nom de la source TV";if("es".equals(l))return "Nombre de la fuente TV";if("it".equals(l))return "Nome sorgente TV";if("pt".equals(l))return "Nome da fonte TV";if("tr".equals(l))return "TV kaynağı adı";if("pl".equals(l))return "Nazwa źródła TV";if("ar".equals(l))return "اسم مصدر التلفاز";return "TV source name";}
+        if("defaults".equals(key)){if("nl".equals(l))return "Free: audio en ondertitels zoals aangeleverd door de provider.";if("de".equals(l))return "Free: Audio und Untertitel wie vom Anbieter geliefert.";if("fr".equals(l))return "Free : audio et sous-titres tels que fournis par le fournisseur.";if("es".equals(l))return "Free: audio y subtítulos tal como los proporciona el proveedor.";if("it".equals(l))return "Free: audio e sottotitoli come forniti dal provider.";if("pt".equals(l))return "Free: áudio e legendas tal como fornecidos pelo fornecedor.";if("tr".equals(l))return "Free: sağlayıcının sunduğu ses ve altyazılar.";if("pl".equals(l))return "Free: dźwięk i napisy dostarczone przez dostawcę.";if("ar".equals(l))return "Free: الصوت والترجمة كما يوفرهما المزود.";return "Free: audio and subtitles as supplied by the provider.";}
+        return key;
+    }
+    @Override public void onCreate(Bundle b){super.onCreate(b);setContentView(R.layout.activity_profile);UiText.applyDirection(this);store=new SecureProfileStore(this);
+        name=findViewById(R.id.nameField);server=findViewById(R.id.serverField);user=findViewById(R.id.userField);pass=findViewById(R.id.passField);m3u=findViewById(R.id.m3uField);epg=findViewById(R.id.epgField);bridge=findViewById(R.id.bridgeField);bridgeToken=findViewById(R.id.bridgeTokenField);xtream=findViewById(R.id.xtreamRadio);m3uRadio=findViewById(R.id.m3uRadio);status=findViewById(R.id.profileStatus);
+        applyLanguage();load();hideProFields();updateTypeVisibility();
+        ((RadioGroup)findViewById(R.id.typeGroup)).setOnCheckedChangeListener((g,id)->updateTypeVisibility());
+        Button test=findViewById(R.id.testButton);test.setOnClickListener(v->test());
+        Button save=findViewById(R.id.saveButton);save.setTextColor(0xFF0A0A0A);save.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));save.setOnClickListener(v->{Profile p=collect();store.save(p);setResult(RESULT_OK);finish();});
+    }
+    void applyLanguage(){((TextView)findViewById(R.id.profileTitle)).setText(tx("source"));((TextView)findViewById(R.id.profileIntro)).setText(T("profile_intro"));name.setHint(tx("name"));server.setHint(T("server_hint"));user.setHint(T("username"));pass.setHint(T("password"));m3u.setHint("M3U-URL");epg.setHint(T("epg_url_optional"));((TextView)findViewById(R.id.profileDefaults)).setText(tx("defaults"));((Button)findViewById(R.id.testButton)).setText(T("test_connection"));((Button)findViewById(R.id.saveButton)).setText(T("save"));}
+    void hideProFields(){findViewById(R.id.bridgeLabel).setVisibility(View.GONE);bridge.setVisibility(View.GONE);bridgeToken.setVisibility(View.GONE);}
+    void updateTypeVisibility(){boolean x=xtream.isChecked();server.setVisibility(x?View.VISIBLE:View.GONE);user.setVisibility(x?View.VISIBLE:View.GONE);pass.setVisibility(x?View.VISIBLE:View.GONE);m3u.setVisibility(x?View.GONE:View.VISIBLE);epg.setVisibility(x?View.GONE:View.VISIBLE);}
+    void load(){if(!store.exists())return;Profile p=store.load();xtream.setChecked(p.type==Profile.Type.XTREAM);m3uRadio.setChecked(p.type==Profile.Type.M3U);name.setText(p.name);server.setText(p.server);user.setText(p.username);pass.setText(p.password);m3u.setText(p.m3uUrl);epg.setText(p.epgUrl);bridge.setText(p.bridgeUrl);bridgeToken.setText(p.bridgeToken);}
+    Profile collect(){Profile p=new Profile();p.type=m3uRadio.isChecked()?Profile.Type.M3U:Profile.Type.XTREAM;p.name=name.getText().toString().trim();p.server=server.getText().toString().trim();p.username=user.getText().toString().trim();p.password=pass.getText().toString();p.m3uUrl=m3u.getText().toString().trim();p.epgUrl=epg.getText().toString().trim();p.bridgeUrl=bridge.getText().toString().trim();p.bridgeToken=bridgeToken.getText().toString();return p;}
+    Provider provider(Profile p){return p.type==Profile.Type.XTREAM?new XtreamProvider(p):new M3uProvider(p,SettingsStore.primaryLanguage(this));}
+    void test(){status.setText(T("testing_connection"));Profile p=collect();exec.execute(()->{try{provider(p).authenticate();runOnUiThread(()->status.setText(T("connection_ok")));}catch(Exception e){runOnUiThread(()->status.setText(T("failed")+": "+friendly(e)));}});}
+    String friendly(Exception e){String m=e.getMessage();if(m==null||m.trim().isEmpty())return T("unknown_error");return m.replace("LOGIN_FAILED",T("login_failed"));}
+    @Override protected void onDestroy(){super.onDestroy();exec.shutdownNow();}
+}
+''')
+
 main.write_text(s)
-print("Prepared NenoTV Free v0.12.4: provider-order + full background sync")
+print("Prepared NenoTV Free v0.12.5: provider-order + full background sync")
