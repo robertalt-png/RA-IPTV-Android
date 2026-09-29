@@ -1,0 +1,338 @@
+name: NenoTV Automated QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: Branch whose latest successful NenoTV source build should be tested
+        required: false
+        default: nenotv-v0.12.6.6-player-controls-autohide
+      source_run_id:
+        description: Optional exact build workflow run ID
+        required: false
+        default: ""
+      full_matrix:
+        description: Also test API 26, 30 and 34
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches:
+      - nenotv-automated-qa-v0.1
+    paths:
+      - "qa/**"
+      - ".github/workflows/nenotv-qa.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  DEFAULT_SOURCE_BRANCH: nenotv-v0.12.6.6-player-controls-autohide
+
+jobs:
+  static-and-web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve generated NenoTV source
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_BRANCH: ${{ inputs.source_branch }}
+          INPUT_RUN: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          BRANCH="${INPUT_BRANCH:-$DEFAULT_SOURCE_BRANCH}"
+          RUN="${INPUT_RUN:-}"
+          if [ -z "$RUN" ]; then
+            RUN=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build-v096.yml --branch "$BRANCH" --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          fi
+          test -n "$RUN"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "run_id=$RUN" >> "$GITHUB_OUTPUT"
+          echo "Testing source branch $BRANCH from run $RUN"
+
+      - name: Download generated source artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.source.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          mkdir source-artifact
+          cd source-artifact
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern 'NenoTV-Free-*-source'
+          SRC=$(find . -name 'NenoTV-Free-*-source.tar.gz' -print -quit)
+          test -n "$SRC"
+          mkdir -p ../src
+          tar -xzf "$SRC" -C ../src
+          test -d ../src/RA_IPTV_Android_v0.1
+
+      - name: Prepare QA instrumentation
+        run: |
+          cd src/RA_IPTV_Android_v0.1
+          python3 "$GITHUB_WORKSPACE/qa/prepare_android_tests.py"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Compile debug, instrumentation and lint
+        working-directory: src/RA_IPTV_Android_v0.1
+        run: |
+          set -euo pipefail
+          gradle --no-daemon :app:assembleDebug :app:assembleAndroidTest :app:lintDebug
+
+      - name: Manifest and permission gate
+        working-directory: src/RA_IPTV_Android_v0.1
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)
+          "$AAPT" dump badging "$APK" | tee "$GITHUB_WORKSPACE/qa-badging.txt"
+          grep -q "package: name='com.robertalt.raiptv'" "$GITHUB_WORKSPACE/qa-badging.txt"
+          grep -q "application-label:'NenoTV'" "$GITHUB_WORKSPACE/qa-badging.txt"
+          "$AAPT" dump permissions "$APK" | tee "$GITHUB_WORKSPACE/qa-permissions.txt"
+          for p in android.permission.INTERNET android.permission.ACCESS_NETWORK_STATE android.permission.WAKE_LOCK; do
+            grep -q "$p" "$GITHUB_WORKSPACE/qa-permissions.txt"
+          done
+
+      - name: Read-only NenoTV website/App Bridge reachability
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 15 -D qa-rest-headers.txt https://nenotv.com/wp-json/nenotv/v1/ -o qa-rest.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open("qa-rest.json"))
+          assert isinstance(data,(dict,list))
+          print("Primary NenoTV REST route: OK")
+          PY
+          curl -fsS --max-time 15 'https://nenotv.com/index.php?rest_route=/nenotv/v1/' -o qa-rest-fallback.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open("qa-rest-fallback.json"))
+          assert isinstance(data,(dict,list))
+          print("Fallback NenoTV REST route: OK")
+          PY
+
+      - name: Upload static evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nenotv-qa-static
+          path: |
+            qa-badging.txt
+            qa-permissions.txt
+            qa-rest*.json
+            qa-rest-headers.txt
+            src/RA_IPTV_Android_v0.1/app/build/reports/lint-results-debug.html
+            src/RA_IPTV_Android_v0.1/app/build/reports/lint-results-debug.xml
+          if-no-files-found: warn
+          retention-days: 30
+
+  emulator-api35:
+    needs: static-and-web
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve and download source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_BRANCH: ${{ inputs.source_branch }}
+          INPUT_RUN: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          BRANCH="${INPUT_BRANCH:-$DEFAULT_SOURCE_BRANCH}"
+          RUN="${INPUT_RUN:-}"
+          if [ -z "$RUN" ]; then
+            RUN=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build-v096.yml --branch "$BRANCH" --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          fi
+          mkdir source-artifact
+          cd source-artifact
+          gh run download "$RUN" --repo "$GITHUB_REPOSITORY" --pattern 'NenoTV-Free-*-source'
+          SRC=$(find . -name 'NenoTV-Free-*-source.tar.gz' -print -quit)
+          mkdir -p ../src
+          tar -xzf "$SRC" -C ../src
+
+      - name: Prepare Android QA
+        run: |
+          cd src/RA_IPTV_Android_v0.1
+          python3 "$GITHUB_WORKSPACE/qa/prepare_android_tests.py"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Generate deterministic HLS and MP4 media
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          mkdir -p qa/media
+          ffmpeg -hide_banner -loglevel error -y             -f lavfi -i testsrc=size=1280x720:rate=25             -f lavfi -i sine=frequency=880:sample_rate=48000             -t 12 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -c:a aac -shortest qa/media/vod.mp4
+          ffmpeg -hide_banner -loglevel error -y             -stream_loop -1 -i qa/media/vod.mp4 -t 18 -c copy             -f hls -hls_time 2 -hls_list_size 0             -hls_segment_filename qa/media/seg%03d.ts qa/media/live.m3u8
+
+      - name: Start synthetic IPTV server
+        run: |
+          set -euo pipefail
+          nohup python3 qa/mock_iptv_server.py --port 8787 > qa-server.log 2>&1 &
+          echo $! > qa-server.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8787/health; then exit 0; fi
+            sleep 1
+          done
+          cat qa-server.log
+          exit 1
+
+      - name: Build app and test APKs
+        working-directory: src/RA_IPTV_Android_v0.1
+        run: gradle --no-daemon :app:assembleDebug :app:assembleAndroidTest
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: API 35 full end-to-end Android QA
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -euo pipefail
+            mkdir -p "$GITHUB_WORKSPACE/qa-evidence/screenshots"
+            adb logcat -c
+            cd "$GITHUB_WORKSPACE/src/RA_IPTV_Android_v0.1"
+            gradle --no-daemon :app:connectedDebugAndroidTest
+            adb shell screencap -p /sdcard/qa-final.png || true
+            adb pull /sdcard/qa-final.png "$GITHUB_WORKSPACE/qa-evidence/screenshots/final-api35.png" || true
+            adb logcat -d > "$GITHUB_WORKSPACE/qa-evidence/logcat-api35.txt"
+            if grep -E 'FATAL EXCEPTION|ANR in com\.robertalt\.raiptv|Process com\.robertalt\.raiptv .* has died' "$GITHUB_WORKSPACE/qa-evidence/logcat-api35.txt"; then
+              echo "Crash/ANR signature detected"
+              exit 1
+            fi
+
+      - name: Collect emulator reports
+        if: always()
+        run: |
+          mkdir -p qa-evidence
+          cp qa-server.log qa-evidence/ || true
+          cp -r src/RA_IPTV_Android_v0.1/app/build/reports/androidTests qa-evidence/ || true
+          cp -r src/RA_IPTV_Android_v0.1/app/build/outputs/androidTest-results qa-evidence/ || true
+
+      - name: Upload emulator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nenotv-qa-emulator-api35
+          path: qa-evidence
+          if-no-files-found: warn
+          retention-days: 30
+
+  compatibility-matrix:
+    if: ${{ inputs.full_matrix == true }}
+    needs: static-and-web
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 30, 34]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve and download source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_BRANCH: ${{ inputs.source_branch }}
+          INPUT_RUN: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          BRANCH="${INPUT_BRANCH:-$DEFAULT_SOURCE_BRANCH}"
+          RUN="${INPUT_RUN:-}"
+          if [ -z "$RUN" ]; then
+            RUN=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build-v096.yml --branch "$BRANCH" --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          fi
+          mkdir source-artifact
+          cd source-artifact
+          gh run download "$RUN" --repo "$GITHUB_REPOSITORY" --pattern 'NenoTV-Free-*-source'
+          SRC=$(find . -name 'NenoTV-Free-*-source.tar.gz' -print -quit)
+          mkdir -p ../src
+          tar -xzf "$SRC" -C ../src
+
+      - name: Prepare tests and synthetic media
+        run: |
+          cd src/RA_IPTV_Android_v0.1
+          python3 "$GITHUB_WORKSPACE/qa/prepare_android_tests.py"
+          cd "$GITHUB_WORKSPACE"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          mkdir -p qa/media
+          ffmpeg -hide_banner -loglevel error -y -f lavfi -i testsrc=size=640x360:rate=25 -f lavfi -i sine=frequency=660:sample_rate=48000 -t 10 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -c:a aac -shortest qa/media/vod.mp4
+          ffmpeg -hide_banner -loglevel error -y -stream_loop -1 -i qa/media/vod.mp4 -t 15 -c copy -f hls -hls_time 2 -hls_list_size 0 -hls_segment_filename qa/media/seg%03d.ts qa/media/live.m3u8
+          nohup python3 qa/mock_iptv_server.py --port 8787 > qa-server.log 2>&1 &
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Android API ${{ matrix.api }} compatibility QA
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            cd "$GITHUB_WORKSPACE/src/RA_IPTV_Android_v0.1"
+            gradle --no-daemon :app:connectedDebugAndroidTest
+
+      - name: Upload compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nenotv-qa-api${{ matrix.api }}
+          path: |
+            qa-server.log
+            src/RA_IPTV_Android_v0.1/app/build/reports/androidTests
+            src/RA_IPTV_Android_v0.1/app/build/outputs/androidTest-results
+          if-no-files-found: warn
+          retention-days: 30
