@@ -846,9 +846,9 @@ pv=providerFile.read_text()
 if 'archiveEntries(MediaEntry item,int limit)' not in pv:
     pv=pv.replace(
         '    default List<EpgEntry> epgEntries(MediaEntry item,int limit) throws Exception { return Collections.emptyList(); }',
-        '    default List<EpgEntry> epgEntries(MediaEntry item,int limit) throws Exception { return Collections.emptyList(); }\\n'
-        '    default List<EpgEntry> archiveEntries(MediaEntry item,int limit) throws Exception { return Collections.emptyList(); }\\n'
-        '    default String catchupUrl(MediaEntry item,EpgEntry programme) throws Exception { return ""; }'
+        '''    default List<EpgEntry> epgEntries(MediaEntry item,int limit) throws Exception { return Collections.emptyList(); }
+    default List<EpgEntry> archiveEntries(MediaEntry item,int limit) throws Exception { return Collections.emptyList(); }
+    default String catchupUrl(MediaEntry item,EpgEntry programme) throws Exception { return ""; }'''
     )
 providerFile.write_text(pv)
 
@@ -898,8 +898,8 @@ if 'autoRefresh' not in ex:
     )
     ex=ex.replace(
         'private List<MediaEntry> all=new ArrayList<>(), shown=new ArrayList<>(); private Provider provider; private String profileKey=""; private volatile boolean disposed=false;',
-        'private List<MediaEntry> all=new ArrayList<>(), shown=new ArrayList<>(); private Provider provider; private String profileKey=""; private volatile boolean disposed=false;\\n'
-        '    private final Runnable autoRefresh=new Runnable(){public void run(){if(disposed)return;cache.clear();loading.clear();notifyDataSetChanged();ui.postDelayed(this,10*60*1000L);}};'
+        '''private List<MediaEntry> all=new ArrayList<>(), shown=new ArrayList<>(); private Provider provider; private String profileKey=""; private volatile boolean disposed=false;
+    private final Runnable autoRefresh=new Runnable(){public void run(){if(disposed)return;cache.clear();loading.clear();notifyDataSetChanged();ui.postDelayed(this,10*60*1000L);}};'''
     )
     ex=ex.replace(
         'public void configure(Provider p,String key){disposed=false;provider=p;profileKey=key==null?"":key;cache.clear();loading.clear();}',
