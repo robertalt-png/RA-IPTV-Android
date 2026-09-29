@@ -1,12 +1,12 @@
-name: Build NenoTV Free v0.12.6
+name: Build NenoTV Free v0.12.6.1
 
 on:
   push:
-    branches: [ nenotv-v0.12.6-free-polish ]
+    branches: [ nenotv-v0.12.6.1-web-integration ]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
@@ -963,16 +963,31 @@ jobs:
           ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
           IN="base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk"
           "$AAPT" dump badging "$IN" | tee free-badging.txt
-          grep -q "package: name='com.robertalt.raiptv' versionCode='55' versionName='0.12.6'" free-badging.txt
-          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-Free-v0.12.6-aligned-unsigned.apk
-          "$ZIPALIGN" -c -p 4 NenoTV-Free-v0.12.6-aligned-unsigned.apk
+          grep -q "package: name='com.robertalt.raiptv' versionCode='59' versionName='0.12.6.1'" free-badging.txt
+          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-Free-v0.12.6.1-aligned-unsigned.apk
+          "$ZIPALIGN" -c -p 4 NenoTV-Free-v0.12.6.1-aligned-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
-          ls -lh NenoTV-Free-v0.12.6-aligned-unsigned.apk
+          ls -lh NenoTV-Free-v0.12.6.1-aligned-unsigned.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-Free-v0.12.6-build
+          name: NenoTV-Free-v0.12.6.1-build
           path: |
-            NenoTV-Free-v0.12.6-aligned-unsigned.apk
+            NenoTV-Free-v0.12.6.1-aligned-unsigned.apk
             free-badging.txt
             apksigner.jar
+
+      - name: Publish unsigned build handoff to branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build-output/v0.12.6.1
+          cp NenoTV-Free-v0.12.6.1-aligned-unsigned.apk build-output/v0.12.6.1/
+          cp free-badging.txt build-output/v0.12.6.1/
+          cp apksigner.jar build-output/v0.12.6.1/
+          sha256sum build-output/v0.12.6.1/* > build-output/v0.12.6.1/SHA256SUMS.txt
+          git config user.name "NenoTV Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add build-output/v0.12.6.1
+          git commit -m "build: publish NenoTV Free v0.12.6.1 handoff [skip ci]"
+          git push origin HEAD:nenotv-v0.12.6.1-web-integration
