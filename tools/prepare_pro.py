@@ -66,6 +66,11 @@ android {
 
 dependencies {
     implementation project(':app')
+    implementation 'androidx.fragment:fragment:1.8.9'
+    implementation 'androidx.media3:media3-exoplayer:1.11.1'
+    implementation 'androidx.media3:media3-exoplayer-hls:1.11.1'
+    implementation 'androidx.media3:media3-ui:1.11.1'
+    implementation 'com.google.android.gms:play-services-cast-framework:22.3.1'
     implementation 'org.videolan.android:libvlc-all:3.7.6'
     implementation 'com.google.mlkit:translate:17.0.3'
     implementation 'com.google.mlkit:language-id:17.0.6'
