@@ -1,8 +1,8 @@
-name: Build NenoTV Free v0.12.8
+name: Build NenoTV Free v0.12.9
 
 on:
   push:
-    branches: [ nenotv-v0.12.8-polish-correctness ]
+    branches: [ nenotv-v0.12.9-final-free-polish ]
   workflow_dispatch:
 
 permissions:
@@ -963,16 +963,16 @@ jobs:
           ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
           IN="base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk"
           "$AAPT" dump badging "$IN" | tee free-badging.txt
-          grep -q "package: name='com.robertalt.raiptv' versionCode='57' versionName='0.12.8'" free-badging.txt
-          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-Free-v0.12.8-aligned-unsigned.apk
-          "$ZIPALIGN" -c -p 4 NenoTV-Free-v0.12.8-aligned-unsigned.apk
+          grep -q "package: name='com.robertalt.raiptv' versionCode='58' versionName='0.12.9'" free-badging.txt
+          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-Free-v0.12.9-aligned-unsigned.apk
+          "$ZIPALIGN" -c -p 4 NenoTV-Free-v0.12.9-aligned-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
-          ls -lh NenoTV-Free-v0.12.8-aligned-unsigned.apk
+          ls -lh NenoTV-Free-v0.12.9-aligned-unsigned.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-Free-v0.12.8-build
+          name: NenoTV-Free-v0.12.9-build
           path: |
-            NenoTV-Free-v0.12.8-aligned-unsigned.apk
+            NenoTV-Free-v0.12.9-aligned-unsigned.apk
             free-badging.txt
             apksigner.jar
