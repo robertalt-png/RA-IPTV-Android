@@ -106,6 +106,7 @@ pro_player = pro_player.replace(
     """package com.robertalt.raiptv.proextras;
 
 import com.robertalt.raiptv.DisplayText;
+import com.robertalt.raiptv.NivaroCastOptionsProvider;
 import com.robertalt.raiptv.ProGate;
 import com.robertalt.raiptv.UiText;"""
     , 1
@@ -113,6 +114,8 @@ import com.robertalt.raiptv.UiText;"""
 pro_player = pro_player.replace("public class PlayerActivity extends", "public class ProPlayerActivity extends", 1)
 pro_player = pro_player.replace("PlayerActivity.this", "ProPlayerActivity.this")
 pro_player = pro_player.replace("R.layout.activity_player", "R.layout.activity_pro_player")
+# Base colors are owned by the application module; keep feature-local ids/layout in feature R.
+pro_player = pro_player.replace("R.color.", "com.robertalt.raiptv.R.color.")
 # Feature module owns its R class; all shared models/storage/cast/subtitle imports remain valid.
 (mod / "src/main/java/com/robertalt/raiptv/proextras/ProPlayerActivity.java").write_text(pro_player)
 
