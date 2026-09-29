@@ -56,7 +56,7 @@ public class NenoTvAutomatedQaTest {
     private void launch(Class<?> cls) {
         Intent i = new Intent(app, cls).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         app.startActivity(i);
-        assertTrue("NenoTV package did not become visible", device.wait(Until.hasObject(By.pkg(PKG).depth(0)), 12000));
+        assertTrue("NenoTV package did not become visible", device.wait(Until.hasObject(By.pkg(PKG)), 12000));
     }
 
     private UiObject2 waitObj(BySelector selector, long timeoutMs) {
@@ -135,8 +135,19 @@ public class NenoTvAutomatedQaTest {
         setText("serverField", BASE);
         setText("userField", "qa");
         setText("passField", "qa-pass");
+        device.pressBack(); // close IME so status feedback is visible
         res("testButton").click();
-        contains("Verbinding OK");
+        long connectionDeadline=SystemClock.uptimeMillis()+15000;
+        boolean connected=false;
+        while(SystemClock.uptimeMillis()<connectionDeadline){
+            UiObject2 state=device.findObject(By.res(PKG,"profileStatus"));
+            String text=state==null?null:state.getText();
+            if(text!=null&&text.contains("Verbinding OK")){connected=true;break;}
+            if(text!=null&&(text.contains("mislukt")||text.contains("Failed")||text.contains("fout")))
+                fail("Connection test reported failure: "+text);
+            SystemClock.sleep(200);
+        }
+        assertTrue("Xtream test endpoint succeeded but success status was not shown",connected);
 
         res("saveButton").click();
         contains("NenoTV");
