@@ -3,6 +3,11 @@ name: Build NenoTV Pro Modular
 on:
   push:
     branches: [ nenotv-pro-modularization-v0.1 ]
+    paths:
+      - '.github/workflows/build-pro-modular.yml'
+      - 'tools/prepare_pro.py'
+      - 'tools/prepare_light.py'
+      - 'patches/**'
   workflow_dispatch:
 
 permissions:
@@ -988,6 +993,28 @@ jobs:
               raise SystemExit("Heavy native libraries leaked into base module: "+", ".join(base_heavy[:10]))
           if not pro_heavy:
               raise SystemExit("Expected heavy Pro native libraries were not found in proextras")
+
+          by_abi=collections.defaultdict(int)
+          pro_native=0
+          for i in zipfile.ZipFile(p).infolist():
+              if not i.filename.startswith("proextras/lib/"):
+                  continue
+              parts=i.filename.split("/")
+              if len(parts)>=4:
+                  by_abi[parts[2]]+=i.compress_size
+                  pro_native+=i.compress_size
+          pro_nonnative=max(0,sums.get("proextras",0)-pro_native)
+          base_mib=sums.get("base",0)/1024/1024
+          delivered={}
+          for abi,v in by_abi.items():
+              delivered[abi]=(v+pro_nonnative)/1024/1024
+
+          if base_mib > 12.0:
+              raise SystemExit(f"Base module size regression: {base_mib:.2f} MiB > 12 MiB gate")
+          too_large={abi:v for abi,v in delivered.items() if v>40.0}
+          if too_large:
+              raise SystemExit("Pro Media Pack per-device size regression: "+str(too_large))
+
           lines=[
               f"AAB bytes: {os.path.getsize(p)}",
               f"AAB MiB: {os.path.getsize(p)/1024/1024:.2f}",
@@ -996,7 +1023,17 @@ jobs:
           ]
           for k,v in sorted(sums.items(), key=lambda kv:-kv[1]):
               lines.append(f"{k}: {v/1024/1024:.2f} MiB compressed; {raws[k]/1024/1024:.2f} MiB raw")
-          lines += ["", "Heavy files in proextras:"] + pro_heavy
+          lines += ["", "Approximate delivered Pro Media Pack by ABI:"]
+          for abi,v in sorted(delivered.items()):
+              lines.append(f"{abi}: {v:.2f} MiB")
+          lines += [
+              "",
+              "Size gates:",
+              f"base <= 12 MiB: PASS ({base_mib:.2f} MiB)",
+              "per-device Pro Media Pack <= 40 MiB: PASS",
+              "",
+              "Heavy files in proextras:"
+          ] + pro_heavy
           open("pro-size-report.txt","w").write("\n".join(lines)+"\n")
           print("\n".join(lines))
           PY
