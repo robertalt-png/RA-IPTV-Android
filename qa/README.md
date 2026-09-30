@@ -27,3 +27,7 @@ The test IPTV service is synthetic. It generates its own short video/audio clips
 ## What still needs real hardware
 
 An emulator cannot fully prove vendor-specific hardware decoding, TV firmware, remote-control behavior, HDMI/audio-device behavior, DRM, all mobile-network conditions or every real IPTV-provider quirk. Those remain a short final real-device smoke test instead of the full manual regression suite.
+
+
+## v0.12.6.7 retest
+Triggered after the corrected v0.12.6.7 source build succeeded. The next green candidate will be promoted as v0.12.6.8 after any QA fixes are applied.
