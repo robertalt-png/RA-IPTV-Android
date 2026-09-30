@@ -8,7 +8,7 @@ APP="$GITHUB_WORKSPACE/src/RA_IPTV_Android_v0.1"
 EVIDENCE="$GITHUB_WORKSPACE/qa-evidence"
 mkdir -p "$EVIDENCE"
 
-adb logcat -c
+adb logcat -c >/dev/null 2>&1 || echo "QA note: this Android version does not allow clearing logcat; continuing with package-specific log scan"
 
 if [ "$EDITION" = "pro" ]; then
   AAB="$APP/app/build/outputs/bundle/debug/app-debug.aab"

@@ -5,9 +5,9 @@ path=sys.argv[1]
 text=open(path,encoding='utf-8',errors='replace').read()
 
 patterns={
- 'fatal_exception':r'FATAL EXCEPTION',
- 'anr':r'ANR in com\.robertalt\.raiptv',
- 'process_died':r'Process com\.robertalt\.raiptv .* has died',
+ 'fatal_exception':r'FATAL EXCEPTION:[\\s\\S]{0,1400}?Process:\\s*com\\.robertalt\\.raiptv(?:,|\\s)',
+ 'anr':r'ANR in com\\.robertalt\\.raiptv',
+ 'process_died':r'Process com\\.robertalt\\.raiptv .* has died',
 }
 findings={k:len(re.findall(v,text)) for k,v in patterns.items()}
 
