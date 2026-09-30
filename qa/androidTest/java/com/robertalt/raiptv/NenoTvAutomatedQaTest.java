@@ -303,17 +303,22 @@ public class NenoTvAutomatedQaTest {
     }
 
     private void backToMainFromPlayer() {
-        for (int i = 0; i < 4 && !waitMainChrome(1000); i++) {
-            device.pressBack();
-            device.waitForIdle(1200);
-            SystemClock.sleep(500);
+        boolean returned = waitMainChrome(5000);
+        for (int i = 0; i < 3 && !returned; i++) {
+            if (device.hasObject(By.res(PKG, "playerRoot"))) {
+                device.pressBack();
+                device.waitForIdle(1200);
+            } else {
+                SystemClock.sleep(1000);
+            }
+            returned = waitMainChrome(5000);
         }
-        assertTrue("Player did not return to MainActivity navigation", waitMainChrome(30000));
+        assertTrue("Player did not return to MainActivity navigation", returned || waitMainChrome(30000));
         device.waitForIdle(1500);
         SystemClock.sleep(350);
     }
 
-    private void clickPlayerSurface() {
+    private boolean clickPlayerSurface() {
         final boolean[] clicked = {false};
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             Collection<Activity> resumed = ActivityLifecycleMonitorRegistry.getInstance()
@@ -326,7 +331,7 @@ public class NenoTvAutomatedQaTest {
                 }
             }
         });
-        assertTrue("Player surface did not receive its click action", clicked[0]);
+        return clicked[0];
     }
 
     private void openCardAndPlay(String title) {
