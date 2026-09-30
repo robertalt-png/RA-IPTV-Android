@@ -2,11 +2,11 @@ version: 2
 editions: [lite, pro]
 sources:
   lite:
-    branch: nenotv-v0.12.6.7-free-qa-crashfix
+    branch: nenotv-v0.12.6.7-free-qa-executorfix
     workflow: build-v096.yml
     artifact_pattern: NenoTV-Free-*-source
   pro:
-    branch: nenotv-pro-modularization-v0.1
+    branch: nenotv-pro-modularization-v0.2-qa-splitfix
     workflow: build-pro-modular.yml
     artifact_pattern: NenoTV-Pro-Modular-*-source
 source_types: [xtream, m3u]
