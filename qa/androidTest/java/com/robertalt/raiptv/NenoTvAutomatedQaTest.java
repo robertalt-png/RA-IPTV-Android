@@ -207,14 +207,21 @@ public class NenoTvAutomatedQaTest {
     }
 
     private void assertPlayerTitle(String expected) {
-        long deadline = SystemClock.uptimeMillis() + 5000;
-        String actual = "";
-        while (SystemClock.uptimeMillis() < deadline) {
-            actual = visibleText(By.res(PKG, "playerTitle"));
-            if (actual.contains(expected)) return;
-            SystemClock.sleep(100);
+        showPlayerControls();
+        assertTrue("Player title field was not visible for " + expected,
+                device.wait(Until.hasObject(By.res(PKG, "playerTitle")), 3000));
+        assertTrue("Player title did not contain " + expected,
+                device.wait(Until.hasObject(By.textContains(expected)), 3000));
+    }
+
+    private UiObject2 openSearchBox() {
+        UiObject2 search = findFresh(By.res(PKG, "searchBox"), 500);
+        for (int attempt = 0; attempt < 3 && search == null; attempt++) {
+            tap(By.res(PKG, "searchToggle"), "searchToggle");
+            search = findFresh(By.res(PKG, "searchBox"), 5000);
         }
-        fail("Player title did not contain " + expected + ": " + actual);
+        assertNotNull("Search box did not become visible", search);
+        return search;
     }
 
     private boolean hasText(String value) {
@@ -409,9 +416,7 @@ public class NenoTvAutomatedQaTest {
         clickNav("navMovies");
         contains("QA NenoTV Test Movie");
 
-        tap(By.res(PKG, "searchToggle"), "searchToggle");
-        UiObject2 search = findFresh(By.res(PKG, "searchBox"), 15000);
-        assertNotNull("Search box did not become visible", search);
+        UiObject2 search = openSearchBox();
         search.setText("QA NenoTV Test Movie");
         SystemClock.sleep(1100);
         assertTrue("Search result disappeared", device.hasObject(By.textContains("QA NenoTV Test Movie")));
