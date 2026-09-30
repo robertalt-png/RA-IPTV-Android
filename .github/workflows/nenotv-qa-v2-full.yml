@@ -1,6 +1,11 @@
 name: NenoTV QA v2 Full Matrix
 
 on:
+  push:
+    branches:
+      - nenotv-qa-v2-testomgeving
+    paths:
+      - '.qa-full-trigger'
   workflow_call:
     inputs:
       layer:
