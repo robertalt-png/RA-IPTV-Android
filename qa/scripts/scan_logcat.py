@@ -41,6 +41,8 @@ for m in secret_re.finditer(text):
     # The matched value is an exception class, not a credential.
     if re.fullmatch(r'java(?:\\.[A-Za-z_$][A-Za-z0-9_$]*)+(?:Exception|Error):?', value):
         continue
+    if value.startswith('java.') or value.startswith('javax.') or value.startswith('javascript:'):
+        continue
     secret_hits.append({'key':key,'value_preview':value[:3]+'…','offset':m.start()})
 
 findings['possible_secret']=len(secret_hits)
