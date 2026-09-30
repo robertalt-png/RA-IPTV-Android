@@ -56,7 +56,9 @@ public class NenoTvAutomatedQaTest {
     private void launch(Class<?> cls) {
         Intent i = new Intent(app, cls).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         app.startActivity(i);
-        assertTrue("NenoTV package did not become visible", device.wait(Until.hasObject(By.pkg(PKG)), 12000));
+        boolean visible = device.wait(Until.hasObject(By.pkg(PKG)), 12000);
+        if (!visible) visible = PKG.equals(device.getCurrentPackageName());
+        assertTrue("NenoTV package did not become visible", visible);
     }
 
     private UiObject2 waitObj(BySelector selector, long timeoutMs) {
@@ -260,6 +262,8 @@ public class NenoTvAutomatedQaTest {
         setText("serverField", BASE);
         setText("userField", "wrong");
         setText("passField", "wrong");
+        device.pressBack(); // close IME so the status field and Test button stay visible
+        SystemClock.sleep(250);
         res("testButton").click();
 
         UiObject2 status = device.wait(Until.findObject(By.res(PKG, "profileStatus")), 8000);
