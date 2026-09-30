@@ -35,6 +35,49 @@ x = re.sub(r'<string name="app_name">.*?</string>',
            '<string name="app_name">NenoTV</string>', x)
 strings.write_text(x)
 
+# QA/UI parity: keep Pro base navigation and first-source setup aligned with the
+# current Free/Lite application. Pro adds capabilities; it must not regress
+# common navigation or rename the shared source setup screen.
+profile_activity = java / "ProfileActivity.java"
+px = profile_activity.read_text()
+if "String sourceLabel()" not in px:
+    px = px.replace(
+        'String T(String k){return UiText.t(this,k);}',
+        '''String T(String k){return UiText.t(this,k);}
+    String sourceLabel(){
+        String l=com.robertalt.raiptv.storage.SettingsStore.language(this);
+        if(l==null)l="en";l=l.toLowerCase(java.util.Locale.ROOT);
+        if("nl".equals(l))return "TV-bron";
+        if("de".equals(l))return "TV-Quelle";
+        if("fr".equals(l))return "Source TV";
+        if("es".equals(l))return "Fuente TV";
+        if("it".equals(l))return "Sorgente TV";
+        if("pt".equals(l))return "Fonte TV";
+        if("tr".equals(l))return "TV kaynağı";
+        if("pl".equals(l))return "Źródło TV";
+        if("ar".equals(l))return "مصدر التلفاز";
+        return "TV source";
+    }'''
+    )
+px = px.replace(
+    '((TextView)findViewById(R.id.profileTitle)).setText(T("profile"));',
+    '((TextView)findViewById(R.id.profileTitle)).setText(sourceLabel());'
+)
+profile_activity.write_text(px)
+
+main_layout = res / "layout/activity_main.xml"
+mx = main_layout.read_text()
+search_button = '''<Button android:id="@+id/searchToggle" android:layout_width="40dp" android:layout_height="36dp" android:layout_marginLeft="5dp" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:text="⌕" android:textSize="22sp" android:textColor="#FFFFFFFF" android:backgroundTint="#151A21" android:visibility="visible" android:contentDescription="Search"/>'''
+mx, replaced = re.subn(
+    r'<Button android:id="@\+id/searchToggle"[^>]*/>',
+    search_button,
+    mx,
+    count=1
+)
+if replaced != 1:
+    raise SystemExit("Could not align Pro searchToggle with Lite UI contract")
+main_layout.write_text(mx)
+
 # Lightweight Pro features remain in the base app and are entitlement-gated.
 # Do NOT force a 40-60 MB media pack download merely to use parental controls,
 # advanced EPG or other code-only features.
