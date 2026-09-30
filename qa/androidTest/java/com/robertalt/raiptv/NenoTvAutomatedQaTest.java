@@ -183,6 +183,33 @@ public class NenoTvAutomatedQaTest {
         return description == null ? "" : description;
     }
 
+    private void revealProfileStatus() {
+        int width = device.getDisplayWidth();
+        int height = device.getDisplayHeight();
+        for (int attempt = 0; attempt < 3; attempt++) {
+            UiObject2 status = device.findObject(By.res(PKG, "profileStatus"));
+            if (status != null) {
+                Rect bounds = status.getVisibleBounds();
+                if (bounds.height() > 0 && bounds.top >= 0 && bounds.bottom <= height) return;
+            }
+            device.swipe(width / 2, height * 3 / 4, width / 2, height / 3, 24);
+            device.waitForIdle(750);
+        }
+        assertNotNull("Profile status did not become visible",
+                findFresh(By.res(PKG, "profileStatus"), 3000));
+    }
+
+    private void assertPlayerTitle(String expected) {
+        long deadline = SystemClock.uptimeMillis() + 5000;
+        String actual = "";
+        while (SystemClock.uptimeMillis() < deadline) {
+            actual = visibleText(By.res(PKG, "playerTitle"));
+            if (actual.contains(expected)) return;
+            SystemClock.sleep(100);
+        }
+        fail("Player title did not contain " + expected + ": " + actual);
+    }
+
     private boolean hasText(String value) {
         return device.hasObject(By.textContains(value)) || device.hasObject(By.descContains(value));
     }
@@ -258,8 +285,7 @@ public class NenoTvAutomatedQaTest {
             }
         }
         assertTrue("Player did not open for " + title, opened);
-        assertTrue("Player title did not contain " + title,
-                device.wait(Until.hasObject(By.textContains(title)), 15000));
+        assertPlayerTitle(title);
     }
 
     private UiObject2 showPlayerControls() {
@@ -285,6 +311,7 @@ public class NenoTvAutomatedQaTest {
         setText("passField", "qa-pass");
         device.pressBack(); // close IME so status feedback is visible
         tap(By.res(PKG, "testButton"), "testButton");
+        revealProfileStatus();
         long connectionDeadline=SystemClock.uptimeMillis()+35000;
         boolean connected=false;
         while(SystemClock.uptimeMillis()<connectionDeadline){
@@ -309,7 +336,6 @@ public class NenoTvAutomatedQaTest {
         clickNav("navLive");
         contains("QA NenoTV Live NL");
         openCardAndPlay("QA NenoTV Live NL");
-        contains("QA NenoTV Live NL");
 
         // v0.12.6.6 regression: player controls must auto-hide during playback.
         assertTrue("Player controls did not auto-hide", device.wait(Until.gone(By.res(PKG, "playPauseButton")), 7000));
@@ -338,7 +364,6 @@ public class NenoTvAutomatedQaTest {
         clickNav("navMovies");
         contains("QA NenoTV Test Movie");
         openCardAndPlay("QA NenoTV Test Movie");
-        contains("QA NenoTV Test Movie");
         SystemClock.sleep(5500);
         backToMainFromPlayer();
 
@@ -350,7 +375,9 @@ public class NenoTvAutomatedQaTest {
         tap(By.textContains("QA Pilot"), "QA Pilot");
         SystemClock.sleep(250);
         tap(By.res(PKG, "heroAction"), "heroAction");
-        contains("QA Pilot");
+        assertTrue("Series episode player did not open",
+                device.wait(Until.hasObject(By.res(PKG, "playerTitle")), 30000));
+        assertPlayerTitle("QA Pilot");
     }
 
     @Test public void m3u_live_and_xmltv_flow() {
@@ -415,6 +442,7 @@ public class NenoTvAutomatedQaTest {
         device.pressBack(); // close IME so the status view is actually visible to accessibility
         SystemClock.sleep(250);
         tap(By.res(PKG, "testButton"), "testButton");
+        revealProfileStatus();
 
         long deadline=SystemClock.uptimeMillis()+35000;
         String message=null;
@@ -449,3 +477,4 @@ public class NenoTvAutomatedQaTest {
         }
     }
 }
+
