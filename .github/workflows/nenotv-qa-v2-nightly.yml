@@ -6,10 +6,10 @@ on:
     inputs:
       lite_branch:
         required: false
-        default: nenotv-v0.12.6.7-free-qa-crashfix
+        default: nenotv-v0.12.6.7-free-qa-executorfix
       pro_branch:
         required: false
-        default: nenotv-pro-modularization-v0.1
+        default: nenotv-pro-modularization-v0.2-qa-splitfix
 
 permissions:
   contents: read
