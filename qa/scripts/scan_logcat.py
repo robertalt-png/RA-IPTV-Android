@@ -36,6 +36,11 @@ for m in secret_re.finditer(text):
         continue
     if value.startswith(safe_prefixes):
         continue
+    # Android/Google services sometimes log phrases such as
+    # "Failed to get ... token: java.io.IOException: QUOTA_EXCEEDED".
+    # The matched value is an exception class, not a credential.
+    if re.fullmatch(r'java(?:\\.[A-Za-z_$][A-Za-z0-9_$]*)+(?:Exception|Error):?', value):
+        continue
     secret_hits.append({'key':key,'value_preview':value[:3]+'…','offset':m.start()})
 
 findings['possible_secret']=len(secret_hits)
