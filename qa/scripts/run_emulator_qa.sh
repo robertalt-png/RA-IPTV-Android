@@ -23,7 +23,11 @@ if [ "$EDITION" = "pro" ]; then
 
   java -jar "$GITHUB_WORKSPACE/bundletool.jar" build-apks     --bundle="$AAB"     --output="$APKS"     --overwrite     --local-testing     --ks="$KS"     --ks-key-alias=androiddebugkey     --ks-pass=pass:android     --key-pass=pass:android
 
-  java -jar "$GITHUB_WORKSPACE/bundletool.jar" install-apks --apks="$APKS"
+  if ! java -jar "$GITHUB_WORKSPACE/bundletool.jar" install-apks --apks="$APKS"; then
+    echo "QA note: local-testing split push failed; retrying base split install without local-testing"
+    java -jar "$GITHUB_WORKSPACE/bundletool.jar" build-apks       --bundle="$AAB"       --output="$APKS"       --overwrite       --ks="$KS"       --ks-key-alias=androiddebugkey       --ks-pass=pass:android       --key-pass=pass:android
+    java -jar "$GITHUB_WORKSPACE/bundletool.jar" install-apks --apks="$APKS"
+  fi
 
   adb shell pm path com.robertalt.raiptv | tee "$EVIDENCE/pro-installed-paths.txt"
   if grep -qi proextras "$EVIDENCE/pro-installed-paths.txt"; then
