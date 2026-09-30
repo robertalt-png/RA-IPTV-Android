@@ -936,7 +936,6 @@ jobs:
           python3 "$GITHUB_WORKSPACE/tools/repair_index_executor.py"
           grep -n "activityDestroyed\|RejectedExecutionException\|scheduleBackgroundIndex" app/src/main/java/com/robertalt/raiptv/MainActivity.java | head -n 20
 
-      - name: Archive generated v0.12.6.1 source
       - name: Apply Android 26+ compatibility repair
         run: |
           set -euo pipefail
@@ -944,6 +943,7 @@ jobs:
           python3 "$GITHUB_WORKSPACE/tools/repair_android_compat.py"
           grep -n "String enc" app/src/main/java/com/robertalt/raiptv/core/XtreamUrls.java
 
+      - name: Archive generated v0.12.6.1 source
         shell: bash
         run: |
           set -euo pipefail
