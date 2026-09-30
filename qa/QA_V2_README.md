@@ -17,10 +17,10 @@ Deze branch is de GitHub-implementatie van de projectbron `NenoTV_QA_Testomgevin
 4. Nightly — soak, fault injection, security, performance en brede compatibiliteit.
 
 ## Huidige brondefaults
-- Lite branch: `nenotv-v0.12.6.7-free-qa-crashfix`
+- Lite branch: `nenotv-v0.12.6.7-free-qa-executorfix`
 - Lite workflow: `build-v096.yml`
 - Lite artifact: `NenoTV-Free-*-source`
-- Pro branch: `nenotv-pro-modularization-v0.1`
+- Pro branch: `nenotv-pro-modularization-v0.2-qa-splitfix`
 - Pro workflow: `build-pro-modular.yml`
 - Pro artifact: `NenoTV-Pro-Modular-*-source`
 
