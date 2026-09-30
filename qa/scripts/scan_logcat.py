@@ -22,7 +22,10 @@ safe_literals={
     '<redacted>','***','-'
 }
 safe_exact={'WidevineCdmVersion','ProvisioningModel'}
-safe_prefixes=('android.os.Binder','BinderProxy','RemoteToken','WCT{')
+safe_prefixes=(
+    'android.os.Binder','BinderProxy','RemoteToken','WCT{',
+    'AppWindowToken{','Token{',
+)
 
 secret_hits=[]
 for m in secret_re.finditer(text):
@@ -53,3 +56,4 @@ if secret_hits:
 
 if findings['fatal_exception'] or findings['anr'] or findings['possible_secret']:
     sys.exit(2)
+
