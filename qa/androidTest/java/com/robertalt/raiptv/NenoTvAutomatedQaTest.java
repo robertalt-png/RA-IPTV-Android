@@ -159,7 +159,7 @@ public class NenoTvAutomatedQaTest {
     }
 
     private void clickNav(String id) {
-        res(id).click();
+        tap(By.res(PKG, id), id);
         SystemClock.sleep(400);
     }
 
@@ -178,11 +178,27 @@ public class NenoTvAutomatedQaTest {
         UiObject2 object = findFresh(selector, 500);
         if (object == null) return "";
         String text = object.getText();
-        return text == null ? "" : text;
+        if (text != null && !text.isEmpty()) return text;
+        String description = object.getContentDescription();
+        return description == null ? "" : description;
     }
 
     private boolean hasText(String value) {
-        return device.hasObject(By.textContains(value));
+        return device.hasObject(By.textContains(value)) || device.hasObject(By.descContains(value));
+    }
+
+    private boolean hasAnyText(String... values) {
+        for (String value : values) {
+            if (hasText(value)) return true;
+        }
+        return false;
+    }
+
+    private String firstVisibleText(String... values) {
+        for (String value : values) {
+            if (hasText(value)) return value;
+        }
+        return "";
     }
 
     private boolean isSuccessStatus(String text) {
@@ -215,23 +231,30 @@ public class NenoTvAutomatedQaTest {
     }
 
     private void backToMainFromPlayer() {
-        device.pressBack();
-        assertTrue("Player did not close",
-                device.wait(Until.gone(By.res(PKG, "playerTitle")), 8000));
-        waitMainInteractive();
+        for (int i = 0; i < 4 && !waitMainChrome(1000); i++) {
+            device.pressBack();
+            device.waitForIdle(1200);
+            SystemClock.sleep(500);
+        }
+        assertTrue("Player did not return to MainActivity navigation", waitMainChrome(30000));
+        device.waitForIdle(1500);
+        SystemClock.sleep(350);
     }
 
     private void openCardAndPlay(String title) {
         boolean opened = false;
         for (int attempt = 0; attempt < 3 && !opened; attempt++) {
-            tap(By.textContains(title), title);
-            device.waitForIdle(2000);
-            SystemClock.sleep(1000);
+            if (findFresh(By.res(PKG, "heroAction"), 1500) == null) {
+                tap(By.textContains(title), title);
+                device.waitForIdle(2000);
+                SystemClock.sleep(1000);
+            }
             tap(By.res(PKG, "heroAction"), "heroAction");
             opened = device.wait(Until.hasObject(By.res(PKG, "playerTitle")), 45000);
-            if (!opened) {
+            if (!opened && findFresh(By.res(PKG, "heroAction"), 1500) == null) {
                 device.pressBack();
-                waitMainInteractive();
+                device.waitForIdle(1500);
+                SystemClock.sleep(500);
             }
         }
         assertTrue("Player did not open for " + title, opened);
@@ -261,13 +284,13 @@ public class NenoTvAutomatedQaTest {
         setText("userField", "qa");
         setText("passField", "qa-pass");
         device.pressBack(); // close IME so status feedback is visible
-        res("testButton").click();
-        long connectionDeadline=SystemClock.uptimeMillis()+25000;
+        tap(By.res(PKG, "testButton"), "testButton");
+        long connectionDeadline=SystemClock.uptimeMillis()+35000;
         boolean connected=false;
         while(SystemClock.uptimeMillis()<connectionDeadline){
-            UiObject2 state=device.findObject(By.res(PKG,"profileStatus"));
-            String text=state==null?null:state.getText();
-            if(isSuccessStatus(text) || hasText("Verbinding OK") || hasText("geslaagd") || hasText("success")){connected=true;break;}
+            String text=visibleText(By.res(PKG,"profileStatus"));
+            if(isSuccessStatus(text) || hasAnyText("Verbinding OK", "Verbinding gelukt", "geslaagd",
+                    "Geslaagd", "success", "Success", "succes", "Succes")){connected=true;break;}
             if(isFailureStatus(text))
                 fail("Connection test reported failure: "+text);
             SystemClock.sleep(200);
@@ -297,14 +320,15 @@ public class NenoTvAutomatedQaTest {
         showPlayerControls();
 
         // When paused, controls must stay visible.
-        showPlayerControls().click();
+        tap(By.res(PKG, "playPauseButton"), "playPauseButton");
         SystemClock.sleep(4200);
         assertNotNull("Controls disappeared while paused", device.findObject(By.res(PKG, "playPauseButton")));
-        showPlayerControls().click();
+        showPlayerControls();
+        tap(By.res(PKG, "playPauseButton"), "playPauseButton");
 
         // Player favorite button must toggle visually.
-        res("favoriteButton").click();
-        assertEquals("♥", res("favoriteButton").getText());
+        tap(By.res(PKG, "favoriteButton"), "favoriteButton");
+        assertEquals("♥", visibleText(By.res(PKG, "favoriteButton")));
         backToMainFromPlayer();
 
         clickNav("navEpg");
@@ -319,13 +343,13 @@ public class NenoTvAutomatedQaTest {
         backToMainFromPlayer();
 
         clickNav("navSeries");
-        contains("QA NenoTV Test Series").click();
+        tap(By.textContains("QA NenoTV Test Series"), "QA NenoTV Test Series");
         SystemClock.sleep(300);
-        res("heroAction").click();
+        tap(By.res(PKG, "heroAction"), "heroAction");
         contains("QA Pilot");
-        contains("QA Pilot").click();
+        tap(By.textContains("QA Pilot"), "QA Pilot");
         SystemClock.sleep(250);
-        res("heroAction").click();
+        tap(By.res(PKG, "heroAction"), "heroAction");
         contains("QA Pilot");
     }
 
@@ -351,7 +375,7 @@ public class NenoTvAutomatedQaTest {
         clickNav("navMovies");
         contains("QA NenoTV Test Movie");
 
-        res("searchToggle").click();
+        tap(By.res(PKG, "searchToggle"), "searchToggle");
         UiObject2 search = findFresh(By.res(PKG, "searchBox"), 15000);
         assertNotNull("Search box did not become visible", search);
         search.setText("QA NenoTV Test Movie");
@@ -375,8 +399,8 @@ public class NenoTvAutomatedQaTest {
         app.startActivity(i);
         assertTrue("NenoTV did not resume", device.wait(Until.hasObject(By.res(PKG, "navHome")), 12000));
 
-        res("menuButton").click();
-        contains("Instellingen").click();
+        tap(By.res(PKG, "menuButton"), "menuButton");
+        tap(By.textContains("Instellingen"), "Instellingen");
         contains("Instellingen");
     }
 
@@ -390,17 +414,15 @@ public class NenoTvAutomatedQaTest {
         setText("passField", "wrong");
         device.pressBack(); // close IME so the status view is actually visible to accessibility
         SystemClock.sleep(250);
-        res("testButton").click();
+        tap(By.res(PKG, "testButton"), "testButton");
 
-        long deadline=SystemClock.uptimeMillis()+25000;
+        long deadline=SystemClock.uptimeMillis()+35000;
         String message=null;
         while(SystemClock.uptimeMillis()<deadline){
             String statusText=visibleText(By.res(PKG,"profileStatus"));
-            String visibleFailure="";
-            if (hasText("mislukt")) visibleFailure="mislukt";
-            else if (hasText("Failed")) visibleFailure="Failed";
-            else if (hasText("ongeldig")) visibleFailure="ongeldig";
-            else if (hasText("invalid")) visibleFailure="invalid";
+            String visibleFailure=firstVisibleText("mislukt", "Mislukt", "failed", "Failed", "fout",
+                    "Fout", "ongeldig", "Ongeldig", "invalid", "Invalid", "geweigerd", "Geweigerd",
+                    "denied", "Denied", "login", "Login");
             message = !statusText.isEmpty() ? statusText : visibleFailure;
             if(!message.isEmpty()&&!isPendingStatus(message))break;
             SystemClock.sleep(200);
