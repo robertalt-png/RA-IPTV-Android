@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.graphics.Rect;
 import android.os.SystemClock;
 import android.view.View;
+import android.widget.TextView;
 
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -218,10 +219,30 @@ public class NenoTvAutomatedQaTest {
 
     private void assertPlayerTitle(String expected) {
         showPlayerControls();
-        assertTrue("Player title field was not visible for " + expected,
-                device.wait(Until.hasObject(By.res(PKG, "playerTitle")), 3000));
-        assertTrue("Player title did not contain " + expected,
-                device.wait(Until.hasObject(By.textContains(expected)), 3000));
+        long deadline = SystemClock.uptimeMillis() + 5000;
+        String actual = "";
+        boolean shown = false;
+        while (SystemClock.uptimeMillis() < deadline) {
+            final String[] value = {""};
+            final boolean[] visible = {false};
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                Collection<Activity> resumed = ActivityLifecycleMonitorRegistry.getInstance()
+                        .getActivitiesInStage(Stage.RESUMED);
+                for (Activity activity : resumed) {
+                    TextView title = activity.findViewById(R.id.playerTitle);
+                    if (title != null && title.getText() != null) {
+                        value[0] = title.getText().toString();
+                        visible[0] = title.isShown();
+                        return;
+                    }
+                }
+            });
+            actual = value[0];
+            shown = visible[0];
+            if (shown && actual.contains(expected)) return;
+            SystemClock.sleep(100);
+        }
+        fail("Visible player title did not contain " + expected + ": " + actual + ", shown=" + shown);
     }
 
     private UiObject2 openSearchBox() {
