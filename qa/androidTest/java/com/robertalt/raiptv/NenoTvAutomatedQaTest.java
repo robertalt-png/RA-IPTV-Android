@@ -163,15 +163,19 @@ public class NenoTvAutomatedQaTest {
         SystemClock.sleep(400);
     }
 
-    private void tap(UiObject2 object) {
-        Rect bounds = object.getVisibleBounds();
-        device.click(bounds.centerX(), bounds.centerY());
-    }
-
     private void tap(BySelector selector, String description) {
-        UiObject2 object = findFresh(selector, 25000);
-        assertNotNull("UI object not found: " + description, object);
-        tap(object);
+        for (int attempt = 0; attempt < 4; attempt++) {
+            UiObject2 object = findFresh(selector, 6250);
+            if (object == null) continue;
+            try {
+                Rect bounds = object.getVisibleBounds();
+                device.click(bounds.centerX(), bounds.centerY());
+                return;
+            } catch (Throwable ignored) {
+                SystemClock.sleep(100);
+            }
+        }
+        fail("UI object not found or refreshed while tapping: " + description);
     }
 
     private String visibleText(BySelector selector) {
@@ -291,7 +295,7 @@ public class NenoTvAutomatedQaTest {
                 SystemClock.sleep(1000);
             }
             tap(By.res(PKG, "heroAction"), "heroAction");
-            opened = device.wait(Until.hasObject(By.res(PKG, "playerTitle")), 45000);
+            opened = device.wait(Until.hasObject(By.res(PKG, "playerRoot")), 45000);
             if (!opened && findFresh(By.res(PKG, "heroAction"), 1500) == null) {
                 device.pressBack();
                 device.waitForIdle(1500);
@@ -390,7 +394,7 @@ public class NenoTvAutomatedQaTest {
         SystemClock.sleep(250);
         tap(By.res(PKG, "heroAction"), "heroAction");
         assertTrue("Series episode player did not open",
-                device.wait(Until.hasObject(By.res(PKG, "playerTitle")), 30000));
+                device.wait(Until.hasObject(By.res(PKG, "playerRoot")), 30000));
         assertPlayerTitle("QA Pilot");
     }
 
