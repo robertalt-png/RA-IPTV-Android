@@ -1,2 +1,4 @@
-full-run-requested-from-smoke-green
-smoke_run=36727869878
+full-run-requested-after-harness-fixes
+previous_full_run=36731910449
+qa_head=9f484ec2edd3fe4e73f9555b7cbda12a1481406f
+requested_at=2026-09-30T17:15:00+02:00
