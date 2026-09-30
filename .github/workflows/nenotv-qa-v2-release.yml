@@ -6,11 +6,11 @@ on:
       lite_branch:
         description: Exact Lite candidate branch
         required: true
-        default: nenotv-v0.12.6.7-free-qa-crashfix
+        default: nenotv-v0.12.6.7-free-qa-executorfix
       pro_branch:
         description: Exact Pro candidate branch
         required: true
-        default: nenotv-pro-modularization-v0.1
+        default: nenotv-pro-modularization-v0.2-qa-splitfix
       real_device_evidence_confirmed:
         description: Phone/TV real-device smoke evidence reviewed
         required: true
