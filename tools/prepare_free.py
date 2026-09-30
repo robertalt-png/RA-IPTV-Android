@@ -1026,3 +1026,37 @@ main.write_text(s)
 print("Prepared NenoTV Free v0.12.6.5: REST fallback + account localization + Pro/EPG fixes")
 
 # v0.12.6.7 release rebuild trigger
+
+
+# v0.13.0 trial-dev1: Trial -> Trial Expired -> Pro access plumbing.
+# This branch stays isolated from the stable Free release while the commercial model is tested.
+gradle=app/"build.gradle"
+gx=gradle.read_text()
+gx=re.sub(r"versionCode\s+\d+","versionCode 66",gx,count=1)
+gx=re.sub(r"versionName\s+'[^']+'","versionName '0.13.0-trial-dev1'",gx,count=1)
+gradle.write_text(gx)
+
+main=app/"src/main/java/com/robertalt/raiptv/MainActivity.java"
+mx=main.read_text()
+old='''    void play(MediaEntry e){
+        pauseIndexForPlayback();
+'''
+new='''    void play(MediaEntry e){
+        com.robertalt.raiptv.storage.EntitlementStore access=new com.robertalt.raiptv.storage.EntitlementStore(this);
+        if(!access.canPlay()){
+            Intent account=new Intent(this,AccountActivity.class);
+            if(access.isTrialExpired())account.putExtra("access_reason","trial_expired");
+            else if(access.needsServerValidation())account.putExtra("access_reason","validation_required");
+            else account.putExtra("access_reason","trial_required");
+            startActivity(account);
+            Toast.makeText(this,access.isTrialExpired()?"NenoTV trial ended · activate Pro":"Start or validate your NenoTV trial",Toast.LENGTH_SHORT).show();
+            return;
+        }
+        pauseIndexForPlayback();
+'''
+if old not in mx:
+    raise SystemExit("Trial play-gate marker missing")
+mx=mx.replace(old,new,1)
+main.write_text(mx)
+
+print("Prepared NenoTV v0.13.0-trial-dev1 access gate")
