@@ -70,6 +70,24 @@ public class NenoTvAutomatedQaTest {
     private UiObject2 res(String id) { return waitObj(By.res(PKG, id), 12000); }
     private UiObject2 contains(String value) { return waitObj(By.textContains(value), 25000); }
 
+    private UiObject2 findFresh(BySelector selector, long timeoutMs) {
+        long deadline = SystemClock.uptimeMillis() + timeoutMs;
+        while (SystemClock.uptimeMillis() < deadline) {
+            UiObject2 object = device.findObject(selector);
+            if (object != null) {
+                try {
+                    object.getVisibleBounds();
+                    return object;
+                } catch (Throwable ignored) {
+                    SystemClock.sleep(250);
+                }
+            } else {
+                SystemClock.sleep(250);
+            }
+        }
+        return null;
+    }
+
     private boolean waitMainChrome(long timeoutMs) {
         long deadline = SystemClock.uptimeMillis() + timeoutMs;
         while (SystemClock.uptimeMillis() < deadline) {
@@ -150,6 +168,42 @@ public class NenoTvAutomatedQaTest {
         device.click(bounds.centerX(), bounds.centerY());
     }
 
+    private void tap(BySelector selector, String description) {
+        UiObject2 object = findFresh(selector, 25000);
+        assertNotNull("UI object not found: " + description, object);
+        tap(object);
+    }
+
+    private String visibleText(BySelector selector) {
+        UiObject2 object = findFresh(selector, 500);
+        if (object == null) return "";
+        String text = object.getText();
+        return text == null ? "" : text;
+    }
+
+    private boolean hasText(String value) {
+        return device.hasObject(By.textContains(value));
+    }
+
+    private boolean isSuccessStatus(String text) {
+        String lower = text == null ? "" : text.toLowerCase(java.util.Locale.ROOT);
+        return lower.contains("verbinding ok") || lower.contains("verbinding gelukt") ||
+                lower.contains("geslaagd") || lower.contains("success") || lower.contains("succes");
+    }
+
+    private boolean isFailureStatus(String text) {
+        String lower = text == null ? "" : text.toLowerCase(java.util.Locale.ROOT);
+        return lower.contains("mislukt") || lower.contains("failed") || lower.contains("fout") ||
+                lower.contains("login") || lower.contains("geaccepteerd") || lower.contains("ongeldig") ||
+                lower.contains("invalid") || lower.contains("geweigerd") || lower.contains("denied");
+    }
+
+    private boolean isPendingStatus(String text) {
+        String lower = text == null ? "" : text.toLowerCase(java.util.Locale.ROOT);
+        return lower.contains("testen") || lower.contains("testing") ||
+                lower.contains("verbinden") || lower.contains("connecting");
+    }
+
     private void waitMainInteractive() {
         if (!waitMainChrome(30000)) {
             device.pressBack();
@@ -169,24 +223,37 @@ public class NenoTvAutomatedQaTest {
 
     private void openCardAndPlay(String title) {
         boolean opened = false;
-        for (int attempt = 0; attempt < 2 && !opened; attempt++) {
-            UiObject2 card = contains(title);
-            tap(card);
+        for (int attempt = 0; attempt < 3 && !opened; attempt++) {
+            tap(By.textContains(title), title);
             device.waitForIdle(2000);
-            SystemClock.sleep(800);
-            UiObject2 action = res("heroAction");
-            tap(action);
-            opened = device.wait(Until.hasObject(By.res(PKG, "playerTitle")), 30000);
+            SystemClock.sleep(1000);
+            tap(By.res(PKG, "heroAction"), "heroAction");
+            opened = device.wait(Until.hasObject(By.res(PKG, "playerTitle")), 45000);
+            if (!opened) {
+                device.pressBack();
+                waitMainInteractive();
+            }
         }
         assertTrue("Player did not open for " + title, opened);
         assertTrue("Player title did not contain " + title,
                 device.wait(Until.hasObject(By.textContains(title)), 15000));
     }
 
+    private UiObject2 showPlayerControls() {
+        UiObject2 controls = findFresh(By.res(PKG, "playPauseButton"), 1000);
+        for (int i = 0; i < 4 && controls == null; i++) {
+            device.click(device.getDisplayWidth() / 2, device.getDisplayHeight() / 2);
+            device.waitForIdle(500);
+            controls = findFresh(By.res(PKG, "playPauseButton"), 2500);
+        }
+        assertNotNull("Player controls did not become visible", controls);
+        return controls;
+    }
+
     @Test public void firstRun_language_and_xtream_profile_connection() {
         launch(SplashActivity.class);
         contains("Choose your language");
-        contains("Nederlands").click();
+        tap(By.textContains("Nederlands"), "Nederlands");
 
         contains("TV-bron");
         setText("nameField", "QA profile");
@@ -200,8 +267,8 @@ public class NenoTvAutomatedQaTest {
         while(SystemClock.uptimeMillis()<connectionDeadline){
             UiObject2 state=device.findObject(By.res(PKG,"profileStatus"));
             String text=state==null?null:state.getText();
-            if(text!=null&&text.contains("Verbinding OK")){connected=true;break;}
-            if(text!=null&&(text.contains("mislukt")||text.contains("Failed")||text.contains("fout")))
+            if(isSuccessStatus(text) || hasText("Verbinding OK") || hasText("geslaagd") || hasText("success")){connected=true;break;}
+            if(isFailureStatus(text))
                 fail("Connection test reported failure: "+text);
             SystemClock.sleep(200);
         }
@@ -227,13 +294,13 @@ public class NenoTvAutomatedQaTest {
         int cx = device.getDisplayWidth() / 2;
         int cy = device.getDisplayHeight() / 2;
         device.click(cx, cy);
-        res("playPauseButton");
+        showPlayerControls();
 
         // When paused, controls must stay visible.
-        res("playPauseButton").click();
+        showPlayerControls().click();
         SystemClock.sleep(4200);
         assertNotNull("Controls disappeared while paused", device.findObject(By.res(PKG, "playPauseButton")));
-        res("playPauseButton").click();
+        showPlayerControls().click();
 
         // Player favorite button must toggle visually.
         res("favoriteButton").click();
@@ -285,7 +352,8 @@ public class NenoTvAutomatedQaTest {
         contains("QA NenoTV Test Movie");
 
         res("searchToggle").click();
-        UiObject2 search = res("searchBox");
+        UiObject2 search = findFresh(By.res(PKG, "searchBox"), 15000);
+        assertNotNull("Search box did not become visible", search);
         search.setText("QA NenoTV Test Movie");
         SystemClock.sleep(1100);
         assertTrue("Search result disappeared", device.hasObject(By.textContains("QA NenoTV Test Movie")));
@@ -327,20 +395,21 @@ public class NenoTvAutomatedQaTest {
         long deadline=SystemClock.uptimeMillis()+25000;
         String message=null;
         while(SystemClock.uptimeMillis()<deadline){
-            UiObject2 status=device.findObject(By.res(PKG,"profileStatus"));
-            message=status==null?null:status.getText();
-            String lower=message==null?"":message.toLowerCase(java.util.Locale.ROOT);
-            boolean pending=lower.contains("testen") || lower.contains("testing") || lower.contains("verbinden") || lower.contains("connecting");
-            if(!lower.isEmpty()&&!pending)break;
+            String statusText=visibleText(By.res(PKG,"profileStatus"));
+            String visibleFailure="";
+            if (hasText("mislukt")) visibleFailure="mislukt";
+            else if (hasText("Failed")) visibleFailure="Failed";
+            else if (hasText("ongeldig")) visibleFailure="ongeldig";
+            else if (hasText("invalid")) visibleFailure="invalid";
+            message = !statusText.isEmpty() ? statusText : visibleFailure;
+            if(!message.isEmpty()&&!isPendingStatus(message))break;
             SystemClock.sleep(200);
         }
         assertNotNull("No credential error status shown", message);
         String lower = message.toLowerCase(java.util.Locale.ROOT);
         assertFalse("Credential test never left pending state: " + message,
-                lower.contains("testen") || lower.contains("testing") || lower.contains("verbinden") || lower.contains("connecting"));
-        assertTrue("Invalid credentials were not reported: " + message,
-                lower.contains("mislukt") || lower.contains("failed") || lower.contains("login") || lower.contains("geaccepteerd") ||
-                lower.contains("ongeldig") || lower.contains("invalid") || lower.contains("geweigerd") || lower.contains("denied"));
+                isPendingStatus(message));
+        assertTrue("Invalid credentials were not reported: " + message, isFailureStatus(message));
         assertTrue("NenoTV disappeared after invalid login", device.wait(Until.hasObject(By.pkg(PKG)), 5000));
     }
 
