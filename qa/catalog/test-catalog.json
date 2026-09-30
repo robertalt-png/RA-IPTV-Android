@@ -813,7 +813,7 @@
     {
       "id": "PROPKG-001",
       "domain": "packaging",
-      "title": "Pro startup providers have valid base or dynamic-feature ownership",
+      "title": "Pro base startup contains no automatic ML Kit provider",
       "layers": [
         "smoke",
         "full",
@@ -824,12 +824,12 @@
       ],
       "severity": "critical",
       "status": "automated",
-      "expected": "Every startup provider must have its implementation in base or be explicitly owned by the dynamic feature that contains the class."
+      "expected": "The base bundle manifest must not register MlKitInitProvider before the on-demand proextras module exists."
     },
     {
       "id": "PROPKG-002",
       "domain": "packaging",
-      "title": "Pro on-demand feature manifest and DEX placement are internally consistent",
+      "title": "ML Kit remains isolated to proextras with manual initialization",
       "layers": [
         "smoke",
         "full",
@@ -840,12 +840,12 @@
       ],
       "severity": "critical",
       "status": "automated",
-      "expected": "ML Kit provider metadata and implementation must remain in a consistent split ownership relationship."
+      "expected": "ML Kit implementation stays in proextras, automatic provider metadata is removed, and feature code initializes ML Kit on first use."
     },
     {
       "id": "PROPKG-003",
       "domain": "packaging",
-      "title": "Pro base-only startup and post-feature installation both remain valid",
+      "title": "Pro base-only and post-feature installation paths both launch successfully",
       "layers": [
         "full",
         "release"
@@ -855,7 +855,7 @@
       ],
       "severity": "critical",
       "status": "specified",
-      "expected": "The app must start before proextras is installed and continue to work after the feature is installed."
+      "expected": "Base-only startup must work without proextras; after feature installation, Pro translation/media paths must still work."
     }
   ]
 }
