@@ -38,12 +38,12 @@ jobs:
           set -euo pipefail
           gradle -p dashboard-app --no-daemon :app:assembleDebug
           test -f dashboard-app/app/build/outputs/apk/debug/app-debug.apk
-          cp dashboard-app/app/build/outputs/apk/debug/app-debug.apk NenoTV-Dashboard-v0.1.1.apk
+          cp dashboard-app/app/build/outputs/apk/debug/app-debug.apk NenoTV-Dashboard-v0.1.2.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-Dashboard-v0.1.1
-          path: NenoTV-Dashboard-v0.1.1.apk
+          name: NenoTV-Dashboard-v0.1.2
+          path: NenoTV-Dashboard-v0.1.2.apk
           if-no-files-found: error
           retention-days: 30
