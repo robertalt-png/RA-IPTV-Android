@@ -31,3 +31,8 @@ De volledige project-ZIP bevat 288 testspecificaties. SHA-256 van de canonieke c
 `21a6ee5cdd473e0677997303791a1b9e595b16e386acbf9fba74bebf1a2a39ba`.
 
 Implementatie wordt gefaseerd: eerst bewezen kernflows automatiseren, daarna edition/entitlement, talen, compatibiliteit, regressies, resilience, security/performance/accessibility en uiteindelijk een harde release gate.
+
+## Actieve Smoke-candidates — 2026-09-30
+- Lite: `nenotv-v0.12.6.7-free-qa-executorfix`
+- Pro: `nenotv-pro-modularization-v0.2-qa-splitfix`
+- Full/Release pas na volledig groene Smoke.
