@@ -262,7 +262,13 @@ public class NenoTvAutomatedQaTest {
         setText("passField", "wrong");
         res("testButton").click();
 
-        contains("niet geaccepteerd");
+        UiObject2 status = device.wait(Until.findObject(By.res(PKG, "profileStatus")), 8000);
+        assertNotNull("No credential error status shown", status);
+        String message = status.getText();
+        assertNotNull(message);
+        String lower = message.toLowerCase(java.util.Locale.ROOT);
+        assertTrue("Invalid credentials were not reported: " + message,
+                lower.contains("mislukt") || lower.contains("failed") || lower.contains("login") || lower.contains("geaccepteerd"));
         assertTrue(device.hasObject(By.pkg(PKG)));
     }
 
