@@ -241,7 +241,7 @@ public class MainActivity extends Activity {
                 connection.setRequestMethod("GET");
                 connection.setRequestProperty("Accept", "application/json");
                 connection.setRequestProperty("Authorization", "Bearer " + token);
-                connection.setRequestProperty("User-Agent", "NenoTV-Dashboard/0.1.1 Android");
+                connection.setRequestProperty("User-Agent", "NenoTV-Dashboard/0.1.2 Android");
 
                 int code = connection.getResponseCode();
                 InputStream stream = code >= 200 && code < 300 ? connection.getInputStream() : connection.getErrorStream();
@@ -274,6 +274,7 @@ public class MainActivity extends Activity {
         JSONObject app = data.optJSONObject("app");
         JSONObject today = data.optJSONObject("today");
         JSONObject access = data.optJSONObject("access");
+        JSONObject analytics = data.optJSONObject("analytics");
         JSONObject linkData = data.optJSONObject("links");
         JSONArray alerts = data.optJSONArray("alerts");
 
@@ -302,8 +303,10 @@ public class MainActivity extends Activity {
         int orders = today == null ? 0 : today.optInt("orders", 0);
         String currency = today == null ? "EUR" : today.optString("currency", "EUR");
 
-        visitorsCard.set(number(visitors), "Koko Analytics", TEXT);
-        pageviewsCard.set(number(pageviews), "Koko Analytics", TEXT);
+        int liveVisitors = analytics == null ? 0 : analytics.optInt("live_visitors", 0);
+        String topCountry = analytics == null ? "" : analytics.optString("top_country_name", "");
+        visitorsCard.set(number(visitors), "Live · " + number(liveVisitors), TEXT);
+        pageviewsCard.set(number(pageviews), topCountry.isEmpty() ? "Topland · —" : "Topland · " + topCountry, TEXT);
         revenueCard.set(money(revenue, currency), "Betaalde orders", TEXT);
         ordersCard.set(number(orders), "Betaald vandaag", TEXT);
 
