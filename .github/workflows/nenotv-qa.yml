@@ -248,10 +248,7 @@ jobs:
             adb shell screencap -p /sdcard/qa-final.png || true
             adb pull /sdcard/qa-final.png "$GITHUB_WORKSPACE/qa-evidence/screenshots/final-api35.png" || true
             adb logcat -d > "$GITHUB_WORKSPACE/qa-evidence/logcat-api35.txt"
-            if grep -E 'FATAL EXCEPTION|ANR in com\.robertalt\.raiptv|Process com\.robertalt\.raiptv .* has died' "$GITHUB_WORKSPACE/qa-evidence/logcat-api35.txt"; then
-              echo "Crash/ANR signature detected"
-              exit 1
-            fi
+            if grep -E 'FATAL EXCEPTION|ANR in com\.robertalt\.raiptv|Process com\.robertalt\.raiptv .* has died' "$GITHUB_WORKSPACE/qa-evidence/logcat-api35.txt"; then echo "Crash/ANR signature detected"; exit 1; fi
 
       - name: Collect emulator reports
         if: always()
