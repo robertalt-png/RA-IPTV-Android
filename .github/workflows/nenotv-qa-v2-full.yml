@@ -1,0 +1,223 @@
+name: NenoTV QA v2 Full Matrix
+
+on:
+  workflow_call:
+    inputs:
+      layer:
+        required: false
+        type: string
+        default: full
+      lite_branch:
+        required: false
+        type: string
+        default: nenotv-v0.12.6.7-free-qa-crashfix
+      pro_branch:
+        required: false
+        type: string
+        default: nenotv-pro-modularization-v0.1
+  workflow_dispatch:
+    inputs:
+      layer:
+        description: Matrix layer
+        required: true
+        type: choice
+        options: [full, release, nightly]
+        default: full
+      lite_branch:
+        required: false
+        default: nenotv-v0.12.6.7-free-qa-crashfix
+      pro_branch:
+        required: false
+        default: nenotv-pro-modularization-v0.1
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.value }}
+      locales: ${{ steps.locales.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate QA framework
+        run: |
+          python3 qa/scripts/validate_qa_environment.py
+          python3 qa/scripts/validate_test_catalog.py
+      - name: Resolve Lite source for locale discovery
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LITE_BRANCH: ${{ inputs.lite_branch || 'nenotv-v0.12.6.7-free-qa-crashfix' }}
+        run: |
+          set -euo pipefail
+          RUN=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build-v096.yml --branch "$LITE_BRANCH" --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          test -n "$RUN"
+          echo "run_id=$RUN" >> "$GITHUB_OUTPUT"
+      - name: Download Lite source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.source.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p source-artifact src
+          cd source-artifact
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern 'NenoTV-Free-*-source'
+          SRC=$(find . -name 'NenoTV-Free-*-source.tar.gz' -print -quit)
+          test -n "$SRC"
+          tar -xzf "$SRC" -C ../src
+          test -d ../src/RA_IPTV_Android_v0.1
+      - name: Discover locales
+        id: locales
+        run: |
+          VALUE=$(python3 qa/scripts/discover_locales.py src/RA_IPTV_Android_v0.1/app/src/main/res)
+          echo "value=$VALUE" >> "$GITHUB_OUTPUT"
+          echo "$VALUE"
+      - name: Generate sharded matrix
+        id: matrix
+        env:
+          LAYER: ${{ inputs.layer || 'full' }}
+          LOCALES: ${{ steps.locales.outputs.value }}
+        run: |
+          VALUE=$(python3 qa/scripts/generate_matrix.py --layer "$LAYER" --locales "$LOCALES")
+          echo "value=$VALUE" >> "$GITHUB_OUTPUT"
+          echo "$VALUE"
+
+  test:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve edition source
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EDITION: ${{ matrix.edition }}
+          LITE_BRANCH: ${{ inputs.lite_branch || 'nenotv-v0.12.6.7-free-qa-crashfix' }}
+          PRO_BRANCH: ${{ inputs.pro_branch || 'nenotv-pro-modularization-v0.1' }}
+        run: |
+          set -euo pipefail
+          if [ "$EDITION" = lite ]; then
+            BRANCH="$LITE_BRANCH"; WORKFLOW=build-v096.yml; PATTERN='NenoTV-Free-*-source'
+          else
+            BRANCH="$PRO_BRANCH"; WORKFLOW=build-pro-modular.yml; PATTERN='NenoTV-Pro-Modular-*-source'
+          fi
+          RUN=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$WORKFLOW" --branch "$BRANCH" --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          test -n "$RUN"
+          echo "run_id=$RUN" >> "$GITHUB_OUTPUT"
+          echo "pattern=$PATTERN" >> "$GITHUB_OUTPUT"
+          echo "source_branch=$BRANCH" >> "$GITHUB_OUTPUT"
+      - name: Download generated source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.source.outputs.run_id }}
+          PATTERN: ${{ steps.source.outputs.pattern }}
+        run: |
+          set -euo pipefail
+          mkdir -p source-artifact src
+          cd source-artifact
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern "$PATTERN"
+          SRC=$(find . -name '*-source.tar.gz' -print -quit)
+          test -n "$SRC"
+          tar -xzf "$SRC" -C ../src
+          test -d ../src/RA_IPTV_Android_v0.1
+      - name: Translation/resource audit
+        run: |
+          python3 qa/scripts/discover_locales.py src/RA_IPTV_Android_v0.1/app/src/main/res | tee qa-locales.json
+          python3 qa/scripts/check_translations.py src/RA_IPTV_Android_v0.1/app/src/main/res | tee qa-translations.json
+      - name: Prepare QA instrumentation
+        run: |
+          cd src/RA_IPTV_Android_v0.1
+          python3 "$GITHUB_WORKSPACE/qa/prepare_android_tests.py"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Android SDK
+        run: |
+          set -euo pipefail
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+      - name: Compile edition
+        working-directory: src/RA_IPTV_Android_v0.1
+        run: gradle --no-daemon :app:assembleDebug :app:assembleAndroidTest
+      - name: Build Pro production AAB for split contract
+        if: ${{ matrix.edition == 'pro' }}
+        working-directory: src/RA_IPTV_Android_v0.1
+        run: gradle --no-daemon :app:bundleRelease
+      - name: Pro production AAB startup contract
+        if: ${{ matrix.edition == 'pro' }}
+        run: |
+          python3 qa/scripts/check_pro_aab_contract.py \
+            src/RA_IPTV_Android_v0.1/app/build/outputs/bundle/release/app-release.aab \
+            --report qa-pro-packaging-contract.json
+      - name: Manifest gate
+        run: bash qa/scripts/check_apk_manifest.sh src/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk
+      - name: Lint
+        continue-on-error: true
+        working-directory: src/RA_IPTV_Android_v0.1
+        run: gradle --no-daemon :app:lintDebug
+      - name: Generate deterministic media
+        if: ${{ matrix.suite == 'core' || matrix.suite == 'compat' }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          mkdir -p qa/media
+          ffmpeg -hide_banner -loglevel error -y -f lavfi -i testsrc=size=640x360:rate=25 -f lavfi -i sine=frequency=660:sample_rate=48000 -t 10 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -c:a aac -shortest qa/media/vod.mp4
+          ffmpeg -hide_banner -loglevel error -y -stream_loop -1 -i qa/media/vod.mp4 -t 15 -c copy -f hls -hls_time 2 -hls_list_size 0 -hls_segment_filename qa/media/seg%03d.ts qa/media/live.m3u8
+          nohup python3 qa/mock_iptv_server.py --port 8787 > qa-server.log 2>&1 &
+          for i in {1..30}; do curl -fsS http://127.0.0.1:8787/health && break; sleep 1; done
+      - name: Enable KVM
+        if: ${{ matrix.suite == 'core' || matrix.suite == 'compat' }}
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Android emulator functional QA
+        if: ${{ matrix.suite == 'core' || matrix.suite == 'compat' }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -eu
+            mkdir -p "$GITHUB_WORKSPACE/qa-evidence"
+            adb logcat -c
+            gradle -p "$GITHUB_WORKSPACE/src/RA_IPTV_Android_v0.1" --no-daemon :app:connectedDebugAndroidTest
+            adb shell screencap -p /sdcard/qa-final.png || true
+            adb pull /sdcard/qa-final.png "$GITHUB_WORKSPACE/qa-evidence/final-${{ matrix.edition }}-api${{ matrix.api }}-${{ matrix.suite }}.png" || true
+            adb logcat -d > "$GITHUB_WORKSPACE/qa-evidence/logcat.txt"
+      - name: Scan runtime evidence
+        if: always()
+        run: |
+          if [ -f qa-evidence/logcat.txt ]; then python3 qa/scripts/scan_logcat.py qa-evidence/logcat.txt; fi
+      - name: Collect reports
+        if: always()
+        run: |
+          mkdir -p qa-evidence
+          cp qa-locales.json qa-translations.json qa-badging.txt qa-permissions.txt qa-pro-packaging-contract.json qa-evidence/ 2>/dev/null || true
+          cp qa-server.log qa-evidence/ 2>/dev/null || true
+          cp -r src/RA_IPTV_Android_v0.1/app/build/reports/androidTests qa-evidence/ 2>/dev/null || true
+          cp -r src/RA_IPTV_Android_v0.1/app/build/outputs/androidTest-results qa-evidence/ 2>/dev/null || true
+      - name: Upload matrix evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-v2-${{ matrix.edition }}-api${{ matrix.api }}-${{ matrix.suite }}-${{ matrix.locale }}-${{ matrix.form_factor }}
+          path: qa-evidence
+          if-no-files-found: warn
+          retention-days: 30

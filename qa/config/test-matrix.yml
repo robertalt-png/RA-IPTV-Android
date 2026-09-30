@@ -1,0 +1,33 @@
+version: 2
+editions: [lite, pro]
+sources:
+  lite:
+    branch: nenotv-v0.12.6.7-free-qa-crashfix
+    workflow: build-v096.yml
+    artifact_pattern: NenoTV-Free-*-source
+  pro:
+    branch: nenotv-pro-modularization-v0.1
+    workflow: build-pro-modular.yml
+    artifact_pattern: NenoTV-Pro-Modular-*-source
+source_types: [xtream, m3u]
+api_levels:
+  smoke: [35]
+  full: [26, 30, 34, 35]
+  release: [26, 30, 34, 35]
+  nightly: [26, 30, 34, 35, 36]
+form_factors:
+  smoke: [phone]
+  full: [compact_phone, phone, tablet, android_tv]
+font_scales: [1.0, 1.3, 1.5]
+orientations: [portrait, landscape]
+locales:
+  mode: discover_from_android_resources
+  include_pseudo: [en-XA, ar-XB]
+entitlements:
+  lite: [none]
+  pro: [valid_single, valid_five, expired, revoked, malformed, offline_valid_cache, offline_expired_cache, device_limit]
+network_profiles: [normal, latency_250, latency_1000, slow, offline, reconnect, server_500]
+rules:
+  - shard_by_risk_and_cadence
+  - never_use_real_customer_credentials
+  - no_release_on_build_only

@@ -1,0 +1,23 @@
+profiles:
+  normal:
+    latency_ms: 0
+    packet_loss_percent: 0
+    bandwidth_kbps: null
+  latency_250:
+    latency_ms: 250
+    packet_loss_percent: 0
+    bandwidth_kbps: null
+  latency_1000:
+    latency_ms: 1000
+    packet_loss_percent: 0
+    bandwidth_kbps: null
+  slow:
+    latency_ms: 300
+    packet_loss_percent: 1
+    bandwidth_kbps: 768
+  offline:
+    offline: true
+  reconnect:
+    phases: [normal, offline, normal]
+  server_500:
+    server_status: 500

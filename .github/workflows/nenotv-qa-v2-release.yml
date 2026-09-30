@@ -1,0 +1,47 @@
+name: NenoTV QA v2 Release Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      lite_branch:
+        description: Exact Lite candidate branch
+        required: true
+        default: nenotv-v0.12.6.7-free-qa-crashfix
+      pro_branch:
+        description: Exact Pro candidate branch
+        required: true
+        default: nenotv-pro-modularization-v0.1
+      real_device_evidence_confirmed:
+        description: Phone/TV real-device smoke evidence reviewed
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  full-release-matrix:
+    uses: ./.github/workflows/nenotv-qa-v2-full.yml
+    with:
+      layer: release
+      lite_branch: ${{ inputs.lite_branch }}
+      pro_branch: ${{ inputs.pro_branch }}
+
+  release-policy:
+    needs: full-release-matrix
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate release policy files
+        run: |
+          python3 qa/scripts/validate_qa_environment.py
+          python3 qa/scripts/validate_test_catalog.py
+      - name: Real-device evidence gate
+        env:
+          CONFIRMED: ${{ inputs.real_device_evidence_confirmed }}
+        run: |
+          test "$CONFIRMED" = true || { echo 'Release blocked: real-device smoke evidence not confirmed'; exit 2; }
+      - name: Release candidate gate passed
+        run: echo 'Automated release matrix passed and real-device evidence was confirmed.'

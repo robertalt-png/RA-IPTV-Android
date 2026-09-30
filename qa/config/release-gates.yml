@@ -1,0 +1,26 @@
+version: 2
+blockers:
+  build_success: true
+  install_success: true
+  crash_count_max: 0
+  anr_count_max: 0
+  unauthorized_pro_unlock_max: 0
+  credential_leak_findings_max: 0
+  core_playback_required: true
+  upgrade_data_loss_allowed: false
+  executor_rejection_crash_max: 0
+  pro_dynamic_feature_startup_contract: true
+critical:
+  all_required_locales_pass: true
+  epg_core_pass: true
+  resume_next_episode_pass: true
+  entitlement_matrix_pass: true
+performance:
+  baseline_required_before_enforcing_numeric_thresholds: true
+  startup_regression_percent_max: null
+  frame_timing_regression_percent_max: null
+real_device:
+  phone_smoke_required: true
+  android_tv_smoke_required_when_tv_supported: true
+exceptions:
+  require_documented_owner_reason_expiry: true

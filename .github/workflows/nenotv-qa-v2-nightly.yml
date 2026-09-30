@@ -1,0 +1,24 @@
+name: NenoTV QA v2 Nightly
+
+# Deliberately manual during bootstrap. Add schedule after Smoke/Full are stable.
+on:
+  workflow_dispatch:
+    inputs:
+      lite_branch:
+        required: false
+        default: nenotv-v0.12.6.7-free-qa-crashfix
+      pro_branch:
+        required: false
+        default: nenotv-pro-modularization-v0.1
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  nightly-matrix:
+    uses: ./.github/workflows/nenotv-qa-v2-full.yml
+    with:
+      layer: nightly
+      lite_branch: ${{ inputs.lite_branch }}
+      pro_branch: ${{ inputs.pro_branch }}

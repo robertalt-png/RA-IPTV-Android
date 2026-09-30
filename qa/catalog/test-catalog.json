@@ -1,0 +1,861 @@
+{
+  "version": 2,
+  "canonical_project_catalog": {
+    "count": 288,
+    "sha256": "21a6ee5cdd473e0677997303791a1b9e595b16e386acbf9fba74bebf1a2a39ba"
+  },
+  "statuses": [
+    "specified",
+    "automated",
+    "manual_release",
+    "quarantined",
+    "retired"
+  ],
+  "tests": [
+    {
+      "id": "INSTALL-001",
+      "domain": "install",
+      "title": "Clean install launches first-run flow",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "INSTALL-002",
+      "domain": "install",
+      "title": "Warm restart preserves usable state",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "INSTALL-003",
+      "domain": "install",
+      "title": "Process kill recovery",
+      "layers": [
+        "full",
+        "nightly"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "I18N-001",
+      "domain": "i18n",
+      "title": "Discover every Android locale resource",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "I18N-002",
+      "domain": "i18n",
+      "title": "All required string keys exist per locale",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "I18N-003",
+      "domain": "i18n",
+      "title": "Format placeholders match default locale",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "I18N-004",
+      "domain": "i18n",
+      "title": "Pseudo-locale long text does not break primary navigation",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "I18N-005",
+      "domain": "i18n",
+      "title": "RTL pseudo-locale preserves navigability",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "PROFILE-001",
+      "domain": "profiles",
+      "title": "Valid Xtream profile connects",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "PROFILE-002",
+      "domain": "profiles",
+      "title": "Invalid Xtream credentials fail safely",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "PROFILE-003",
+      "domain": "profiles",
+      "title": "Valid M3U profile loads",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "LIVE-001",
+      "domain": "live",
+      "title": "Live categories and channel list load",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "LIVE-002",
+      "domain": "live",
+      "title": "Live HLS starts playback",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "EPG-001",
+      "domain": "epg",
+      "title": "XMLTV current/next shown correctly",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "EPG-002",
+      "domain": "epg",
+      "title": "Xtream current/next shown correctly",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "EPG-003",
+      "domain": "epg",
+      "title": "Grid and list use consistent program times",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "VOD-001",
+      "domain": "vod",
+      "title": "Movie list opens and movie plays",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "SERIES-001",
+      "domain": "series",
+      "title": "Series seasons and episodes load",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "SERIES-002",
+      "domain": "series",
+      "title": "Episodes sort by season and episode number",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "SERIES-003",
+      "domain": "series",
+      "title": "Next episode follows watch progress",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "PLAYER-001",
+      "domain": "player",
+      "title": "Controls auto-hide while playing",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "PLAYER-002",
+      "domain": "player",
+      "title": "Controls stay visible while paused",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "PLAYER-003",
+      "domain": "player",
+      "title": "10-second rewind and forward work",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "PLAYER-004",
+      "domain": "player",
+      "title": "Fullscreen keeps content clear of system UI",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "PLAYER-005",
+      "domain": "player",
+      "title": "Audio/subtitle selection persists appropriately",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "LIB-001",
+      "domain": "library",
+      "title": "Favorite toggle persists",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "LIB-002",
+      "domain": "library",
+      "title": "Resume position is consistent",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "SEARCH-001",
+      "domain": "search",
+      "title": "Search returns expected provider item",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "LIFE-001",
+      "domain": "lifecycle",
+      "title": "Rotation preserves usable foreground state",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "LIFE-002",
+      "domain": "lifecycle",
+      "title": "Background/foreground resumes app",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "SET-001",
+      "domain": "settings",
+      "title": "Settings opens without crash",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "LAYOUT-001",
+      "domain": "layout",
+      "title": "Primary navigation stays inside display bounds",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "REG-POSTER-001",
+      "domain": "regression",
+      "title": "Missing poster uses fallback without broken layout",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "REG-RATING-001",
+      "domain": "regression",
+      "title": "Rating null/zero is not rendered as a real score",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "REG-SAFEAREA-001",
+      "domain": "regression",
+      "title": "Content remains above bottom/system navigation",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "EDITION-001",
+      "domain": "edition",
+      "title": "Lite does not expose active Pro-only behavior",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "EDITION-002",
+      "domain": "edition",
+      "title": "Pro source compiles with QA instrumentation",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "ENT-001",
+      "domain": "entitlement",
+      "title": "Valid single-device entitlement unlocks Pro",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "ENT-002",
+      "domain": "entitlement",
+      "title": "Valid five-device entitlement respects device limit",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "ENT-003",
+      "domain": "entitlement",
+      "title": "Expired entitlement fails closed",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "ENT-004",
+      "domain": "entitlement",
+      "title": "Revoked entitlement fails closed",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "ENT-005",
+      "domain": "entitlement",
+      "title": "Malformed entitlement response never unlocks Pro",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "NET-001",
+      "domain": "network",
+      "title": "Offline state is recoverable",
+      "layers": [
+        "full",
+        "nightly"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "NET-002",
+      "domain": "network",
+      "title": "Reconnect resumes without app restart",
+      "layers": [
+        "full",
+        "nightly"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "SEC-001",
+      "domain": "security",
+      "title": "No password/token/authorization secret appears in logcat",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "SEC-002",
+      "domain": "security",
+      "title": "Server error cannot be interpreted as Pro=true",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "PERF-001",
+      "domain": "performance",
+      "title": "Startup baseline recorded before enforcing threshold",
+      "layers": [
+        "release",
+        "nightly"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "major",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "A11Y-001",
+      "domain": "accessibility",
+      "title": "Core navigation remains usable at 1.5 font scale",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "major",
+      "status": "specified",
+      "expected": "Pass without crash and satisfy domain-specific assertions."
+    },
+    {
+      "id": "REG-EXECUTOR-001",
+      "domain": "regression",
+      "title": "Background search indexing never submits work to a terminated executor",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "lite",
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Lifecycle transitions and background indexing must not crash with RejectedExecutionException."
+    },
+    {
+      "id": "PROPKG-001",
+      "domain": "packaging",
+      "title": "Pro base manifest never registers a startup provider whose class exists only in an on-demand feature",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Base application must be independently startable before the on-demand Pro media module is installed."
+    },
+    {
+      "id": "PROPKG-002",
+      "domain": "packaging",
+      "title": "Pro on-demand feature contains its declared ML Kit provider implementation",
+      "layers": [
+        "smoke",
+        "full",
+        "release"
+      ],
+      "editions": [
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "automated",
+      "expected": "Feature manifest and feature DEX placement must be internally consistent."
+    },
+    {
+      "id": "PROPKG-003",
+      "domain": "packaging",
+      "title": "Pro base-only and base-plus-feature installation paths both launch successfully",
+      "layers": [
+        "full",
+        "release"
+      ],
+      "editions": [
+        "pro"
+      ],
+      "severity": "critical",
+      "status": "specified",
+      "expected": "Both pre-download base startup and post-download Pro media module startup must work."
+    }
+  ]
+}
