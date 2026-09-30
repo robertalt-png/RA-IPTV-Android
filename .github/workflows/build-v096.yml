@@ -1,8 +1,8 @@
-name: Build NenoTV Free v0.12.6.7
+name: Build NenoTV Free v0.12.6.7 r1 executor fix
 
 on:
   push:
-    branches: [ nenotv-v0.12.6.7-free-qa-crashfix ]
+    branches: [ nenotv-v0.12.6.7-free-qa-executorfix ]
   workflow_dispatch:
 
 permissions:
@@ -923,6 +923,13 @@ jobs:
           sed -i "s/versionCode 37/versionCode 48/" app/build.gradle
           sed -i "s/versionName '0.9.5'/versionName '0.11.0'/" app/build.gradle
 
+      - name: Apply lifecycle/index executor repair
+        run: |
+          set -euo pipefail
+          cd base/RA_IPTV_Android_v0.1
+          python3 "$GITHUB_WORKSPACE/tools/repair_index_executor.py"
+          grep -n "activityDestroyed\|RejectedExecutionException\|scheduleBackgroundIndex" app/src/main/java/com/robertalt/raiptv/MainActivity.java | head -n 20
+
       - name: Prepare NenoTV Free core
         run: |
           set -euo pipefail
@@ -933,12 +940,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tar -czf NenoTV-Free-v0.12.6.7-source.tar.gz -C base RA_IPTV_Android_v0.1
+          tar -czf NenoTV-Free-v0.12.6.7-r1-source.tar.gz -C base RA_IPTV_Android_v0.1
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-Free-v0.12.6.7-source
-          path: NenoTV-Free-v0.12.6.7-source.tar.gz
+          name: NenoTV-Free-v0.12.6.7-r1-source
+          path: NenoTV-Free-v0.12.6.7-r1-source.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -984,7 +991,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-Free-v0.12.6.7-build
+          name: NenoTV-Free-v0.12.6.7-r1-build
           path: |
             NenoTV-Free-v0.12.6.7-aligned-unsigned.apk
             free-badging.txt
