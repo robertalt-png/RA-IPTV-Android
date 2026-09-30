@@ -813,7 +813,7 @@
     {
       "id": "PROPKG-001",
       "domain": "packaging",
-      "title": "Pro base manifest never registers a startup provider whose class exists only in an on-demand feature",
+      "title": "Pro startup providers have valid base or dynamic-feature ownership",
       "layers": [
         "smoke",
         "full",
@@ -824,12 +824,12 @@
       ],
       "severity": "critical",
       "status": "automated",
-      "expected": "Base application must be independently startable before the on-demand Pro media module is installed."
+      "expected": "Every startup provider must have its implementation in base or be explicitly owned by the dynamic feature that contains the class."
     },
     {
       "id": "PROPKG-002",
       "domain": "packaging",
-      "title": "Pro on-demand feature contains its declared ML Kit provider implementation",
+      "title": "Pro on-demand feature manifest and DEX placement are internally consistent",
       "layers": [
         "smoke",
         "full",
@@ -840,12 +840,12 @@
       ],
       "severity": "critical",
       "status": "automated",
-      "expected": "Feature manifest and feature DEX placement must be internally consistent."
+      "expected": "ML Kit provider metadata and implementation must remain in a consistent split ownership relationship."
     },
     {
       "id": "PROPKG-003",
       "domain": "packaging",
-      "title": "Pro base-only and base-plus-feature installation paths both launch successfully",
+      "title": "Pro base-only startup and post-feature installation both remain valid",
       "layers": [
         "full",
         "release"
@@ -855,7 +855,7 @@
       ],
       "severity": "critical",
       "status": "specified",
-      "expected": "Both pre-download base startup and post-download Pro media module startup must work."
+      "expected": "The app must start before proextras is installed and continue to work after the feature is installed."
     }
   ]
 }
