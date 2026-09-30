@@ -3,6 +3,7 @@ package com.robertalt.raiptv.entitlement;
 import android.content.Context;
 import com.robertalt.raiptv.BuildConfig;
 import com.robertalt.raiptv.storage.EntitlementStore;
+import com.robertalt.raiptv.storage.SettingsStore;
 import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -14,16 +15,30 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 public final class EntitlementClient {
+    private final Context context;
     private final EntitlementStore store;
-    public EntitlementClient(Context c){store=new EntitlementStore(c);}
+
+    public EntitlementClient(Context c){
+        context=c.getApplicationContext();
+        store=new EntitlementStore(context);
+    }
 
     public JSONObject refresh() throws Exception {return post("entitlement/refresh",new JSONObject());}
+
+    public JSONObject startTrial(String email) throws Exception {
+        JSONObject body=new JSONObject();
+        body.put("email",email==null?"":email.trim());
+        body.put("language",SettingsStore.language(context));
+        return post("entitlement/trial",body);
+    }
+
     public JSONObject claim(String email,String orderId) throws Exception {
         JSONObject body=new JSONObject();
         body.put("email",email==null?"":email.trim());
         body.put("order_id",orderId==null?"":orderId.trim());
         return post("entitlement/claim",body);
     }
+
     public JSONObject redeemToken(String token) throws Exception {
         JSONObject body=new JSONObject();
         body.put("activation_token",token==null?"":token.trim());
@@ -36,6 +51,7 @@ public final class EntitlementClient {
         body.put("device_key",store.deviceKey());
         body.put("platform","android");
         body.put("app_version",BuildConfig.VERSION_NAME);
+        if(!body.has("language"))body.put("language",SettingsStore.language(context));
 
         String base=BuildConfig.NENOTV_API_BASE.trim();
         while(base.endsWith("/"))base=base.substring(0,base.length()-1);
@@ -59,7 +75,8 @@ public final class EntitlementClient {
         }
 
         JSONObject entitlement=out.optJSONObject("entitlement");
-        store.applyServer(entitlement==null?out:entitlement);
+        if(entitlement!=null)store.applyServer(entitlement);
+        else if(out.has("level")||out.has("status"))store.applyServer(out);
         return out;
     }
 
