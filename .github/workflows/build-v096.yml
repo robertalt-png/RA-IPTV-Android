@@ -923,18 +923,18 @@ jobs:
           sed -i "s/versionCode 37/versionCode 48/" app/build.gradle
           sed -i "s/versionName '0.9.5'/versionName '0.11.0'/" app/build.gradle
 
+      - name: Prepare NenoTV Free core
+        run: |
+          set -euo pipefail
+          cd base/RA_IPTV_Android_v0.1
+          python3 "$GITHUB_WORKSPACE/tools/prepare_free.py"
+
       - name: Apply lifecycle/index executor repair
         run: |
           set -euo pipefail
           cd base/RA_IPTV_Android_v0.1
           python3 "$GITHUB_WORKSPACE/tools/repair_index_executor.py"
           grep -n "activityDestroyed\|RejectedExecutionException\|scheduleBackgroundIndex" app/src/main/java/com/robertalt/raiptv/MainActivity.java | head -n 20
-
-      - name: Prepare NenoTV Free core
-        run: |
-          set -euo pipefail
-          cd base/RA_IPTV_Android_v0.1
-          python3 "$GITHUB_WORKSPACE/tools/prepare_free.py"
 
       - name: Archive generated v0.12.6.1 source
         shell: bash
