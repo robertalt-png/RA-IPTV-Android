@@ -121,7 +121,16 @@ jobs:
       - name: Download bundletool for split-aware Pro install
         if: ${{ matrix.edition == 'pro' }}
         run: |
-          curl -fL --retry 3 -o bundletool.jar https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar
+          set -euo pipefail
+          url=https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fL --retry 3 --retry-all-errors --retry-delay 5 -o bundletool.jar "$url"; then
+              break
+            fi
+            rm -f bundletool.jar
+            sleep $((attempt * 5))
+          done
+          test -s bundletool.jar
           java -jar bundletool.jar version
       - name: Build Pro production AAB for split contract
         if: ${{ matrix.edition == 'pro' }}
