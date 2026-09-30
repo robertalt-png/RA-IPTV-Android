@@ -47,6 +47,9 @@ public class NenoTvAutomatedQaTest {
 
     private void resetAppState() {
         app.getSharedPreferences("nivaro_settings", Context.MODE_PRIVATE).edit().clear().commit();
+        // Core navigation tests must not be diverted into Picture-in-Picture.
+        // PiP has its own dedicated coverage; normal Back should return to MainActivity.
+        SettingsStore.prefs(app).edit().putBoolean("pip", false).commit();
         app.getSharedPreferences("profile", Context.MODE_PRIVATE).edit().clear().commit();
         app.getSharedPreferences("library", Context.MODE_PRIVATE).edit().clear().commit();
         app.getSharedPreferences("nenotv_entitlement", Context.MODE_PRIVATE).edit().clear().commit();
