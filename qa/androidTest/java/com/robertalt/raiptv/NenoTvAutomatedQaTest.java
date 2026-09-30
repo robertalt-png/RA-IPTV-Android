@@ -2,14 +2,18 @@ package com.robertalt.raiptv;
 
 import static org.junit.Assert.*;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Rect;
 import android.os.SystemClock;
+import android.view.View;
 
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry;
+import androidx.test.runner.lifecycle.Stage;
 import androidx.test.uiautomator.By;
 import androidx.test.uiautomator.BySelector;
 import androidx.test.uiautomator.UiDevice;
@@ -24,6 +28,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
+import java.util.Collection;
 
 @RunWith(AndroidJUnit4.class)
 public class NenoTvAutomatedQaTest {
@@ -286,6 +292,22 @@ public class NenoTvAutomatedQaTest {
         SystemClock.sleep(350);
     }
 
+    private void clickPlayerSurface() {
+        final boolean[] clicked = {false};
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            Collection<Activity> resumed = ActivityLifecycleMonitorRegistry.getInstance()
+                    .getActivitiesInStage(Stage.RESUMED);
+            for (Activity activity : resumed) {
+                View surface = activity.findViewById(R.id.media3View);
+                if (surface != null) {
+                    clicked[0] = surface.performClick();
+                    return;
+                }
+            }
+        });
+        assertTrue("Player surface did not receive its click action", clicked[0]);
+    }
+
     private void openCardAndPlay(String title) {
         boolean opened = false;
         for (int attempt = 0; attempt < 3 && !opened; attempt++) {
@@ -309,7 +331,7 @@ public class NenoTvAutomatedQaTest {
     private UiObject2 showPlayerControls() {
         UiObject2 controls = findFresh(By.res(PKG, "playPauseButton"), 1000);
         for (int i = 0; i < 4 && controls == null; i++) {
-            device.click(device.getDisplayWidth() / 2, device.getDisplayHeight() / 2);
+            clickPlayerSurface();
             device.waitForIdle(500);
             controls = findFresh(By.res(PKG, "playPauseButton"), 2500);
         }
