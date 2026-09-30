@@ -175,12 +175,19 @@ public class NenoTvAutomatedQaTest {
     }
 
     private String visibleText(BySelector selector) {
-        UiObject2 object = findFresh(selector, 500);
-        if (object == null) return "";
-        String text = object.getText();
-        if (text != null && !text.isEmpty()) return text;
-        String description = object.getContentDescription();
-        return description == null ? "" : description;
+        for (int attempt = 0; attempt < 4; attempt++) {
+            UiObject2 object = findFresh(selector, 500);
+            if (object == null) return "";
+            try {
+                String text = object.getText();
+                if (text != null && !text.isEmpty()) return text;
+                String description = object.getContentDescription();
+                return description == null ? "" : description;
+            } catch (Throwable ignored) {
+                SystemClock.sleep(100);
+            }
+        }
+        return "";
     }
 
     private void revealProfileStatus() {
