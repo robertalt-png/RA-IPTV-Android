@@ -241,7 +241,7 @@ public class MainActivity extends Activity {
                 connection.setRequestMethod("GET");
                 connection.setRequestProperty("Accept", "application/json");
                 connection.setRequestProperty("Authorization", "Bearer " + token);
-                connection.setRequestProperty("User-Agent", "NenoTV-Dashboard/0.1.0 Android");
+                connection.setRequestProperty("User-Agent", "NenoTV-Dashboard/0.1.1 Android");
 
                 int code = connection.getResponseCode();
                 InputStream stream = code >= 200 && code < 300 ? connection.getInputStream() : connection.getErrorStream();
@@ -288,9 +288,13 @@ public class MainActivity extends Activity {
         boolean siteOnline = site != null && "online".equalsIgnoreCase(site.optString("status"));
         siteCard.set(siteOnline ? "Online" : "Storing", siteOnline ? "nenotv.com" : "Niet bereikbaar", siteOnline ? GREEN : RED);
 
-        boolean appOnline = app != null && "online".equalsIgnoreCase(app.optString("status"));
-        String version = app == null ? "" : app.optString("latest_version", "");
-        appCard.set(appOnline ? "Online" : "Storing", version.isEmpty() ? "App Bridge" : "v" + version, appOnline ? GREEN : RED);
+        boolean appLive = app != null && "live".equalsIgnoreCase(app.optString("status"));
+        boolean bridgeOnline = app != null && "online".equalsIgnoreCase(app.optString("bridge_status"));
+        if (appLive) {
+            appCard.set("Live", bridgeOnline ? "Backend online" : "Backend storing", bridgeOnline ? GREEN : RED);
+        } else {
+            appCard.set("Nog niet live", bridgeOnline ? "Backend online" : "Backend storing", bridgeOnline ? ORANGE : RED);
+        }
 
         int visitors = today == null ? 0 : today.optInt("visitors", 0);
         int pageviews = today == null ? 0 : today.optInt("pageviews", 0);
