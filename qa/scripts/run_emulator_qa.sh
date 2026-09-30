@@ -13,12 +13,12 @@ adb logcat -c
 if [ "$EDITION" = "pro" ]; then
   AAB="$APP/app/build/outputs/bundle/debug/app-debug.aab"
   APKS="$EVIDENCE/pro-debug.apks"
-  KS="$HOME/.android/nenotv-qa-debug.keystore"
+  KS="$HOME/.android/debug.keystore"
   test -f "$AAB"
   test -f "$GITHUB_WORKSPACE/bundletool.jar"
 
   if [ ! -f "$KS" ]; then
-    keytool -genkeypair -v       -keystore "$KS"       -storepass android       -alias androiddebugkey       -keypass android       -keyalg RSA       -keysize 2048       -validity 10000       -dname "CN=NenoTV QA,O=NenoTV,C=NL" >/dev/null 2>&1
+    keytool -genkeypair -v       -keystore "$KS"       -storepass android       -alias androiddebugkey       -keypass android       -keyalg RSA       -keysize 2048       -validity 10000       -dname "CN=Android Debug,O=Android,C=US" >/dev/null 2>&1
   fi
 
   java -jar "$GITHUB_WORKSPACE/bundletool.jar" build-apks     --bundle="$AAB"     --output="$APKS"     --overwrite     --local-testing     --ks="$KS"     --ks-key-alias=androiddebugkey     --ks-pass=pass:android     --key-pass=pass:android
