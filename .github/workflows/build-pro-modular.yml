@@ -1,8 +1,8 @@
-name: Build NenoTV Pro Modular
+name: Build NenoTV Pro Modular v0.2 split-aware QA
 
 on:
   push:
-    branches: [ nenotv-pro-modularization-v0.1 ]
+    branches: [ nenotv-pro-modularization-v0.2-qa-splitfix ]
     paths:
       - '.github/workflows/build-pro-modular.yml'
       - 'tools/prepare_pro.py'
@@ -1038,6 +1038,49 @@ jobs:
           print("\n".join(lines))
           PY
           grep -n "applicationId\|versionCode\|versionName\|dynamicFeatures" base/RA_IPTV_Android_v0.1/app/build.gradle | tee pro-version.txt
+
+      - name: Download bundletool
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o bundletool.jar https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar
+          java -jar bundletool.jar version
+
+      - name: Enable KVM for split-aware smoke
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Split-aware base startup smoke
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -euo pipefail
+            AAB="$GITHUB_WORKSPACE/base/RA_IPTV_Android_v0.1/app/build/outputs/bundle/release/app-release.aab"
+            APKS="$GITHUB_WORKSPACE/pro-base-startup.apks"
+            java -jar "$GITHUB_WORKSPACE/bundletool.jar" build-apks --bundle="$AAB" --output="$APKS" --overwrite --local-testing
+            java -jar "$GITHUB_WORKSPACE/bundletool.jar" install-apks --apks="$APKS"
+            adb shell pm path com.robertalt.raiptv | tee "$GITHUB_WORKSPACE/pro-installed-paths.txt"
+            if grep -qi proextras "$GITHUB_WORKSPACE/pro-installed-paths.txt"; then
+              echo "On-demand proextras was unexpectedly installed during base install"
+              exit 2
+            fi
+            adb logcat -c
+            adb shell monkey -p com.robertalt.raiptv -c android.intent.category.LAUNCHER 1 >/dev/null
+            sleep 8
+            adb logcat -d > "$GITHUB_WORKSPACE/pro-base-startup-logcat.txt"
+            if grep -q "FATAL EXCEPTION" "$GITHUB_WORKSPACE/pro-base-startup-logcat.txt"; then
+              cat "$GITHUB_WORKSPACE/pro-base-startup-logcat.txt"
+              exit 2
+            fi
+            adb shell pidof com.robertalt.raiptv
+            echo "Base-only startup PASS; proextras remains on-demand."
 
       - name: Upload modular Pro build
         uses: actions/upload-artifact@v4
