@@ -1,4 +1,4 @@
-full-run-requested-after-stable-player-root
-previous_full_run=36749015320
-qa_head=3d140893e6508e3d9582d7cc5a63ca457a2c435e
-requested_at=2026-09-30T19:20:00+02:00
+full-run-requested-after-direct-player-assertions
+previous_full_run=36750543975
+qa_head=8bd982ae29ce4fd3b8df22a8f38f52807ace4578
+requested_at=2026-09-30T19:38:00+02:00
