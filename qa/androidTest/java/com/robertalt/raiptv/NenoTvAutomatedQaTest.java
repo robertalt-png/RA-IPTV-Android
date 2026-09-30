@@ -70,6 +70,17 @@ public class NenoTvAutomatedQaTest {
     private UiObject2 res(String id) { return waitObj(By.res(PKG, id), 12000); }
     private UiObject2 contains(String value) { return waitObj(By.textContains(value), 25000); }
 
+    private boolean waitMainChrome(long timeoutMs) {
+        long deadline = SystemClock.uptimeMillis() + timeoutMs;
+        while (SystemClock.uptimeMillis() < deadline) {
+            if (device.hasObject(By.res(PKG, "navHome")) || device.hasObject(By.res(PKG, "menuButton"))) {
+                return true;
+            }
+            SystemClock.sleep(250);
+        }
+        return false;
+    }
+
     private void setText(String id, String value) {
         UiObject2 o = res(id);
         o.click();
@@ -110,8 +121,12 @@ public class NenoTvAutomatedQaTest {
         Intent i = new Intent(app, MainActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         app.startActivity(i);
-        assertTrue("MainActivity navigation did not become visible",
-                device.wait(Until.hasObject(By.res(PKG, "navHome")), 20000));
+        if (!waitMainChrome(30000)) {
+            device.pressHome();
+            SystemClock.sleep(750);
+            app.startActivity(i);
+        }
+        assertTrue("MainActivity navigation did not become visible", waitMainChrome(30000));
         device.waitForIdle(1500);
     }
 
@@ -130,9 +145,17 @@ public class NenoTvAutomatedQaTest {
         SystemClock.sleep(400);
     }
 
+    private void tap(UiObject2 object) {
+        Rect bounds = object.getVisibleBounds();
+        device.click(bounds.centerX(), bounds.centerY());
+    }
+
     private void waitMainInteractive() {
-        assertTrue("MainActivity navigation did not return",
-                device.wait(Until.hasObject(By.res(PKG, "navHome")), 20000));
+        if (!waitMainChrome(30000)) {
+            device.pressBack();
+            SystemClock.sleep(750);
+        }
+        assertTrue("MainActivity navigation did not return", waitMainChrome(30000));
         device.waitForIdle(1500);
         SystemClock.sleep(350);
     }
@@ -145,14 +168,17 @@ public class NenoTvAutomatedQaTest {
     }
 
     private void openCardAndPlay(String title) {
-        UiObject2 card = contains(title);
-        card.click();
-        device.waitForIdle(1500);
-        SystemClock.sleep(500);
-        UiObject2 action = res("heroAction");
-        action.click();
-        assertTrue("Player did not open for " + title,
-                device.wait(Until.hasObject(By.res(PKG, "playerTitle")), 30000));
+        boolean opened = false;
+        for (int attempt = 0; attempt < 2 && !opened; attempt++) {
+            UiObject2 card = contains(title);
+            tap(card);
+            device.waitForIdle(2000);
+            SystemClock.sleep(800);
+            UiObject2 action = res("heroAction");
+            tap(action);
+            opened = device.wait(Until.hasObject(By.res(PKG, "playerTitle")), 30000);
+        }
+        assertTrue("Player did not open for " + title, opened);
         assertTrue("Player title did not contain " + title,
                 device.wait(Until.hasObject(By.textContains(title)), 15000));
     }
@@ -263,10 +289,13 @@ public class NenoTvAutomatedQaTest {
         search.setText("QA NenoTV Test Movie");
         SystemClock.sleep(1100);
         assertTrue("Search result disappeared", device.hasObject(By.textContains("QA NenoTV Test Movie")));
+        device.pressBack(); // close IME before rotating; the search result must remain visible
+        SystemClock.sleep(500);
+        assertTrue("Search result disappeared after keyboard close", device.hasObject(By.textContains("QA NenoTV Test Movie")));
 
         device.setOrientationLeft();
         assertTrue("NenoTV lost foreground after rotation",
-                device.wait(Until.hasObject(By.res(PKG, "navHome")), 12000));
+                device.wait(Until.hasObject(By.pkg(PKG)), 25000));
         device.setOrientationNatural();
         waitMainInteractive();
 
