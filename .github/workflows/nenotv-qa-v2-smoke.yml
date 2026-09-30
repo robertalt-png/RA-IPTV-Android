@@ -181,43 +181,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            set -eu
-            mkdir -p "$GITHUB_WORKSPACE/qa-evidence"
-            if [ "${{ matrix.edition }}" = "pro" ]; then
-              APP="$GITHUB_WORKSPACE/src/RA_IPTV_Android_v0.1"
-              AAB="$APP/app/build/outputs/bundle/debug/app-debug.aab"
-              APKS="$GITHUB_WORKSPACE/qa-evidence/pro-debug.apks"
-              java -jar "$GITHUB_WORKSPACE/bundletool.jar" build-apks --bundle="$AAB" --output="$APKS" --overwrite --local-testing
-              java -jar "$GITHUB_WORKSPACE/bundletool.jar" install-apks --apks="$APKS"
-              adb shell pm path com.robertalt.raiptv | tee "$GITHUB_WORKSPACE/qa-evidence/pro-installed-paths.txt"
-              if grep -qi proextras "$GITHUB_WORKSPACE/qa-evidence/pro-installed-paths.txt"; then
-                echo "On-demand proextras was unexpectedly installed during base install"
-                exit 2
-              fi
-              adb logcat -c
-              adb shell monkey -p com.robertalt.raiptv -c android.intent.category.LAUNCHER 1 >/dev/null
-              sleep 5
-              adb logcat -d > "$GITHUB_WORKSPACE/qa-evidence/pro-base-startup-logcat.txt"
-              if grep -q "FATAL EXCEPTION" "$GITHUB_WORKSPACE/qa-evidence/pro-base-startup-logcat.txt"; then
-                cat "$GITHUB_WORKSPACE/qa-evidence/pro-base-startup-logcat.txt"
-                exit 2
-              fi
-              adb shell pidof com.robertalt.raiptv
-              TEST_APK=$(find "$APP/app/build/outputs/apk/androidTest" -name '*.apk' -print -quit)
-              test -n "$TEST_APK"
-              adb install -r "$TEST_APK"
-              OUT="$GITHUB_WORKSPACE/qa-evidence/instrumentation-pro.txt"
-              adb shell am instrument -w -r com.robertalt.raiptv.test/androidx.test.runner.AndroidJUnitRunner > "$OUT" 2>&1 || { cat "$OUT"; exit 2; }
-              cat "$OUT"
-              if grep -Eq "FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed" "$OUT"; then exit 2; fi
-            else
-              adb logcat -c
-              gradle -p "$GITHUB_WORKSPACE/src/RA_IPTV_Android_v0.1" --no-daemon :app:connectedDebugAndroidTest
-            fi
-            adb shell screencap -p /sdcard/qa-final.png || true
-            adb pull /sdcard/qa-final.png "$GITHUB_WORKSPACE/qa-evidence/final-${{ matrix.edition }}-api35.png" || true
-            adb logcat -d > "$GITHUB_WORKSPACE/qa-evidence/logcat.txt"
+          script: bash "$GITHUB_WORKSPACE/qa/scripts/run_emulator_qa.sh" "${{ matrix.edition }}" "35" "smoke"
       - name: Scan logcat for crash, ANR and secret leakage
         if: always()
         run: |
