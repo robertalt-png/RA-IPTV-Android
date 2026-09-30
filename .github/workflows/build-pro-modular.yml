@@ -1060,27 +1060,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            set -eu
-            AAB="$GITHUB_WORKSPACE/base/RA_IPTV_Android_v0.1/app/build/outputs/bundle/release/app-release.aab"
-            APKS="$GITHUB_WORKSPACE/pro-base-startup.apks"
-            java -jar "$GITHUB_WORKSPACE/bundletool.jar" build-apks --bundle="$AAB" --output="$APKS" --overwrite --local-testing
-            java -jar "$GITHUB_WORKSPACE/bundletool.jar" install-apks --apks="$APKS"
-            adb shell pm path com.robertalt.raiptv | tee "$GITHUB_WORKSPACE/pro-installed-paths.txt"
-            if grep -qi proextras "$GITHUB_WORKSPACE/pro-installed-paths.txt"; then
-              echo "On-demand proextras was unexpectedly installed during base install"
-              exit 2
-            fi
-            adb logcat -c
-            adb shell monkey -p com.robertalt.raiptv -c android.intent.category.LAUNCHER 1 >/dev/null
-            sleep 8
-            adb logcat -d > "$GITHUB_WORKSPACE/pro-base-startup-logcat.txt"
-            if grep -q "FATAL EXCEPTION" "$GITHUB_WORKSPACE/pro-base-startup-logcat.txt"; then
-              cat "$GITHUB_WORKSPACE/pro-base-startup-logcat.txt"
-              exit 2
-            fi
-            adb shell pidof com.robertalt.raiptv
-            echo "Base-only startup PASS; proextras remains on-demand."
+          script: bash "$GITHUB_WORKSPACE/tools/pro_split_base_smoke.sh"
 
       - name: Upload modular Pro build
         uses: actions/upload-artifact@v4
