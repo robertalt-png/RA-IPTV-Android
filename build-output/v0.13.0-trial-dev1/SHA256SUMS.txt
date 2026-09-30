@@ -1,0 +1,3 @@
+ad2cd9013b139b46be8d7d4945736428a4469efbb910adf6d95fcc6570562695  build-output/v0.13.0-trial-dev1/NenoTV-Trial-v0.13.0-dev1-aligned-unsigned.apk
+3716d9311e55d2b0918a2fd9d54ba9e406c5f6abeea700b287f11259bc163dec  build-output/v0.13.0-trial-dev1/apksigner.jar
+951e9138013ea9ac9de993eedec30b8ed80eaba4299d76520bca79ce8deb85d6  build-output/v0.13.0-trial-dev1/free-badging.txt
