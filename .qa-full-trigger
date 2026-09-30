@@ -1,4 +1,4 @@
-full-run-requested-after-split-and-harness-fixes
-previous_full_run=36735250036
-qa_head=bb37c4ac854bb7c560eab51eb8820618a075e90d
-requested_at=2026-09-30T17:35:00+02:00
+full-run-requested-after-compat-sync-hardening
+previous_full_run=36736867069
+qa_head=075c1c302f599156a2b774c4ff43ab4ee192194b
+requested_at=2026-09-30T18:05:00+02:00
