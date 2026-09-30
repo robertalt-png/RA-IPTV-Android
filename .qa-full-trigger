@@ -1,4 +1,4 @@
-full-run-requested-after-player-completion-timing
-previous_full_run=36752814960
-qa_head=29e66d8953357ec616e0ea6165cfecaf70714bee
-requested_at=2026-09-30T19:55:00+02:00
+full-run-requested-after-edition-player-surface-fix
+previous_full_run=36754434662
+qa_head=51088ea66dab660bcf9b78404c0b6fe0db676767
+requested_at=2026-09-30T18:03:44.603Z
