@@ -4,7 +4,6 @@ from pathlib import Path
 
 PROVIDER=b"MlKitInitProvider"
 PROVIDER_CLASS=b"com/google/mlkit/common/internal/MlKitInitProvider"
-FEATURE=b"proextras"
 
 ap=argparse.ArgumentParser()
 ap.add_argument("aab")
@@ -29,34 +28,31 @@ base_class=PROVIDER_CLASS in base_dex
 feature_mentions=PROVIDER in feature_manifest
 feature_class=PROVIDER_CLASS in feature_dex
 
-# App Bundles may encode a dynamic-feature component in the base manifest table while
-# assigning it to that feature through android:splitName. In that case the provider
-# class is expected to live in the feature DEX, not base DEX.
-base_split_owned=base_mentions and b"splitName" in base_manifest and FEATURE in base_manifest
-
 violations=[]
-if base_mentions and not base_class and not (base_split_owned and feature_class):
+if base_mentions:
     violations.append(
-        "MlKitInitProvider is referenced from base without a base implementation or a valid proextras split owner."
+        "MlKitInitProvider leaked into the base bundle manifest. The base must start before proextras is installed."
     )
-if feature_mentions and not feature_class:
-    violations.append("proextras manifest references MlKitInitProvider but proextras DEX lacks the class.")
-if feature_class and not feature_mentions:
-    violations.append("proextras contains MlKitInitProvider but its feature manifest does not declare the provider.")
+if feature_mentions:
+    violations.append(
+        "MlKitInitProvider remains as automatic provider metadata in proextras. NenoTV Pro must use manual ML Kit initialization."
+    )
+if base_class:
+    violations.append(
+        "ML Kit provider implementation leaked into base DEX; heavy ML Kit code must remain in proextras."
+    )
+if not feature_class:
+    violations.append(
+        "Expected ML Kit implementation is missing from proextras DEX."
+    )
 
-ownership=(
-    "base" if base_class else
-    "proextras-split" if base_split_owned and feature_class else
-    "unknown"
-)
 report={
     "aab":str(aab),
     "base_manifest_mentions_mlkit_provider":base_mentions,
     "base_dex_contains_mlkit_provider_class":base_class,
-    "base_manifest_marks_provider_as_proextras_split":base_split_owned,
     "proextras_manifest_mentions_mlkit_provider":feature_mentions,
     "proextras_dex_contains_mlkit_provider_class":feature_class,
-    "provider_ownership":ownership,
+    "provider_ownership":"manual-proextras" if (not base_mentions and not feature_mentions and not base_class and feature_class) else "invalid",
     "status":"fail" if violations else "pass",
     "violations":violations,
 }
