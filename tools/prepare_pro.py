@@ -79,12 +79,17 @@ dependencies {
 
 (mod / "src/main/AndroidManifest.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-          xmlns:dist="http://schemas.android.com/apk/distribution">
+          xmlns:dist="http://schemas.android.com/apk/distribution"
+          xmlns:tools="http://schemas.android.com/tools">
   <dist:module dist:instant="false" dist:title="@string/title_proextras">
     <dist:delivery><dist:on-demand/></dist:delivery>
     <dist:fusing dist:include="true"/>
   </dist:module>
   <application>
+    <provider
+      android:name="com.google.mlkit.common.internal.MlKitInitProvider"
+      android:authorities="${applicationId}.mlkitinitprovider"
+      tools:node="remove"/>
     <activity
       android:name="com.robertalt.raiptv.proextras.ProPlayerActivity"
       android:exported="false"
@@ -125,9 +130,18 @@ pro_player = pro_player.replace("R.color.", "com.robertalt.raiptv.R.color.")
 # Base InfoTranslator uses reflection, so it has zero compile dependency on ML Kit.
 (java / "InfoTranslator.java").write_text("""package com.robertalt.raiptv;
 
+import android.content.Context;
+
 public final class InfoTranslator {
     public interface Callback { void done(String text); }
+    private static volatile Context appContext;
     private InfoTranslator(){}
+
+    public static void init(Context context){
+        if(context!=null)appContext=context.getApplicationContext();
+    }
+
+    public static Context context(){ return appContext; }
 
     public static void translate(String text,String target,Callback cb){
         String fallback=text==null?"":text;
@@ -148,11 +162,30 @@ pro_translator = pro_translator.replace(
     "package com.robertalt.raiptv;",
     """package com.robertalt.raiptv.proextras;
 
-import com.robertalt.raiptv.InfoTranslator;""",
+import com.robertalt.raiptv.InfoTranslator;
+import com.google.mlkit.common.MlKit;""",
     1
 )
 pro_translator = pro_translator.replace("public final class InfoTranslator", "public final class ProInfoTranslator", 1)
 pro_translator = pro_translator.replace("private InfoTranslator()", "private ProInfoTranslator()")
+pro_translator = pro_translator.replace(
+    "public final class ProInfoTranslator {",
+    """public final class ProInfoTranslator {
+    private static volatile boolean MLKIT_READY=false;
+    private static synchronized boolean ensureMlKit(){
+        if(MLKIT_READY)return true;
+        android.content.Context context=InfoTranslator.context();
+        if(context==null)return false;
+        try{
+            MlKit.initialize(context);
+            MLKIT_READY=true;
+            return true;
+        }catch(Throwable ignored){
+            return false;
+        }
+    }""",
+    1
+)
 pro_translator = re.sub(
     r"public interface Callback\s*\{\s*void done\(String text\);\s*\}\s*",
     "",
@@ -162,6 +195,12 @@ pro_translator = re.sub(
 pro_translator = pro_translator.replace(
     "public static void translate(String text, String target, Callback cb)",
     "public static void translate(String text, String target, InfoTranslator.Callback cb)"
+)
+pro_translator = pro_translator.replace(
+    "public static void translate(String text, String target, InfoTranslator.Callback cb) {",
+    """public static void translate(String text, String target, InfoTranslator.Callback cb) {
+        if(!ensureMlKit()){if(cb!=null)cb.done(text==null?"":text);return;}""",
+    1
 )
 (mod / "src/main/java/com/robertalt/raiptv/proextras/ProInfoTranslator.java").write_text(pro_translator)
 
@@ -214,6 +253,7 @@ public final class ProModuleInstaller {
 # Route playback through the Pro media player only when entitlement + module are both present.
 main = java / "MainActivity.java"
 m = main.read_text()
+m = m.replace("super.onCreate(b);", "super.onCreate(b);InfoTranslator.init(this);", 1)
 m = m.replace("new Intent(this,PlayerActivity.class)", "ProModuleInstaller.playerIntent(this)")
 main.write_text(m)
 
@@ -225,5 +265,12 @@ main.write_text(m)
     "base_application_id=com.robertalt.raiptv\n"
     "dev_version=0.12.6.6-pro-dev1\n"
 )
+
+# QA contract: the base process must not auto-load ML Kit before proextras exists.
+feature_manifest=(mod / "src/main/AndroidManifest.xml").read_text()
+if "MlKitInitProvider" not in feature_manifest or 'tools:node="remove"' not in feature_manifest:
+    raise SystemExit("ML Kit provider removal contract missing from proextras manifest")
+if "MlKit.initialize" not in (mod / "src/main/java/com/robertalt/raiptv/proextras/ProInfoTranslator.java").read_text():
+    raise SystemExit("Manual ML Kit initialization missing from ProInfoTranslator")
 
 print("Prepared NenoTV modular Pro dev build: lean base + on-demand Pro Media Pack")
