@@ -10,11 +10,11 @@ on:
       lite_branch:
         required: false
         type: string
-        default: nenotv-v0.12.6.7-free-qa-crashfix
+        default: nenotv-v0.12.6.7-free-qa-executorfix
       pro_branch:
         required: false
         type: string
-        default: nenotv-pro-modularization-v0.1
+        default: nenotv-pro-modularization-v0.2-qa-splitfix
   workflow_dispatch:
     inputs:
       layer:
@@ -25,10 +25,10 @@ on:
         default: full
       lite_branch:
         required: false
-        default: nenotv-v0.12.6.7-free-qa-crashfix
+        default: nenotv-v0.12.6.7-free-qa-executorfix
       pro_branch:
         required: false
-        default: nenotv-pro-modularization-v0.1
+        default: nenotv-pro-modularization-v0.2-qa-splitfix
 
 permissions:
   contents: read
@@ -50,7 +50,7 @@ jobs:
         id: source
         env:
           GH_TOKEN: ${{ github.token }}
-          LITE_BRANCH: ${{ inputs.lite_branch || 'nenotv-v0.12.6.7-free-qa-crashfix' }}
+          LITE_BRANCH: ${{ inputs.lite_branch || 'nenotv-v0.12.6.7-free-qa-executorfix' }}
         run: |
           set -euo pipefail
           RUN=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build-v096.yml --branch "$LITE_BRANCH" --status success --limit 1 --json databaseId --jq '.[0].databaseId')
@@ -99,8 +99,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EDITION: ${{ matrix.edition }}
-          LITE_BRANCH: ${{ inputs.lite_branch || 'nenotv-v0.12.6.7-free-qa-crashfix' }}
-          PRO_BRANCH: ${{ inputs.pro_branch || 'nenotv-pro-modularization-v0.1' }}
+          LITE_BRANCH: ${{ inputs.lite_branch || 'nenotv-v0.12.6.7-free-qa-executorfix' }}
+          PRO_BRANCH: ${{ inputs.pro_branch || 'nenotv-pro-modularization-v0.2-qa-splitfix' }}
         run: |
           set -euo pipefail
           if [ "$EDITION" = lite ]; then
@@ -151,12 +151,21 @@ jobs:
       - name: Compile edition
         working-directory: src/RA_IPTV_Android_v0.1
         run: gradle --no-daemon :app:assembleDebug :app:assembleAndroidTest
+      - name: Build Pro debug App Bundle
+        if: ${{ matrix.edition == 'pro' && (matrix.suite == 'core' || matrix.suite == 'compat') }}
+        working-directory: src/RA_IPTV_Android_v0.1
+        run: gradle --no-daemon :app:bundleDebug
+      - name: Download bundletool for split-aware Pro install
+        if: ${{ matrix.edition == 'pro' && (matrix.suite == 'core' || matrix.suite == 'compat') }}
+        run: |
+          curl -fL --retry 3 -o bundletool.jar https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar
+          java -jar bundletool.jar version
       - name: Build Pro production AAB for split contract
-        if: ${{ matrix.edition == 'pro' }}
+        if: ${{ matrix.edition == 'pro' && matrix.suite == 'core' }}
         working-directory: src/RA_IPTV_Android_v0.1
         run: gradle --no-daemon :app:bundleRelease
       - name: Pro production AAB startup contract
-        if: ${{ matrix.edition == 'pro' }}
+        if: ${{ matrix.edition == 'pro' && matrix.suite == 'core' }}
         run: |
           python3 qa/scripts/check_pro_aab_contract.py \
             src/RA_IPTV_Android_v0.1/app/build/outputs/bundle/release/app-release.aab \
@@ -196,8 +205,30 @@ jobs:
           script: |
             set -eu
             mkdir -p "$GITHUB_WORKSPACE/qa-evidence"
-            adb logcat -c
-            gradle -p "$GITHUB_WORKSPACE/src/RA_IPTV_Android_v0.1" --no-daemon :app:connectedDebugAndroidTest
+            if [ "${{ matrix.edition }}" = "pro" ]; then
+              APP="$GITHUB_WORKSPACE/src/RA_IPTV_Android_v0.1"
+              AAB="$APP/app/build/outputs/bundle/debug/app-debug.aab"
+              APKS="$GITHUB_WORKSPACE/qa-evidence/pro-debug.apks"
+              java -jar "$GITHUB_WORKSPACE/bundletool.jar" build-apks --bundle="$AAB" --output="$APKS" --overwrite --local-testing
+              java -jar "$GITHUB_WORKSPACE/bundletool.jar" install-apks --apks="$APKS"
+              adb shell pm path com.robertalt.raiptv | tee "$GITHUB_WORKSPACE/qa-evidence/pro-installed-paths.txt"
+              if grep -qi proextras "$GITHUB_WORKSPACE/qa-evidence/pro-installed-paths.txt"; then exit 2; fi
+              adb logcat -c
+              adb shell monkey -p com.robertalt.raiptv -c android.intent.category.LAUNCHER 1 >/dev/null
+              sleep 5
+              adb logcat -d > "$GITHUB_WORKSPACE/qa-evidence/pro-base-startup-logcat.txt"
+              if grep -q "FATAL EXCEPTION" "$GITHUB_WORKSPACE/qa-evidence/pro-base-startup-logcat.txt"; then exit 2; fi
+              TEST_APK=$(find "$APP/app/build/outputs/apk/androidTest" -name '*.apk' -print -quit)
+              test -n "$TEST_APK"
+              adb install -r "$TEST_APK"
+              OUT="$GITHUB_WORKSPACE/qa-evidence/instrumentation-pro.txt"
+              adb shell am instrument -w -r com.robertalt.raiptv.test/androidx.test.runner.AndroidJUnitRunner > "$OUT" 2>&1 || { cat "$OUT"; exit 2; }
+              cat "$OUT"
+              if grep -Eq "FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed" "$OUT"; then exit 2; fi
+            else
+              adb logcat -c
+              gradle -p "$GITHUB_WORKSPACE/src/RA_IPTV_Android_v0.1" --no-daemon :app:connectedDebugAndroidTest
+            fi
             adb shell screencap -p /sdcard/qa-final.png || true
             adb pull /sdcard/qa-final.png "$GITHUB_WORKSPACE/qa-evidence/final-${{ matrix.edition }}-api${{ matrix.api }}-${{ matrix.suite }}.png" || true
             adb logcat -d > "$GITHUB_WORKSPACE/qa-evidence/logcat.txt"
