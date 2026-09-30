@@ -165,7 +165,7 @@ jobs:
           sudo apt-get install -y -qq ffmpeg
           mkdir -p qa/media
           ffmpeg -hide_banner -loglevel error -y -f lavfi -i testsrc=size=1280x720:rate=25 -f lavfi -i sine=frequency=880:sample_rate=48000 -t 12 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -c:a aac -shortest qa/media/vod.mp4
-          ffmpeg -hide_banner -loglevel error -y -stream_loop -1 -i qa/media/vod.mp4 -t 18 -c copy -f hls -hls_time 2 -hls_list_size 0 -hls_segment_filename qa/media/seg%03d.ts qa/media/live.m3u8
+          ffmpeg -hide_banner -loglevel error -y -stream_loop -1 -i qa/media/vod.mp4 -t 60 -c copy -f hls -hls_time 2 -hls_list_size 0 -hls_segment_filename qa/media/seg%03d.ts qa/media/live.m3u8
       - name: Start synthetic IPTV server
         run: |
           set -euo pipefail
