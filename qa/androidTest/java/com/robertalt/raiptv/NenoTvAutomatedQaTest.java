@@ -118,6 +118,20 @@ public class NenoTvAutomatedQaTest {
         SystemClock.sleep(400);
     }
 
+    private void waitMainInteractive() {
+        assertTrue("MainActivity navigation did not return",
+                device.wait(Until.hasObject(By.res(PKG, "navHome")), 10000));
+        device.waitForIdle(1500);
+        SystemClock.sleep(350);
+    }
+
+    private void backToMainFromPlayer() {
+        device.pressBack();
+        assertTrue("Player did not close",
+                device.wait(Until.gone(By.res(PKG, "playerTitle")), 8000));
+        waitMainInteractive();
+    }
+
     private void openCardAndPlay(String title) {
         contains(title).click();
         SystemClock.sleep(300);
@@ -180,8 +194,7 @@ public class NenoTvAutomatedQaTest {
         // Player favorite button must toggle visually.
         res("favoriteButton").click();
         assertEquals("♥", res("favoriteButton").getText());
-        device.pressBack();
-        SystemClock.sleep(500);
+        backToMainFromPlayer();
 
         clickNav("navEpg");
         contains("QA NenoTV Live NL");
@@ -192,7 +205,7 @@ public class NenoTvAutomatedQaTest {
         openCardAndPlay("QA NenoTV Test Movie");
         contains("QA NenoTV Test Movie");
         SystemClock.sleep(5500);
-        device.pressBack();
+        backToMainFromPlayer();
 
         clickNav("navSeries");
         contains("QA NenoTV Test Series").click();
@@ -260,6 +273,8 @@ public class NenoTvAutomatedQaTest {
         setText("serverField", BASE);
         setText("userField", "wrong");
         setText("passField", "wrong");
+        device.pressBack(); // close IME so the status view is actually visible to accessibility
+        SystemClock.sleep(250);
         res("testButton").click();
 
         UiObject2 status = device.wait(Until.findObject(By.res(PKG, "profileStatus")), 8000);

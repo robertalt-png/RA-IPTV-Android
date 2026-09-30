@@ -43,6 +43,15 @@ if [ "$EDITION" = "pro" ]; then
 
   TEST_APK="$(find "$APP/app/build/outputs/apk/androidTest" -name '*.apk' -print -quit)"
   test -n "$TEST_APK"
+
+  # Instrumentation must be signed with the exact same certificate as the
+  # bundletool-generated target splits. Re-sign explicitly to remove any
+  # runner/Gradle debug-keystore ambiguity.
+  APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+  test -n "$APKSIGNER"
+  "$APKSIGNER" sign     --ks "$KS"     --ks-key-alias androiddebugkey     --ks-pass pass:android     --key-pass pass:android     "$TEST_APK"
+  "$APKSIGNER" verify --print-certs "$TEST_APK" | tee "$EVIDENCE/pro-test-apk-cert.txt"
+
   adb install -r "$TEST_APK"
 
   OUT="$EVIDENCE/instrumentation-pro.txt"
