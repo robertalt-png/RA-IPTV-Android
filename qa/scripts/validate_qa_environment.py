@@ -16,6 +16,7 @@ required=[
  'qa/scripts/scan_logcat.py',
  'qa/scripts/check_apk_manifest.sh',
  'qa/scripts/check_pro_aab_contract.py',
+ 'qa/scripts/run_emulator_qa.sh',
 ]
 missing=[p for p in required if not Path(p).exists()]
 if missing:
