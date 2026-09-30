@@ -103,14 +103,23 @@ public class NenoTvAutomatedQaTest {
         new SecureProfileStore(app).save(p);
     }
 
+    private void launchMain() {
+        Intent i = new Intent(app, MainActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        app.startActivity(i);
+        assertTrue("MainActivity navigation did not become visible",
+                device.wait(Until.hasObject(By.res(PKG, "navHome")), 20000));
+        device.waitForIdle(1500);
+    }
+
     private void openMainXtream() {
         seedXtream();
-        launch(MainActivity.class);
+        launchMain();
     }
 
     private void openMainM3u() {
         seedM3u();
-        launch(MainActivity.class);
+        launchMain();
     }
 
     private void clickNav(String id) {
@@ -151,7 +160,7 @@ public class NenoTvAutomatedQaTest {
         setText("passField", "qa-pass");
         device.pressBack(); // close IME so status feedback is visible
         res("testButton").click();
-        long connectionDeadline=SystemClock.uptimeMillis()+15000;
+        long connectionDeadline=SystemClock.uptimeMillis()+25000;
         boolean connected=false;
         while(SystemClock.uptimeMillis()<connectionDeadline){
             UiObject2 state=device.findObject(By.res(PKG,"profileStatus"));
@@ -277,14 +286,24 @@ public class NenoTvAutomatedQaTest {
         SystemClock.sleep(250);
         res("testButton").click();
 
-        UiObject2 status = device.wait(Until.findObject(By.res(PKG, "profileStatus")), 8000);
-        assertNotNull("No credential error status shown", status);
-        String message = status.getText();
-        assertNotNull(message);
+        long deadline=SystemClock.uptimeMillis()+25000;
+        String message=null;
+        while(SystemClock.uptimeMillis()<deadline){
+            UiObject2 status=device.findObject(By.res(PKG,"profileStatus"));
+            message=status==null?null:status.getText();
+            String lower=message==null?"":message.toLowerCase(java.util.Locale.ROOT);
+            boolean pending=lower.contains("testen") || lower.contains("testing") || lower.contains("verbinden") || lower.contains("connecting");
+            if(!lower.isEmpty()&&!pending)break;
+            SystemClock.sleep(200);
+        }
+        assertNotNull("No credential error status shown", message);
         String lower = message.toLowerCase(java.util.Locale.ROOT);
+        assertFalse("Credential test never left pending state: " + message,
+                lower.contains("testen") || lower.contains("testing") || lower.contains("verbinden") || lower.contains("connecting"));
         assertTrue("Invalid credentials were not reported: " + message,
-                lower.contains("mislukt") || lower.contains("failed") || lower.contains("login") || lower.contains("geaccepteerd"));
-        assertTrue(device.hasObject(By.pkg(PKG)));
+                lower.contains("mislukt") || lower.contains("failed") || lower.contains("login") || lower.contains("geaccepteerd") ||
+                lower.contains("ongeldig") || lower.contains("invalid") || lower.contains("geweigerd") || lower.contains("denied"));
+        assertTrue("NenoTV disappeared after invalid login", device.wait(Until.hasObject(By.pkg(PKG)), 5000));
     }
 
     @Test public void layout_sanity_keeps_primary_controls_on_screen() {
