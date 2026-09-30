@@ -1,4 +1,4 @@
-full-run-requested-after-profile-player-sync
-previous_full_run=36740792858
-qa_head=29487349241a7a5676f28f42eef240e47d75a5a7
-requested_at=2026-09-30T18:45:00+02:00
+full-run-requested-after-overlay-refresh
+previous_full_run=36747134800
+qa_head=93247f18a28388b865bac1c22db7c217315389fa
+requested_at=2026-09-30T19:05:00+02:00
