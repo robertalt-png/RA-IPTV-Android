@@ -68,7 +68,7 @@ public class NenoTvAutomatedQaTest {
     }
 
     private UiObject2 res(String id) { return waitObj(By.res(PKG, id), 12000); }
-    private UiObject2 contains(String value) { return waitObj(By.textContains(value), 12000); }
+    private UiObject2 contains(String value) { return waitObj(By.textContains(value), 25000); }
 
     private void setText(String id, String value) {
         UiObject2 o = res(id);
@@ -132,7 +132,7 @@ public class NenoTvAutomatedQaTest {
 
     private void waitMainInteractive() {
         assertTrue("MainActivity navigation did not return",
-                device.wait(Until.hasObject(By.res(PKG, "navHome")), 10000));
+                device.wait(Until.hasObject(By.res(PKG, "navHome")), 20000));
         device.waitForIdle(1500);
         SystemClock.sleep(350);
     }
@@ -145,10 +145,16 @@ public class NenoTvAutomatedQaTest {
     }
 
     private void openCardAndPlay(String title) {
-        contains(title).click();
-        SystemClock.sleep(300);
-        res("heroAction").click();
-        waitObj(By.res(PKG, "playerTitle"), 12000);
+        UiObject2 card = contains(title);
+        card.click();
+        device.waitForIdle(1500);
+        SystemClock.sleep(500);
+        UiObject2 action = res("heroAction");
+        action.click();
+        assertTrue("Player did not open for " + title,
+                device.wait(Until.hasObject(By.res(PKG, "playerTitle")), 30000));
+        assertTrue("Player title did not contain " + title,
+                device.wait(Until.hasObject(By.textContains(title)), 15000));
     }
 
     @Test public void firstRun_language_and_xtream_profile_connection() {
@@ -259,10 +265,10 @@ public class NenoTvAutomatedQaTest {
         assertTrue("Search result disappeared", device.hasObject(By.textContains("QA NenoTV Test Movie")));
 
         device.setOrientationLeft();
-        SystemClock.sleep(900);
-        assertTrue("NenoTV lost foreground after rotation", device.hasObject(By.pkg(PKG)));
+        assertTrue("NenoTV lost foreground after rotation",
+                device.wait(Until.hasObject(By.res(PKG, "navHome")), 12000));
         device.setOrientationNatural();
-        SystemClock.sleep(900);
+        waitMainInteractive();
 
         device.pressHome();
         SystemClock.sleep(800);
@@ -270,7 +276,7 @@ public class NenoTvAutomatedQaTest {
         assertNotNull(i);
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         app.startActivity(i);
-        assertTrue("NenoTV did not resume", device.wait(Until.hasObject(By.pkg(PKG)), 8000));
+        assertTrue("NenoTV did not resume", device.wait(Until.hasObject(By.res(PKG, "navHome")), 12000));
 
         res("menuButton").click();
         contains("Instellingen").click();
