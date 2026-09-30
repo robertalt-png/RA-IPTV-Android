@@ -1,4 +1,4 @@
-full-run-requested-after-compat-sync-hardening
-previous_full_run=36736867069
-qa_head=075c1c302f599156a2b774c4ff43ab4ee192194b
-requested_at=2026-09-30T18:05:00+02:00
+full-run-requested-after-compat-profile-hardening
+previous_full_run=36738971682
+qa_head=ca9d561c505584833049ae83d411ddf9f5eb1ecf
+requested_at=2026-09-30T18:28:00+02:00
