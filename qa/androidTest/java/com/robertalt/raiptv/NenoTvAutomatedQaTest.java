@@ -324,9 +324,11 @@ public class NenoTvAutomatedQaTest {
             Collection<Activity> resumed = ActivityLifecycleMonitorRegistry.getInstance()
                     .getActivitiesInStage(Stage.RESUMED);
             for (Activity activity : resumed) {
+                View root = activity.findViewById(R.id.playerRoot);
                 View surface = activity.findViewById(R.id.media3View);
-                if (surface != null) {
-                    clicked[0] = surface.performClick();
+                if (root != null || surface != null) {
+                    clicked[0] = root != null && root.performClick();
+                    if (!clicked[0] && surface != null) clicked[0] = surface.performClick();
                     return;
                 }
             }
