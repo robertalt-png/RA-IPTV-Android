@@ -934,7 +934,6 @@ jobs:
           cd base/RA_IPTV_Android_v0.1
           python3 "$GITHUB_WORKSPACE/tools/prepare_pro.py"
 
-      - name: Archive generated modular source
       - name: Apply Android 26+ compatibility repair
         run: |
           set -euo pipefail
@@ -942,6 +941,7 @@ jobs:
           python3 "$GITHUB_WORKSPACE/tools/repair_android_compat.py"
           grep -n "String enc" app/src/main/java/com/robertalt/raiptv/core/XtreamUrls.java
 
+      - name: Archive generated modular source
         run: |
           set -euo pipefail
           tar -czf NenoTV-Pro-Modular-dev1-source.tar.gz -C base RA_IPTV_Android_v0.1
