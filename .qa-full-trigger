@@ -1,4 +1,4 @@
-full-run-requested-after-harness-fixes
-previous_full_run=36731910449
-qa_head=9f484ec2edd3fe4e73f9555b7cbda12a1481406f
-requested_at=2026-09-30T17:15:00+02:00
+full-run-requested-after-split-and-harness-fixes
+previous_full_run=36735250036
+qa_head=bb37c4ac854bb7c560eab51eb8820618a075e90d
+requested_at=2026-09-30T17:35:00+02:00
