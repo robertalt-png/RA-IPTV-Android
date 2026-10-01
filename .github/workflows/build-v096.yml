@@ -1,8 +1,8 @@
-name: Build NenoTV Trial v0.13.0 dev1
+name: Build NenoTV Trial v0.13.0 dev2
 
 on:
   push:
-    branches: [ nenotv-trial-to-pro-v0.1 ]
+    branches: [ nenotv-v0.13.0-trial-dev2-founding-testers ]
   workflow_dispatch:
 
 permissions:
@@ -976,7 +976,7 @@ jobs:
           ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
           IN="base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk"
           "$AAPT" dump badging "$IN" | tee free-badging.txt
-          grep -q "package: name='com.robertalt.raiptv' versionCode='66' versionName='0.13.0-trial-dev1'" free-badging.txt
+          grep -q "package: name='com.robertalt.raiptv' versionCode='67' versionName='0.13.0-trial-dev2'" free-badging.txt
           "$ZIPALIGN" -p -f 4 "$IN" NenoTV-Trial-v0.13.0-dev1-aligned-unsigned.apk
           "$ZIPALIGN" -c -p 4 NenoTV-Trial-v0.13.0-dev1-aligned-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
@@ -994,13 +994,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p build-output/v0.13.0-trial-dev1
-          cp NenoTV-Trial-v0.13.0-dev1-aligned-unsigned.apk build-output/v0.13.0-trial-dev1/
-          cp free-badging.txt build-output/v0.13.0-trial-dev1/
-          cp apksigner.jar build-output/v0.13.0-trial-dev1/
-          sha256sum build-output/v0.13.0-trial-dev1/* > build-output/v0.13.0-trial-dev1/SHA256SUMS.txt
+          mkdir -p build-output/v0.13.0-trial-dev2
+          cp NenoTV-Trial-v0.13.0-dev1-aligned-unsigned.apk build-output/v0.13.0-trial-dev2/
+          cp free-badging.txt build-output/v0.13.0-trial-dev2/
+          cp apksigner.jar build-output/v0.13.0-trial-dev2/
+          sha256sum build-output/v0.13.0-trial-dev2/* > build-output/v0.13.0-trial-dev2/SHA256SUMS.txt
           git config user.name "NenoTV Build Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add build-output/v0.13.0-trial-dev1
-          git commit -m "build: publish NenoTV Free v0.13.0-trial-dev1 handoff [skip ci]"
-          git push origin HEAD:nenotv-v0.13.0-trial-dev1-free-qa-crashfix
+          git add build-output/v0.13.0-trial-dev2
+          git commit -m "build: publish NenoTV Free v0.13.0-trial-dev2 handoff [skip ci]"
+          git push origin HEAD:nenotv-v0.13.0-trial-dev2-free-qa-crashfix
