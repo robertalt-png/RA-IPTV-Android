@@ -84,7 +84,7 @@ jobs:
       - name: Generate sharded matrix
         id: matrix
         env:
-          LAYER: ${{ (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'qa: request Release QA') && 'release') || inputs.layer || 'full' }}
+          LAYER: ${{ (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release-qa-trigger') && 'release') || inputs.layer || 'full' }}
           LOCALES: ${{ steps.locales.outputs.value }}
         run: |
           VALUE=$(python3 qa/scripts/generate_matrix.py --layer "$LAYER" --locales "$LOCALES")
