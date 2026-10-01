@@ -60,7 +60,7 @@ add_action('woocommerce_order_status_processing', 'nenotv_qa_grant_entitlement',
 add_action('woocommerce_thankyou', function($order_id) {
     $order = wc_get_order($order_id);
     if (!$order || !$order->get_meta('_nenotv_qa_entitlement_granted')) return;
-    echo '<section id="nenotv-qa-proof"><h2>NenoTV QA entitlement created</h2><p data-plan="' .
+    echo '<section id="nenotv-qa-proof" data-order-id="' . esc_attr($order->get_id()) . '"><h2>NenoTV QA entitlement created</h2><p data-plan="' .
       esc_attr($order->get_meta('_nenotv_qa_entitlement_plan')) . '">Plan: ' .
       esc_html($order->get_meta('_nenotv_qa_entitlement_plan')) . '</p><p>Devices: ' .
       esc_html($order->get_meta('_nenotv_qa_entitlement_devices')) . '</p><p>Activation: ' .
@@ -68,6 +68,18 @@ add_action('woocommerce_thankyou', function($order_id) {
 });
 
 add_action('rest_api_init', function() {
+    register_rest_route('nenotv-qa/v1', '/config', [
+        'methods' => 'GET',
+        'permission_callback' => '__return_true',
+        'callback' => function() {
+            return rest_ensure_response([
+                'checkout_url' => wc_get_checkout_url(),
+                'cart_url' => wc_get_cart_url(),
+                'account_url' => wc_get_page_permalink('myaccount'),
+                'qa_gateway' => 'nenotv_qa'
+            ]);
+        }
+    ]);
     register_rest_route('nenotv-qa/v1', '/order/(?P<id>\\d+)', [
         'methods' => 'GET',
         'permission_callback' => '__return_true',
