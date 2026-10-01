@@ -36,6 +36,9 @@ foreach ($plans as $plan) {
     $product->update_meta_data('_nenotv_qa_expected_term', $plan[4]);
     $product->save();
 }
+add_action('wp_mail_failed', function ($error) {
+    throw new RuntimeException('Local mail capture: ' . $error->get_error_message());
+});
 if (!wp_mail('customer@example.invalid', 'NenoTV QA mailbox check', 'Synthetic mail; no real recipient.')) {
     throw new RuntimeException('Local mail capture failed.');
 }
