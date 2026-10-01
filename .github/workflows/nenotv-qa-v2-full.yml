@@ -6,6 +6,7 @@ on:
       - nenotv-qa-v2-testomgeving
     paths:
       - '.qa-full-trigger'
+      - '.qa-release-trigger'
   workflow_call:
     inputs:
       layer:
@@ -83,7 +84,7 @@ jobs:
       - name: Generate sharded matrix
         id: matrix
         env:
-          LAYER: ${{ inputs.layer || 'full' }}
+          LAYER: ${{ (github.event_name == 'push' && (contains(github.event.head_commit.added, '.qa-release-trigger') || contains(github.event.head_commit.modified, '.qa-release-trigger')) && 'release') || inputs.layer || 'full' }}
           LOCALES: ${{ steps.locales.outputs.value }}
         run: |
           VALUE=$(python3 qa/scripts/generate_matrix.py --layer "$LAYER" --locales "$LOCALES")
