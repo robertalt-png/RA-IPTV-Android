@@ -7,7 +7,7 @@
         android:usesCleartextTraffic="false"
         android:icon="@drawable/ic_launcher"
         android:roundIcon="@drawable/ic_launcher"
-        android:label="NenoTV Dashboard"
+        android:label="NenoTV Admin"
         android:theme="@style/Theme.NenoTVDashboard">
         <activity
             android:name=".MainActivity"
