@@ -186,7 +186,7 @@ gradle.write_text(s)
 
 # Replace legacy source namespace and all Nivaro branding in active compiled text.
 roots = [app, pro]
-text_suffixes={".java",".kt",".xml",".gradle",".properties",".txt",".json",".pro"}
+text_suffixes={".java",".kt",".xml",".gradle",".properties",".txt",".json",".pro",".html",".htm",".js",".css"}
 for base in roots:
     if not base.exists():
         continue
