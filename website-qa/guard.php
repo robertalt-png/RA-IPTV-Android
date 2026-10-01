@@ -9,6 +9,8 @@ if (!defined('NENOTV_WEBSITE_QA') || NENOTV_WEBSITE_QA !== true) {
 add_filter('pre_option_mollie-payments-for-woocommerce_test_mode_enabled', function () { return 'yes'; });
 add_filter('pre_option_mollie-payments-for-woocommerce_live_api_key', function () { return ''; });
 add_filter('pre_option_blog_public', function () { return '0'; });
+add_filter('wp_mail_from', function () { return 'qa@example.invalid'; });
+add_filter('wp_mail_from_name', function () { return 'NenoTV QA'; });
 add_filter('pre_http_request', function ($pre, $args, $url) {
     $host = strtolower((string) wp_parse_url($url, PHP_URL_HOST));
     $allowed = array('api.wordpress.org', 'downloads.wordpress.org', 'wordpress', 'localhost', '127.0.0.1');
