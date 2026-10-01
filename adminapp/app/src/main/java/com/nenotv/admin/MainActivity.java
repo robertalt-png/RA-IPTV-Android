@@ -644,14 +644,18 @@ public class MainActivity extends Activity {
 
     private void renderTesters() {
         JSONObject t=data.optJSONObject("testers");
+        int sessions=t==null?0:t.optInt("test_sessions",0);
+        long activeSeconds=t==null?0:t.optLong("active_seconds",0);
         section("Founding Testers");
-        metricPair("Aanvragen",String.valueOf(t==null?0:t.optInt("applications",0)),"",
-                "In testgroep",String.valueOf(t==null?0:t.optInt("in_test_group",0)),"");
         metricPair("Actief vandaag",String.valueOf(t==null?0:t.optInt("active_today",0)),"",
-                "Testsessies",String.valueOf(t==null?0:t.optInt("test_sessions",0)),"");
-        metricPair("Testtijd",duration(t==null?0:t.optLong("active_seconds",0)),"totaal",
-                "Crashes",String.valueOf(t==null?0:t.optInt("app_crashes",0)),"");
+                "In testgroep",String.valueOf(t==null?0:t.optInt("in_test_group",0)),"");
+        metricPair("Gem. sessieduur",duration(sessions>0?activeSeconds/sessions:0),"",
+                "Testsessies",String.valueOf(sessions),"");
+        metricPair("Crashes",String.valueOf(t==null?0:t.optInt("app_crashes",0)),"",
+                "Aandacht nodig",String.valueOf(t==null?0:t.optInt("attention_needed",0)),"");
         LinearLayout b=box();
+        row(b,"Aanvragen",String.valueOf(t==null?0:t.optInt("applications",0)));
+        row(b,"Totale testtijd",duration(activeSeconds));
         row(b,"Reserve",String.valueOf(t==null?0:t.optInt("reserve",0)));
         row(b,"Uitgenodigd",String.valueOf(t==null?0:t.optInt("invited",0)));
         row(b,"App gestart",String.valueOf(t==null?0:t.optInt("app_started",0)));
@@ -667,8 +671,8 @@ public class MainActivity extends Activity {
         JSONObject c=data.optJSONObject("commerce_detail");
         JSONObject access=data.optJSONObject("access");
         section("Commerce");
-        metricPair("Orders",String.valueOf(c==null?0:c.optInt("orders",0)),rangeDays+" dagen",
-                "Omzet",money(c==null?0:c.optDouble("revenue",0),c==null?"EUR":c.optString("currency","EUR")),rangeDays+" dagen");
+        metricPair("Orders",String.valueOf(c==null?0:c.optInt("orders",0)),rangeLabel(),
+                "Omzet",money(c==null?0:c.optDouble("revenue",0),c==null?"EUR":c.optString("currency","EUR")),rangeLabel());
         metricPair("Mislukt",String.valueOf(c==null?0:c.optInt("failed",0)),"betalingen",
                 "Actieve Pro",String.valueOf(access==null?0:access.optInt("active_pro",0)),"");
         LinearLayout b=box();
