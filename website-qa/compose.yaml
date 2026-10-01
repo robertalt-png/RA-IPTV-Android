@@ -36,9 +36,12 @@ services:
     networks: [isolated]
   cli:
     image: wordpress:cli-2.12.0-php8.3
+    entrypoint: ["wp"]
     user: "33:33"
     profiles: [tools]
-    environment: *wp_environment
+    environment:
+      <<: *wp_environment
+      WP_CLI_CACHE_DIR: /tmp/wp-cli-cache
     volumes: *wp_volumes
     networks: [isolated, downloads]
   mailpit:
