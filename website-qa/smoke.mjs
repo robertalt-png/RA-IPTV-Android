@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { checkoutId, assertCheckoutPage } from './checks.mjs';
 
 const base = 'http://localhost:8090';
+const checkoutPageId = checkoutId(process.env.QA_CHECKOUT_ID);
 const results = [];
 async function json(url) {
   const response = await fetch(url);
@@ -26,10 +28,11 @@ for (const [slug, price] of Object.entries(expected)) {
   assert.equal(cart.items.length, 1);
   assert.equal(cart.items[0].id, product.id);
   assert.equal(cart.totals.total_price, price);
-  const checkoutResponse = await fetch(`${base}/?page_id=${process.env.QA_CHECKOUT_ID}`, { headers: { Cookie: cookies } });
+  assert.equal(Number(cart.totals.total_tax), Math.round(Number(price) - Number(price) / 1.21), 'Inclusive NL fixture VAT');
+  const checkoutResponse = await fetch(`${base}/?page_id=${checkoutPageId}`, { headers: { Cookie: cookies } });
   assert.equal(checkoutResponse.status, 200);
   const checkout = await checkoutResponse.text();
-  assert.match(checkout, /woocommerce.*checkout|wc-block-checkout/i);
+  assertCheckoutPage(checkout, checkoutPageId);
   assert.doesNotMatch(checkout, /Something big is brewing/i);
   assert.match(checkoutResponse.headers.get('x-robots-tag'), /noindex/);
   results.push({ plan: slug, product: 'passed', cart: 'passed', checkoutPage: 'passed', payment: 'not-tested', entitlement: 'not-tested' });

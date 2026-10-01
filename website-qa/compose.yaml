@@ -41,8 +41,19 @@ services:
     environment:
       <<: *wp_environment
       WP_CLI_CACHE_DIR: /tmp/wp-cli-cache
-    volumes: *wp_volumes
-    networks: [isolated, downloads]
+    volumes:
+      - wordpress:/var/www/html
+      - ./guard.php:/var/www/html/wp-content/mu-plugins/nenotv-qa-guard.php:ro
+      - ./bootstrap.php:/qa/bootstrap.php:ro
+      - ./network-check.php:/qa/network-check.php:ro
+      - packages:/packages:ro
+    networks: [isolated]
+  downloader:
+    image: curlimages/curl:8.14.1
+    user: "0:0"
+    profiles: [tools]
+    volumes: ["packages:/packages"]
+    networks: [downloads]
   mailpit:
     image: axllent/mailpit:v1.27
     networks: [isolated]
@@ -59,3 +70,4 @@ networks:
 volumes:
   db: {}
   wordpress: {}
+  packages: {}

@@ -11,7 +11,9 @@ Met Docker Compose, Bash, OpenSSL en Node 22:
 
 ```sh
 bash website-qa/setup.sh
-export QA_CHECKOUT_ID=$(cd website-qa && docker compose run --rm -T cli option get woocommerce_checkout_page_id)
+QA_CHECKOUT_ID=$(cd website-qa && docker compose run --rm -T cli option get woocommerce_checkout_page_id) || exit 1
+export QA_CHECKOUT_ID
+node --test website-qa/checks.test.mjs
 node website-qa/smoke.mjs
 ```
 
@@ -25,7 +27,9 @@ Opruimen: `docker compose down -v` vanuit deze map, uitsluitend voor deze testda
 - Alleen nieuwe fictieve producten en gegevens; geen productie-import.
 - Website, database en mailbox draaien op een intern Docker-netwerk.
 - Browserpoorten luisteren uitsluitend op 127.0.0.1.
-- Alleen de installatiecontainer kan WordPress-downloads ophalen.
+- Een aparte downloader haalt uitsluitend de plugin-ZIPs op. Deze container heeft geen
+  WordPressbestanden of databaseverbinding. WordPress en WP-CLI hebben geen internetroute.
+- De nginx-toegangspoort heeft alleen vaste lokale upstreams en luistert op loopback.
 - De QA-guard dwingt Mollie TEST af, wist de live sleutel bij bootstrap,
   blokkeert externe WordPress HTTP-aanvragen en stuurt mail naar Mailpit.
 - Geen deploy naar nenotv.com, geen live sleutels, geen externe mailbox.
@@ -49,6 +53,19 @@ een voorlopig testgegeven en moet tegen de echte productconfiguratie worden geco
    My NenoTV, ordermail, refund/revoke en herhaalde betaalmeldingen uitvoeren.
 
 De basiscontrole mag niet als launch-goedkeuring worden gebruikt.
+
+## Auditcorrecties
+
+De beheercontainer is nu ook van internet afgesloten; directe cURL wordt in beide
+PHP-containers getest. Een ontbrekende checkout-ID stopt de workflow en de test zelf.
+Checkoutcontrole vereist de juiste pagina-ID plus een echt checkoutblok of formulier.
+De fixture gebruikt NL 21% btw met prijzen inclusief btw, zoals de twee bevestigde
+productieopties. Andere landen, vrijstellingen en de volledige productietarieven zijn niet nagebouwd.
+Pluginversies worden na installatie gecontroleerd. Mollie-betaalmethodes blijven
+bewust ongeconfigureerd in deze basisomgeving; betaaltests zijn nog niet uitgevoerd.
+Docker-tags en action-versietags zijn nog niet op inhoudshashes vastgepind.
+Een sessie die WordPress.org blokkeert kan de setup niet uitvoeren; vraag daar
+netwerktoegang voor de officiele downloads aan. Omzeil het sessiebeleid niet.
 
 Technische bronnen: [WordPress Docker](https://hub.docker.com/_/wordpress),
 [Mailpit Docker](https://mailpit.axllent.org/docs/install/docker/).

@@ -21,7 +21,14 @@ if ! docker compose run --rm cli core is-installed >/dev/null 2>&1; then
     --title='NenoTV Website QA' --admin_user=qa_admin \
     --admin_password="$qa_password" --admin_email=admin@example.invalid --skip-email
 fi
-docker compose run --rm cli plugin install woocommerce --version=11.1.2 --activate
-docker compose run --rm cli plugin install mollie-payments-for-woocommerce --version=8.1.10 --activate
+for package in woocommerce.11.1.2 mollie-payments-for-woocommerce.8.1.10; do
+  docker compose run --rm -T downloader --fail --show-error --location \
+    --proto '=https' --proto-redir '=https' --max-time 120 \
+    "https://downloads.wordpress.org/plugin/$package.zip" --output "/packages/$package.zip"
+done
+docker compose run --rm -T cli plugin install /packages/woocommerce.11.1.2.zip --force --activate
+docker compose run --rm -T cli plugin install /packages/mollie-payments-for-woocommerce.8.1.10.zip --force --activate
+test "$(docker compose run --rm -T cli plugin get woocommerce --field=version)" = 11.1.2
+test "$(docker compose run --rm -T cli plugin get mollie-payments-for-woocommerce --field=version)" = 8.1.10
 docker compose run --rm cli eval-file /qa/bootstrap.php
 docker compose run --rm cli plugin list --format=json

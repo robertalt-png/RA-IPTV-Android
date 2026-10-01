@@ -7,7 +7,21 @@ if (!class_exists('WooCommerce')) { throw new RuntimeException('WooCommerce is r
 update_option('blog_public', 0);
 update_option('woocommerce_currency', 'EUR');
 update_option('woocommerce_default_country', 'NL');
-update_option('woocommerce_calc_taxes', 'no');
+update_option('woocommerce_calc_taxes', 'yes');
+update_option('woocommerce_prices_include_tax', 'yes');
+update_option('woocommerce_tax_display_shop', 'incl');
+update_option('woocommerce_tax_display_cart', 'incl');
+update_option('woocommerce_tax_based_on', 'base');
+update_option('woocommerce_default_customer_address', 'base');
+global $wpdb;
+$rate_name = 'QA Netherlands 21';
+$rate_id = $wpdb->get_var($wpdb->prepare("SELECT tax_rate_id FROM {$wpdb->prefix}woocommerce_tax_rates WHERE tax_rate_name = %s", $rate_name));
+if (!$rate_id) {
+    WC_Tax::_insert_tax_rate(array('tax_rate_country' => 'NL', 'tax_rate_state' => '',
+        'tax_rate' => '21.0000', 'tax_rate_name' => $rate_name, 'tax_rate_priority' => 1,
+        'tax_rate_compound' => 0, 'tax_rate_shipping' => 0, 'tax_rate_order' => 0, 'tax_rate_class' => ''));
+}
+WC_Cache_Helper::invalidate_cache_group('taxes');
 // Only this new isolated database is opened for synthetic checkout tests.
 update_option('woocommerce_coming_soon', 'no');
 update_option('mollie-payments-for-woocommerce_test_mode_enabled', 'yes');
@@ -29,6 +43,7 @@ foreach ($plans as $plan) {
     $product->set_sku($sku);
     $product->set_status('publish');
     $product->set_virtual(true);
+    $product->set_tax_status('taxable');
     $product->set_regular_price($plan[2]);
     $product->update_meta_data('_nenotv_qa_fixture', true);
     // Fixture expectations, not production entitlement metadata.
