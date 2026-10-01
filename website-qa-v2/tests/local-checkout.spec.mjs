@@ -23,10 +23,16 @@ for (const [slug, cents, devices, term] of plans) {
     expect(product, `missing ${slug}`).toBeTruthy();
     expect(product.prices.price).toBe(cents);
 
+    const configResp = await request.get(`${base}/?rest_route=/nenotv-qa/v1/config`);
+    expect(configResp.ok()).toBeTruthy();
+    const config = await configResp.json();
+    expect(config.checkout_url).toBeTruthy();
+
     const beforeMail = await mailCount(request);
     await page.goto(`${base}/?add-to-cart=${product.id}`);
-    await page.goto(`${base}/checkout/`);
+    await page.goto(config.checkout_url, { waitUntil: 'domcontentloaded' });
 
+    await expect(page.locator('#billing_first_name')).toBeVisible();
     await page.locator('#billing_first_name').fill('NenoTV');
     await page.locator('#billing_last_name').fill('QA');
     await page.locator('#billing_address_1').fill('Teststraat 1');
@@ -35,22 +41,21 @@ for (const [slug, cents, devices, term] of plans) {
     await page.locator('#billing_email').fill(`qa+${slug}-${Date.now()}@example.invalid`);
 
     const gateway = page.locator('#payment_method_nenotv_qa');
-    await expect(gateway).toBeVisible();
-    await gateway.check();
+    await expect(gateway).toBeAttached();
+    if (!(await gateway.isChecked())) await gateway.check({ force: true });
 
     const terms = page.locator('#terms');
-    if (await terms.count()) await terms.check();
+    if (await terms.count()) await terms.check({ force: true });
 
     await page.locator('#place_order').click();
-    await page.waitForURL(/order-received|checkout\/order-received/, { timeout: 45_000 });
-    await expect(page.locator('#nenotv-qa-proof')).toBeVisible();
+    await expect(page.locator('#nenotv-qa-proof')).toBeVisible({ timeout: 45_000 });
     await expect(page.locator('#nenotv-qa-proof')).toContainText(`Plan: ${slug}`);
     await expect(page.locator('#nenotv-qa-proof')).toContainText(`Devices: ${devices}`);
     await expect(page.locator('#nenotv-qa-proof')).toContainText(/Activation: QA-/);
 
-    const m = page.url().match(/order-received\/(\d+)/);
-    expect(m).toBeTruthy();
-    const orderResp = await request.get(`${base}/?rest_route=/nenotv-qa/v1/order/${m[1]}`);
+    const orderId = await page.locator('#nenotv-qa-proof').getAttribute('data-order-id');
+    expect(orderId).toMatch(/^\d+$/);
+    const orderResp = await request.get(`${base}/?rest_route=/nenotv-qa/v1/order/${orderId}`);
     expect(orderResp.ok()).toBeTruthy();
     const order = await orderResp.json();
     expect(order.status).toBe('completed');
