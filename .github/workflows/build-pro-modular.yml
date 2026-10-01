@@ -1,8 +1,8 @@
-name: Build NenoTV Pro Modular v0.2 split-aware QA
+name: Build NenoTV Play v0.13.1 modular
 
 on:
   push:
-    branches: [ nenotv-pro-modularization-v0.2-qa-splitfix ]
+    branches: [ nenotv-v0.13.1-play-release ]
     paths:
       - '.github/workflows/build-pro-modular.yml'
       - 'tools/prepare_pro.py'
@@ -934,6 +934,17 @@ jobs:
           cd base/RA_IPTV_Android_v0.1
           python3 "$GITHUB_WORKSPACE/tools/prepare_pro.py"
 
+      - name: Finalize NenoTV Play package and branding
+        run: |
+          set -euo pipefail
+          cd base/RA_IPTV_Android_v0.1
+          python3 "$GITHUB_WORKSPACE/tools/finalize_play_release.py"
+          grep -q "applicationId 'com.nenotv.player'" app/build.gradle
+          grep -q "versionCode 69" app/build.gradle
+          grep -q "versionName '0.13.1-play1'" app/build.gradle
+          ! grep -Rni --exclude-dir=build --exclude='*.png' --exclude='*.jpg' --exclude='*.webp' "nivaro" app proextras
+          ! grep -Rni --exclude-dir=build "com.robertalt.raiptv" app proextras
+
       - name: Apply Android 26+ compatibility repair
         run: |
           set -euo pipefail
@@ -944,12 +955,12 @@ jobs:
       - name: Archive generated modular source
         run: |
           set -euo pipefail
-          tar -czf NenoTV-Pro-Modular-dev1-source.tar.gz -C base RA_IPTV_Android_v0.1
+          tar -czf NenoTV-Play-v0.13.1-source.tar.gz -C base RA_IPTV_Android_v0.1
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-Pro-Modular-dev1-source
-          path: NenoTV-Pro-Modular-dev1-source.tar.gz
+          name: NenoTV-Play-v0.13.1-source
+          path: NenoTV-Play-v0.13.1-source.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -1045,12 +1056,24 @@ jobs:
           print("\n".join(lines))
           PY
           grep -n "applicationId\|versionCode\|versionName\|dynamicFeatures" base/RA_IPTV_Android_v0.1/app/build.gradle | tee pro-version.txt
+          grep -q "applicationId 'com.nenotv.player'" base/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "versionCode 69" base/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "versionName '0.13.1-play1'" base/RA_IPTV_Android_v0.1/app/build.gradle
+          if unzip -p "$AAB" | strings | grep -qi "nivaro"; then
+            echo "Legacy Nivaro branding found inside AAB"
+            exit 2
+          fi
+          if unzip -p "$AAB" | strings | grep -q "com.robertalt.raiptv"; then
+            echo "Legacy package namespace found inside AAB"
+            exit 2
+          fi
 
       - name: Download bundletool
         run: |
           set -euo pipefail
           curl -fL --retry 3 -o bundletool.jar https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar
           java -jar bundletool.jar version
+          java -jar bundletool.jar validate --bundle=base/RA_IPTV_Android_v0.1/app/build/outputs/bundle/release/app-release.aab
 
       - name: Enable KVM for split-aware smoke
         run: |
@@ -1072,7 +1095,7 @@ jobs:
       - name: Upload modular Pro build
         uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-Pro-Modular-dev1-build
+          name: NenoTV-Play-v0.13.1-build
           path: |
             base/RA_IPTV_Android_v0.1/app/build/outputs/bundle/release/app-release.aab
             pro-size-report.txt
