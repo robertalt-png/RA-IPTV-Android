@@ -31,6 +31,13 @@ secret_hits=[]
 for m in secret_re.finditer(text):
     key=m.group(1).lower()
     value=m.group(2).strip()
+    line_start=text.rfind('\n',0,m.start())+1
+    line_end=text.find('\n',m.end())
+    line=text[line_start:line_end if line_end>=0 else len(text)]
+    if key == 'token' and re.search(r'\bI CAR\.TOKEN:', line):
+        continue
+    if key == 'password' and re.search(r'\bI AndroidIME:.*\bPasswordIme\.onActivate\(\)', line):
+        continue
     if len(value) < 6:
         continue
     if value.lower() in safe_literals:
