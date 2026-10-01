@@ -1,4 +1,4 @@
-release-run-requested-after-green-full
+release-run-requested-after-trigger-selection-fix
 full_run=36826580857
-qa_head=dcd803831846a02cc4091b14b14cc863bdcfbad2
-requested_at=2026-10-01T07:01:15.538Z
+qa_head=cf2804302a1f07265f0aea4db7f98fb983bc5d83
+requested_at=2026-10-01T07:04:46.169Z
