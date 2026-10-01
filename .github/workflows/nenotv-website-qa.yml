@@ -1,0 +1,43 @@
+name: NenoTV Website QA
+on:
+  push:
+    branches: [nenotv-website-qa-v0.1]
+    paths: [website-qa/**, .github/workflows/nenotv-website-qa.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: website-qa-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  isolated-website:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Start isolated website and seed fixtures
+        run: bash website-qa/setup.sh
+      - name: Verify safety guards
+        working-directory: website-qa
+        run: |
+          test "$(docker compose run --rm -T cli option get mollie-payments-for-woocommerce_test_mode_enabled)" = yes
+          test "$(docker compose run --rm -T cli option get blog_public)" = 0
+          docker compose run --rm -T cli eval 'if (!is_wp_error(wp_remote_get("https://nenotv.com/"))) { exit(1); }'
+      - name: Check products, carts, checkout pages and local mail
+        run: |
+          export QA_CHECKOUT_ID=$(cd website-qa && docker compose run --rm -T cli option get woocommerce_checkout_page_id)
+          node website-qa/smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: website-qa-evidence
+          path: website-qa/results/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Remove disposable environment
+        if: always()
+        working-directory: website-qa
+        run: docker compose down -v
