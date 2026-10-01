@@ -111,7 +111,7 @@ jobs:
             test -n "$(adb shell pidof com.nenotv.player | tr -d '\r')"
 
       - name: Archive Light source
-        run: tar -czf NenoTV-Light-v0.13.2-source.tar.gz -C base RA_IPTV_Android_v0.1
+        run: tar --exclude='*/build' --exclude='*/.gradle' -czf NenoTV-Light-v0.13.2-source.tar.gz -C base RA_IPTV_Android_v0.1
 
       - uses: actions/upload-artifact@v4
         with:
@@ -205,7 +205,7 @@ jobs:
           sha256sum NenoTV-Play-v0.13.2-play1-vc72-UNSIGNED.aab | tee NenoTV-Play-v0.13.2-SHA256.txt
           cp base/RA_IPTV_Android_v0.1/NENOTV_ARCHITECTURE.txt NenoTV-Play-v0.13.2-ARCHITECTURE.txt
           cp base/RA_IPTV_Android_v0.1/proextras/PRO_LIBRARY_ARCHITECTURE.txt NenoTV-Pro-Module-v0.13.2-ARCHITECTURE.txt
-          (cd base/RA_IPTV_Android_v0.1 && zip -qr "$GITHUB_WORKSPACE/NenoTV-Pro-Module-v0.13.2-source.zip" proextras)
+          (cd base/RA_IPTV_Android_v0.1 && zip -qr "$GITHUB_WORKSPACE/NenoTV-Pro-Module-v0.13.2-source.zip" proextras -x 'proextras/build/*')
 
       - name: Validate bundle
         run: |
@@ -243,7 +243,7 @@ jobs:
             test -n "$(adb shell pidof com.nenotv.player | tr -d '\r')"
 
       - name: Archive modular source
-        run: tar -czf NenoTV-Play-v0.13.2-source.tar.gz -C base RA_IPTV_Android_v0.1
+        run: tar --exclude='*/build' --exclude='*/.gradle' -czf NenoTV-Play-v0.13.2-source.tar.gz -C base RA_IPTV_Android_v0.1
 
       - uses: actions/upload-artifact@v4
         with:
