@@ -6,8 +6,8 @@ app = root / "app"
 pro = root / "proextras"
 OLD_PKG = "com.robertalt.raiptv"
 NEW_PKG = "com.nenotv.player"
-VERSION_CODE = 69
-VERSION_NAME = "0.13.1-play1"
+VERSION_CODE = 70
+VERSION_NAME = "0.13.1-play2"
 
 def must(path: Path):
     if not path.exists():
