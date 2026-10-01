@@ -1,4 +1,4 @@
-release-run-requested-after-trigger-selection-fix
+release-run-requested-with-yaml-safe-selector
 full_run=36826580857
-qa_head=cf2804302a1f07265f0aea4db7f98fb983bc5d83
-requested_at=2026-10-01T07:04:46.169Z
+qa_head=62e9282d7d054be4a0a365a87a2b4a8bd2a0783f
+requested_at=2026-10-01T07:06:40.564Z
