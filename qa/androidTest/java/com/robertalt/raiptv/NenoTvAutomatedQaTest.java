@@ -336,6 +336,54 @@ public class NenoTvAutomatedQaTest {
         return clicked[0];
     }
 
+    private View activeViewOnMain(int id) {
+        Collection<Activity> resumed = ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(Stage.RESUMED);
+        for (Activity activity : resumed) {
+            View view = activity.findViewById(id);
+            if (view != null) return view;
+        }
+        return null;
+    }
+
+    private boolean isActiveViewShown(int id) {
+        final boolean[] shown = {false};
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            View view = activeViewOnMain(id);
+            shown[0] = view != null && view.isShown();
+        });
+        return shown[0];
+    }
+
+    private boolean waitActiveViewShown(int id, boolean expected, long timeoutMs) {
+        long deadline = SystemClock.uptimeMillis() + timeoutMs;
+        do {
+            if (isActiveViewShown(id) == expected) return true;
+            SystemClock.sleep(100);
+        } while (SystemClock.uptimeMillis() < deadline);
+        return false;
+    }
+
+    private boolean clickActiveView(int id) {
+        final boolean[] clicked = {false};
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            View view = activeViewOnMain(id);
+            if (view != null && view.isShown()) clicked[0] = view.performClick();
+        });
+        return clicked[0];
+    }
+
+    private String activeText(int id) {
+        final String[] text = {""};
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            View view = activeViewOnMain(id);
+            if (view instanceof TextView && ((TextView) view).getText() != null) {
+                text[0] = ((TextView) view).getText().toString();
+            }
+        });
+        return text[0];
+    }
+
     private void openCardAndPlay(String title) {
         boolean opened = false;
         for (int attempt = 0; attempt < 3 && !opened; attempt++) {
@@ -356,15 +404,14 @@ public class NenoTvAutomatedQaTest {
         assertPlayerTitle(title);
     }
 
-    private UiObject2 showPlayerControls() {
-        UiObject2 controls = findFresh(By.res(PKG, "playPauseButton"), 1000);
-        for (int i = 0; i < 4 && controls == null; i++) {
+    private void showPlayerControls() {
+        boolean shown = waitActiveViewShown(R.id.playPauseButton, true, 1000);
+        for (int i = 0; i < 4 && !shown; i++) {
             clickPlayerSurface();
             device.waitForIdle(500);
-            controls = findFresh(By.res(PKG, "playPauseButton"), 2500);
+            shown = waitActiveViewShown(R.id.playPauseButton, true, 2500);
         }
-        assertNotNull("Player controls did not become visible", controls);
-        return controls;
+        assertTrue("Player controls did not become visible", shown);
     }
 
     @Test public void firstRun_language_and_xtream_profile_connection() {
@@ -406,7 +453,8 @@ public class NenoTvAutomatedQaTest {
         openCardAndPlay("QA NenoTV Live NL");
 
         // v0.12.6.6 regression: player controls must auto-hide during playback.
-        assertTrue("Player controls did not auto-hide", device.wait(Until.gone(By.res(PKG, "playPauseButton")), 7000));
+        assertTrue("Player controls did not auto-hide",
+                waitActiveViewShown(R.id.playPauseButton, false, 7000));
 
         int cx = device.getDisplayWidth() / 2;
         int cy = device.getDisplayHeight() / 2;
@@ -414,15 +462,16 @@ public class NenoTvAutomatedQaTest {
         showPlayerControls();
 
         // When paused, controls must stay visible.
-        tap(By.res(PKG, "playPauseButton"), "playPauseButton");
+        assertTrue("Pause control did not receive its click", clickActiveView(R.id.playPauseButton));
         SystemClock.sleep(4200);
-        assertNotNull("Controls disappeared while paused", device.findObject(By.res(PKG, "playPauseButton")));
+        assertTrue("Controls disappeared while paused",
+                waitActiveViewShown(R.id.playPauseButton, true, 1000));
         showPlayerControls();
-        tap(By.res(PKG, "playPauseButton"), "playPauseButton");
+        assertTrue("Resume control did not receive its click", clickActiveView(R.id.playPauseButton));
 
         // Player favorite button must toggle visually.
-        tap(By.res(PKG, "favoriteButton"), "favoriteButton");
-        assertEquals("♥", visibleText(By.res(PKG, "favoriteButton")));
+        assertTrue("Favorite control did not receive its click", clickActiveView(R.id.favoriteButton));
+        assertEquals("♥", activeText(R.id.favoriteButton));
         backToMainFromPlayer();
 
         clickNav("navEpg");
