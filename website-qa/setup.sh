@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
-docker compose up -d db wordpress mailpit
+docker compose up -d db wordpress mailpit proxy
 ready=false
 for attempt in $(seq 1 15); do
   if docker compose run --rm -T cli core version; then
