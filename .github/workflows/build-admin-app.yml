@@ -41,21 +41,21 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
-      - name: Build installable debug APK
+      - name: Build release APK
         shell: bash
         run: |
           set -euo pipefail
-          gradle -p adminapp :app:assembleDebug --stacktrace
-          cp adminapp/app/build/outputs/apk/debug/app-debug.apk NenoTV-Admin-v0.1.0.apk
-          sha256sum NenoTV-Admin-v0.1.0.apk > SHA256SUMS.txt
-          test -s NenoTV-Admin-v0.1.0.apk
+          gradle -p adminapp :app:assembleRelease --stacktrace
+          cp adminapp/app/build/outputs/apk/release/app-release-unsigned.apk NenoTV-Admin-v0.1.0-unsigned.apk
+          sha256sum NenoTV-Admin-v0.1.0-unsigned.apk > SHA256SUMS.txt
+          test -s NenoTV-Admin-v0.1.0-unsigned.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-Admin-v0.1.0
+          name: NenoTV-Admin-v0.1.0-release
           path: |
-            NenoTV-Admin-v0.1.0.apk
+            NenoTV-Admin-v0.1.0-unsigned.apk
             SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
