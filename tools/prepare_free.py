@@ -1060,3 +1060,184 @@ mx=mx.replace(old,new,1)
 main.write_text(mx)
 
 print("Prepared NenoTV v0.13.0-trial-dev1 access gate")
+
+
+# v0.13.0 trial-dev2: Founding Tester bridge.
+# A personal NenoTV tester link claims a short-lived portal credential once,
+# stores only the returned tester session locally, and then reports lightweight
+# app activity. IPTV credentials, playlist URLs and stream data are never sent.
+gradle=app/"build.gradle"
+gx=gradle.read_text()
+gx=re.sub(r"versionCode\s+\d+","versionCode 67",gx,count=1)
+gx=re.sub(r"versionName\s+'[^']+'","versionName '0.13.0-trial-dev2'",gx,count=1)
+gradle.write_text(gx)
+
+tester_bridge=app/"src/main/java/com/robertalt/raiptv/TesterBridge.java"
+tester_bridge.write_text(r'''package com.robertalt.raiptv;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import org.json.JSONObject;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+
+public final class TesterBridge {
+    private static final String PREFS = "nenotv_founding_tester";
+    private static final String API = "https://nenotv.com/wp-json/nenotv/v1";
+    private static final long HEARTBEAT_MS = 6L * 60L * 60L * 1000L;
+
+    private TesterBridge() {}
+
+    public static final class Result {
+        public final boolean ok;
+        public final String message;
+        Result(boolean ok, String message) { this.ok=ok; this.message=message; }
+    }
+
+    public static Result claim(Context context, String testerId, String access) {
+        try {
+            if (testerId == null || testerId.trim().isEmpty() || access == null || access.trim().isEmpty())
+                return new Result(false, "Ongeldige testerlink");
+            JSONObject body=new JSONObject();
+            body.put("tester_id",testerId.trim());
+            body.put("access",access.trim());
+            body.put("app_version",BuildConfig.VERSION_NAME);
+            body.put("platform","android");
+            JSONObject out=post(API+"/tester/claim",body);
+            if (!out.optBoolean("ok",false))
+                return new Result(false,out.optString("error","Koppeling mislukt"));
+            String session=out.optString("session_token","");
+            if (session.isEmpty()) return new Result(false,"Geen testersessie ontvangen");
+            SharedPreferences p=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+            p.edit()
+                .putString("tester_id",testerId.trim())
+                .putString("session_token",session)
+                .putLong("last_activity",System.currentTimeMillis())
+                .apply();
+            return new Result(true,"Tester gekoppeld");
+        } catch (Throwable e) {
+            return new Result(false,"Koppeling mislukt");
+        }
+    }
+
+    public static void heartbeat(Context context) {
+        try {
+            final Context app=context.getApplicationContext();
+            final SharedPreferences p=app.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+            final String tester=p.getString("tester_id","");
+            final String session=p.getString("session_token","");
+            if (tester.isEmpty() || session.isEmpty()) return;
+            long now=System.currentTimeMillis();
+            if (now-p.getLong("last_activity",0L)<HEARTBEAT_MS) return;
+            p.edit().putLong("last_activity",now).apply();
+            new Thread(() -> {
+                try {
+                    JSONObject body=new JSONObject();
+                    body.put("tester_id",tester);
+                    body.put("session_token",session);
+                    body.put("app_version",BuildConfig.VERSION_NAME);
+                    body.put("platform","android");
+                    JSONObject out=post(API+"/tester/activity",body);
+                    if (!out.optBoolean("ok",false)) p.edit().putLong("last_activity",0L).apply();
+                } catch (Throwable ignored) {
+                    p.edit().putLong("last_activity",0L).apply();
+                }
+            },"nenotv-tester-heartbeat").start();
+        } catch (Throwable ignored) {}
+    }
+
+    private static JSONObject post(String endpoint, JSONObject payload) throws Exception {
+        HttpURLConnection c=(HttpURLConnection)new URL(endpoint).openConnection();
+        c.setConnectTimeout(12000);
+        c.setReadTimeout(12000);
+        c.setRequestMethod("POST");
+        c.setRequestProperty("Accept","application/json");
+        c.setRequestProperty("Content-Type","application/json; charset=utf-8");
+        c.setDoOutput(true);
+        byte[] bytes=payload.toString().getBytes(StandardCharsets.UTF_8);
+        try(OutputStream os=c.getOutputStream()){ os.write(bytes); }
+        int status=c.getResponseCode();
+        InputStream in=(status>=200&&status<400)?c.getInputStream():c.getErrorStream();
+        StringBuilder sb=new StringBuilder();
+        if(in!=null){
+            try(BufferedReader br=new BufferedReader(new InputStreamReader(in,StandardCharsets.UTF_8))){
+                String line; while((line=br.readLine())!=null) sb.append(line);
+            }
+        }
+        c.disconnect();
+        if(sb.length()==0) return new JSONObject().put("ok",false).put("error","http_"+status);
+        return new JSONObject(sb.toString());
+    }
+}
+''')
+
+tester_activity=app/"src/main/java/com/robertalt/raiptv/TesterLinkActivity.java"
+tester_activity.write_text(r'''package com.robertalt.raiptv;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.widget.Toast;
+
+public class TesterLinkActivity extends Activity {
+    @Override protected void onCreate(Bundle state) {
+        super.onCreate(state);
+        Uri uri=getIntent()!=null?getIntent().getData():null;
+        if(uri==null || !"nenotv".equalsIgnoreCase(uri.getScheme()) || !"tester".equalsIgnoreCase(uri.getHost())){
+            finish(); return;
+        }
+        final String tester=uri.getQueryParameter("tester_id");
+        final String access=uri.getQueryParameter("access");
+        Toast.makeText(this,"NenoTV tester koppelen…",Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            final TesterBridge.Result result=TesterBridge.claim(getApplicationContext(),tester,access);
+            new Handler(Looper.getMainLooper()).post(() -> {
+                Toast.makeText(TesterLinkActivity.this,
+                    result.ok ? "NenoTV is gekoppeld aan je test" : "Tester koppelen is niet gelukt",
+                    Toast.LENGTH_LONG).show();
+                Intent i=new Intent(TesterLinkActivity.this,MainActivity.class);
+                i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                startActivity(i);
+                finish();
+            });
+        },"nenotv-tester-claim").start();
+    }
+}
+''')
+
+manifest=app/"src/main/AndroidManifest.xml"
+mm=manifest.read_text()
+if 'android:name=".TesterLinkActivity"' not in mm:
+    activity='''<activity android:name=".TesterLinkActivity" android:exported="true">
+<intent-filter>
+<action android:name="android.intent.action.VIEW"/>
+<category android:name="android.intent.category.DEFAULT"/>
+<category android:name="android.intent.category.BROWSABLE"/>
+<data android:scheme="nenotv" android:host="tester"/>
+</intent-filter>
+</activity>'''
+    if "</application>" not in mm: raise SystemExit("Android manifest application marker missing")
+    mm=mm.replace("</application>",activity+"\n</application>",1)
+    manifest.write_text(mm)
+
+main=app/"src/main/java/com/robertalt/raiptv/MainActivity.java"
+mx=main.read_text()
+if "TesterBridge.heartbeat(this);" not in mx:
+    oi=mx.find("void onCreate(")
+    if oi<0: raise SystemExit("MainActivity onCreate marker missing")
+    si=mx.find("super.onCreate",oi)
+    if si<0: raise SystemExit("MainActivity super.onCreate marker missing")
+    semi=mx.find(";",si)
+    if semi<0: raise SystemExit("MainActivity super.onCreate terminator missing")
+    mx=mx[:semi+1]+"\n        TesterBridge.heartbeat(this);"+mx[semi+1:]
+    main.write_text(mx)
+
+print("Prepared NenoTV v0.13.0-trial-dev2 Founding Tester bridge")
