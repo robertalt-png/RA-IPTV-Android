@@ -78,6 +78,14 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        if (prefs != null && !getToken().isEmpty() && siteCard != null) {
+            refresh();
+        }
+    }
+
+    @Override
     protected void onDestroy() {
         executor.shutdownNow();
         super.onDestroy();
@@ -185,8 +193,8 @@ public class MainActivity extends Activity {
 
         LinearLayout row1 = horizontal();
         addRow(root, row1);
-        visitorsCard = addCard(row1, "Bezoekers", "—", "Koko Analytics", "analytics");
-        pageviewsCard = addCard(row1, "Pageviews", "—", "Koko Analytics", "analytics");
+        visitorsCard = addCard(row1, "Bezoekers", "—", "NenoTV Analytics", "analytics");
+        pageviewsCard = addCard(row1, "Pageviews", "—", "NenoTV Analytics", "analytics");
 
         LinearLayout row2 = horizontal();
         addRow(root, row2);
@@ -241,7 +249,7 @@ public class MainActivity extends Activity {
                 connection.setRequestMethod("GET");
                 connection.setRequestProperty("Accept", "application/json");
                 connection.setRequestProperty("Authorization", "Bearer " + token);
-                connection.setRequestProperty("User-Agent", "NenoTV-Dashboard/0.1.2 Android");
+                connection.setRequestProperty("User-Agent", "NenoTV-Dashboard/0.1.3 Android");
 
                 int code = connection.getResponseCode();
                 InputStream stream = code >= 200 && code < 300 ? connection.getInputStream() : connection.getErrorStream();
