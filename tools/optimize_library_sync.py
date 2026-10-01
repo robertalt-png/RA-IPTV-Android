@@ -1,8 +1,8 @@
 from pathlib import Path
 
-p=Path("app/src/main/java/com/nenotv/player/MainActivity.java")
+p=Path("app/src/main/java/com/robertalt/raiptv/MainActivity.java")
 if not p.exists():
-    raise SystemExit("MainActivity.java not found after package finalization")
+    raise SystemExit("MainActivity.java not found")
 s=p.read_text()
 
 start=s.find("    void refreshSearchIndex(boolean force){")
