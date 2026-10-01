@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+private/
+results/
+*.sql
+*.zip
+*.log
