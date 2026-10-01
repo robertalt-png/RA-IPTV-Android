@@ -6,12 +6,14 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
@@ -80,7 +82,10 @@ public class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         handler.removeCallbacks(autoRefresh);
-        if (!SecureStore.getToken(this).isEmpty()) handler.postDelayed(autoRefresh, 60000);
+        if (!SecureStore.getToken(this).isEmpty()) {
+            if (data != null) requestData(false);
+            handler.postDelayed(autoRefresh, 60000);
+        }
     }
 
     @Override protected void onPause() {
@@ -115,6 +120,27 @@ public class MainActivity extends Activity {
         return d;
     }
 
+    private void applySystemInsets(View target, int baseLeft, int baseTop, int baseRight, int baseBottom) {
+        target.setOnApplyWindowInsetsListener((v, insets) -> {
+            int left = 0, top = 0, right = 0, bottom = 0;
+            if (Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                left = bars.left;
+                top = bars.top;
+                right = bars.right;
+                bottom = bars.bottom;
+            } else {
+                left = insets.getSystemWindowInsetLeft();
+                top = insets.getSystemWindowInsetTop();
+                right = insets.getSystemWindowInsetRight();
+                bottom = insets.getSystemWindowInsetBottom();
+            }
+            v.setPadding(dp(baseLeft) + left, dp(baseTop) + top, dp(baseRight) + right, dp(baseBottom) + bottom);
+            return insets;
+        });
+        target.requestApplyInsets();
+    }
+
     private Button button(String label) {
         Button b = new Button(this);
         b.setText(label);
@@ -131,8 +157,8 @@ public class MainActivity extends Activity {
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);
-        root.setPadding(dp(26), dp(30), dp(26), dp(30));
         root.setBackgroundColor(BG);
+        applySystemInsets(root, 26, 30, 26, 30);
 
         TextView logo = text("N", 44, ACCENT, true);
         logo.setGravity(Gravity.CENTER);
@@ -210,6 +236,7 @@ public class MainActivity extends Activity {
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BG);
+        applySystemInsets(root, 0, 0, 0, 0);
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
@@ -498,7 +525,7 @@ public class MainActivity extends Activity {
         section("Vandaag");
         metricPair("Live bezoekers",String.valueOf(analytics==null?0:analytics.optInt("live_visitors",0)),"laatste 5 min",
                 "Bezoekers",String.valueOf(today==null?0:today.optInt("visitors",0)),"vandaag");
-        metricPair("App actief",String.valueOf(usage==null?0:usage.optInt("active_24h",0)),"laatste 24 uur",
+        metricPair("App-apparaten 24u",String.valueOf(usage==null?0:usage.optInt("active_24h",0)),"laatste 24 uur",
                 "Testers actief",String.valueOf(testers==null?0:testers.optInt("active_today",0)),"vandaag");
         metricPair("Orders",String.valueOf(today==null?0:today.optInt("orders",0)),"vandaag",
                 "Omzet",money(today==null?0:today.optDouble("revenue",0),today==null?"EUR":today.optString("currency","EUR")),"vandaag");
