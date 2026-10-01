@@ -243,13 +243,17 @@ public class MainActivity extends Activity {
 
         executor.execute(() -> {
             try {
-                HttpURLConnection connection = (HttpURLConnection) new URL(API_URL).openConnection();
+                URL requestUrl = new URL(API_URL + "?fresh=" + System.currentTimeMillis());
+                HttpURLConnection connection = (HttpURLConnection) requestUrl.openConnection();
+                connection.setUseCaches(false);
                 connection.setConnectTimeout(10000);
                 connection.setReadTimeout(10000);
                 connection.setRequestMethod("GET");
                 connection.setRequestProperty("Accept", "application/json");
                 connection.setRequestProperty("Authorization", "Bearer " + token);
-                connection.setRequestProperty("User-Agent", "NenoTV-Dashboard/0.1.3 Android");
+                connection.setRequestProperty("Cache-Control", "no-cache, no-store, max-age=0");
+                connection.setRequestProperty("Pragma", "no-cache");
+                connection.setRequestProperty("User-Agent", "NenoTV-Dashboard/0.1.4 Android");
 
                 int code = connection.getResponseCode();
                 InputStream stream = code >= 200 && code < 300 ? connection.getInputStream() : connection.getErrorStream();
