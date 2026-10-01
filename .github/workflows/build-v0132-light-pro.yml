@@ -101,7 +101,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            set -euo pipefail
+            set -eu
             adb install -r "$GITHUB_WORKSPACE/NenoTV-Light-v0.13.2-vc71-TEST-SIGNED.apk"
             adb logcat -c
             adb shell monkey -p com.nenotv.player -c android.intent.category.LAUNCHER 1 >/dev/null
@@ -229,7 +229,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            set -euo pipefail
+            set -eu
             KS="$HOME/.android/nenotv-v0132-qa.jks"
             if [ ! -f "$KS" ]; then keytool -genkeypair -v -keystore "$KS" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=NenoTV QA,O=NenoTV,C=NL" >/dev/null 2>&1; fi
             java -jar "$GITHUB_WORKSPACE/bundletool.jar" build-apks --bundle="$GITHUB_WORKSPACE/NenoTV-Play-v0.13.2-play1-vc72-UNSIGNED.aab" --output="$GITHUB_WORKSPACE/v0132.apks" --overwrite --local-testing --ks="$KS" --ks-key-alias=androiddebugkey --ks-pass=pass:android --key-pass=pass:android
