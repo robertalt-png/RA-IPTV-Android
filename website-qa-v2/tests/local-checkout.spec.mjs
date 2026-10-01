@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const base = process.env.LOCAL_BASE_URL || 'http://127.0.0.1:8090';
+const base = process.env.LOCAL_BASE_URL || 'http://localhost:8090';
 const plans = [
   ['solo-yearly','899',1,'yearly'],
   ['solo-lifetime','1799',1,'lifetime'],
@@ -27,11 +27,17 @@ for (const [slug, cents, devices, term] of plans) {
     expect(configResp.ok()).toBeTruthy();
     const config = await configResp.json();
     expect(config.checkout_url).toBeTruthy();
+    expect(config.cart_url).toBeTruthy();
 
     const beforeMail = await mailCount(request);
-    await page.goto(`${base}/?add-to-cart=${product.id}`);
-    await page.goto(config.checkout_url, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${base}/?add-to-cart=${product.id}`, { waitUntil: 'domcontentloaded' });
 
+    // Prove the browser session really owns a WooCommerce cart before opening checkout.
+    await page.goto(config.cart_url, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('body')).not.toContainText(/your cart is currently empty/i);
+    await expect(page.locator('body')).toContainText(product.name);
+
+    await page.goto(config.checkout_url, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#billing_first_name')).toBeVisible();
     await page.locator('#billing_first_name').fill('NenoTV');
     await page.locator('#billing_last_name').fill('QA');
