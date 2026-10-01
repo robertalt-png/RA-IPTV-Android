@@ -8,7 +8,8 @@ on:
       - '.github/workflows/build-pro-modular.yml'
       - 'tools/prepare_pro.py'
       - 'tools/prepare_light.py'
-      - 'tools/finalize_play_release.py'\n      - 'tools/optimize_library_sync.py'
+      - 'tools/finalize_play_release.py'
+      - 'tools/optimize_library_sync.py'
       - 'tools/repair_android_compat.py'
       - 'tools/pro_split_base_smoke.sh'
       - 'patches/**'
@@ -997,15 +998,6 @@ jobs:
           set -euo pipefail
           rm -rf app/build proextras/build build .gradle
           gradle --no-daemon --no-build-cache --rerun-tasks clean :app:bundleRelease
-
-      - name: Export standalone Light APK
-        run: |
-          set -euo pipefail
-          find base/RA_IPTV_Android_v0.1/app/build/outputs/apk -type f -name '*.apk' -print
-          APK="$(find base/RA_IPTV_Android_v0.1/app/build/outputs/apk -type f -name '*.apk' | head -n 1)"
-          test -n "$APK"
-          test -s "$APK"
-          cp "$APK" NenoTV-Light-v0.13.1-unsigned.apk
 
       - name: Verify modular payload placement
         run: |
