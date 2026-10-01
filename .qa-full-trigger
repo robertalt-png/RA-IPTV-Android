@@ -1,4 +1,4 @@
-full-run-requested-after-direct-player-view-checks
-previous_full_run=36757722615
-qa_head=2d1d4b3061ed93153480421e95c88ca7f59e0c22
-requested_at=2026-10-01T05:10:43.896Z
+full-run-requested-after-framework-log-filter-fix
+previous_full_run=36818543442
+qa_head=da8c870d044b4b7e3d145e1bb1e432477d77aab6
+requested_at=2026-10-01T06:46:23.977Z
