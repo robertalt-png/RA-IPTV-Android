@@ -1,8 +1,8 @@
-name: Build NenoTV Trial v0.13.0 dev2
+name: Build NenoTV Trial v0.13.0 dev3
 
 on:
   push:
-    branches: [ nenotv-v0.13.0-trial-dev2-founding-testers ]
+    branches: [ nenotv-v0.13.0-trial-dev3-tester-monitoring ]
   workflow_dispatch:
 
 permissions:
@@ -933,12 +933,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tar -czf NenoTV-Trial-v0.13.0-dev2-source.tar.gz -C base RA_IPTV_Android_v0.1
+          tar -czf NenoTV-Trial-v0.13.0-dev3-source.tar.gz -C base RA_IPTV_Android_v0.1
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-Trial-v0.13.0-dev2-source
-          path: NenoTV-Trial-v0.13.0-dev2-source.tar.gz
+          name: NenoTV-Trial-v0.13.0-dev3-source
+          path: NenoTV-Trial-v0.13.0-dev3-source.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -978,17 +978,17 @@ jobs:
           AAB="base/RA_IPTV_Android_v0.1/app/build/outputs/bundle/release/app-release.aab"
           test -s "$AAB"
           "$AAPT" dump badging "$IN" | tee free-badging.txt
-          grep -q "package: name='com.robertalt.raiptv' versionCode='67' versionName='0.13.0-trial-dev2'" free-badging.txt
-          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-Trial-v0.13.0-dev2-aligned-unsigned.apk
-          "$ZIPALIGN" -c -p 4 NenoTV-Trial-v0.13.0-dev2-aligned-unsigned.apk
+          grep -q "package: name='com.robertalt.raiptv' versionCode='68' versionName='0.13.0-trial-dev3'" free-badging.txt
+          "$ZIPALIGN" -p -f 4 "$IN" NenoTV-Trial-v0.13.0-dev3-aligned-unsigned.apk
+          "$ZIPALIGN" -c -p 4 NenoTV-Trial-v0.13.0-dev3-aligned-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
-          ls -lh NenoTV-Trial-v0.13.0-dev2-aligned-unsigned.apk
+          ls -lh NenoTV-Trial-v0.13.0-dev3-aligned-unsigned.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-Trial-v0.13.0-dev2-build
+          name: NenoTV-Trial-v0.13.0-dev3-build
           path: |
-            NenoTV-Trial-v0.13.0-dev2-aligned-unsigned.apk
+            NenoTV-Trial-v0.13.0-dev3-aligned-unsigned.apk
             base/RA_IPTV_Android_v0.1/app/build/outputs/bundle/release/app-release.aab
             free-badging.txt
             apksigner.jar
@@ -997,15 +997,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf build-output/v0.13.0-trial-dev2
-          mkdir -p build-output/v0.13.0-trial-dev2
-          cp NenoTV-Trial-v0.13.0-dev2-aligned-unsigned.apk build-output/v0.13.0-trial-dev2/
-          cp base/RA_IPTV_Android_v0.1/app/build/outputs/bundle/release/app-release.aab build-output/v0.13.0-trial-dev2/NenoTV-Trial-v0.13.0-dev2-unsigned.aab
-          cp free-badging.txt build-output/v0.13.0-trial-dev2/
-          cp apksigner.jar build-output/v0.13.0-trial-dev2/
-          sha256sum build-output/v0.13.0-trial-dev2/* > build-output/v0.13.0-trial-dev2/SHA256SUMS.txt
+          rm -rf build-output/v0.13.0-trial-dev3
+          mkdir -p build-output/v0.13.0-trial-dev3
+          cp NenoTV-Trial-v0.13.0-dev3-aligned-unsigned.apk build-output/v0.13.0-trial-dev3/
+          cp base/RA_IPTV_Android_v0.1/app/build/outputs/bundle/release/app-release.aab build-output/v0.13.0-trial-dev3/NenoTV-Trial-v0.13.0-dev3-unsigned.aab
+          cp free-badging.txt build-output/v0.13.0-trial-dev3/
+          cp apksigner.jar build-output/v0.13.0-trial-dev3/
+          sha256sum build-output/v0.13.0-trial-dev3/* > build-output/v0.13.0-trial-dev3/SHA256SUMS.txt
           git config user.name "NenoTV Build Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add build-output/v0.13.0-trial-dev2
-          git commit -m "build: publish NenoTV Free v0.13.0-trial-dev2 handoff [skip ci]"
-          git push origin HEAD:nenotv-v0.13.0-trial-dev2-play-handoff
+          git add build-output/v0.13.0-trial-dev3
+          git commit -m "build: publish NenoTV Free v0.13.0-trial-dev3 handoff [skip ci]"
+          git push origin HEAD:nenotv-v0.13.0-trial-dev3-play-handoff
