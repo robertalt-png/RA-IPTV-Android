@@ -1580,3 +1580,5 @@ tx=tx.replace('Intent i=new Intent(TesterLinkActivity.this,MainActivity.class);'
 tester_activity.write_text(tx)
 
 print("Prepared NenoTV v0.13.0-trial-dev3: privacy-friendly Founding Tester monitoring")
+
+# dev3-monitoring-build-trigger
