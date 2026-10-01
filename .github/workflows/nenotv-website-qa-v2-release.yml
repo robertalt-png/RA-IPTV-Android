@@ -1,0 +1,39 @@
+name: NenoTV Website QA v2 Release Gate
+on:
+  workflow_dispatch:
+    inputs:
+      staging_paid_confirmed:
+        description: Paid Mollie staging run reviewed
+        required: true
+        type: boolean
+        default: false
+      refund_chargeback_confirmed:
+        description: Refund/chargeback evidence reviewed
+        required: true
+        type: boolean
+        default: false
+      device_entitlement_confirmed:
+        description: Solo/Multi entitlement/device evidence reviewed
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  browser-readonly:
+    uses: ./.github/workflows/nenotv-website-qa-v2-full.yml
+  gate:
+    needs: browser-readonly
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require staging evidence
+        env:
+          PAID: ${{ inputs.staging_paid_confirmed }}
+          REFUND: ${{ inputs.refund_chargeback_confirmed }}
+          DEVICE: ${{ inputs.device_entitlement_confirmed }}
+        run: |
+          test "$PAID" = true || { echo 'BLOCKED: paid staging evidence missing'; exit 2; }
+          test "$REFUND" = true || { echo 'BLOCKED: refund/chargeback evidence missing'; exit 2; }
+          test "$DEVICE" = true || { echo 'BLOCKED: entitlement/device evidence missing'; exit 2; }
+          echo 'Website commerce release evidence gate passed.'

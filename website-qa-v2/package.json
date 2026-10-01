@@ -1,0 +1,16 @@
+{
+  "name": "nenotv-website-qa-v2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "qa:local": "playwright test tests/local-checkout.spec.mjs --project=chromium",
+    "qa:public": "playwright test tests/public-readonly.spec.mjs",
+    "qa:a11y": "playwright test tests/accessibility.spec.mjs",
+    "qa:staging": "node scripts/staging-guard.mjs && playwright test tests/staging-commerce.spec.mjs --project=chromium",
+    "qa:full": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.56.1"
+  }
+}

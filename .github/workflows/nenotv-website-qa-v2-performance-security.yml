@@ -1,0 +1,41 @@
+name: NenoTV Website QA v2 Performance and Passive Security
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 3 * * 2,5'
+permissions:
+  contents: read
+jobs:
+  lighthouse:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - working-directory: website-qa-v2
+        run: |
+          npm install --no-audit --no-fund
+          npx @lhci/cli@0.15.x autorun
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-evidence
+          path: website-qa-v2/results/lighthouse/
+          if-no-files-found: warn
+          retention-days: 30
+  zap-passive:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: ZAP baseline passive scan only
+        run: |
+          mkdir -p website-qa-v2/results/zap
+          docker run --rm -v "$PWD/website-qa-v2/results/zap:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable             zap-baseline.py -t https://nenotv.com -m 3 -J zap.json -r zap.html || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-passive-evidence
+          path: website-qa-v2/results/zap/
+          if-no-files-found: warn
+          retention-days: 30

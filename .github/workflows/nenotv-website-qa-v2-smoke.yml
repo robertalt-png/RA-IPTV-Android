@@ -1,0 +1,50 @@
+name: NenoTV Website QA v2 Smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [nenotv-website-qa-v2]
+    paths:
+      - 'website-qa/**'
+      - 'website-qa-v2/**'
+      - '.github/workflows/nenotv-website-qa-v2-*.yml'
+permissions:
+  contents: read
+concurrency:
+  group: website-qa-v2-smoke-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  isolated-checkout:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - name: Start isolated WordPress/WooCommerce
+        run: bash website-qa/setup.sh
+      - name: Install browser QA
+        working-directory: website-qa-v2
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Complete all four checkout journeys
+        working-directory: website-qa-v2
+        env:
+          LOCAL_BASE_URL: http://127.0.0.1:8090
+        run: npm run qa:local
+      - name: Verify production remains unreachable from isolated WordPress
+        working-directory: website-qa
+        run: |
+          test "$(docker compose run --rm -T cli option get mollie-payments-for-woocommerce_test_mode_enabled)" = yes
+          docker compose run --rm -T cli eval 'if (!is_wp_error(wp_remote_get("https://nenotv.com/"))) { exit(1); }'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: website-qa-v2-smoke-evidence
+          path: website-qa-v2/results/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Destroy disposable environment
+        if: always()
+        working-directory: website-qa
+        run: docker compose down -v

@@ -31,6 +31,7 @@ services:
     volumes: &wp_volumes
       - wordpress:/var/www/html
       - ./guard.php:/var/www/html/wp-content/mu-plugins/nenotv-qa-guard.php:ro
+      - ../website-qa-v2/fixtures/qa-e2e-plugin.php:/var/www/html/wp-content/mu-plugins/nenotv-qa-e2e.php:ro
       - ./bootstrap.php:/qa/bootstrap.php:ro
     networks: [isolated]
   cli:
@@ -44,6 +45,7 @@ services:
     volumes:
       - wordpress:/var/www/html
       - ./guard.php:/var/www/html/wp-content/mu-plugins/nenotv-qa-guard.php:ro
+      - ../website-qa-v2/fixtures/qa-e2e-plugin.php:/var/www/html/wp-content/mu-plugins/nenotv-qa-e2e.php:ro
       - ./bootstrap.php:/qa/bootstrap.php:ro
       - ./network-check.php:/qa/network-check.php:ro
       - packages:/packages:ro

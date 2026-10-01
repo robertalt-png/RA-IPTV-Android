@@ -1,0 +1,42 @@
+name: NenoTV Website QA v2 Staging Commerce
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging-commerce:
+    environment: nenotv-staging
+    strategy:
+      fail-fast: false
+      matrix:
+        mollie_status: [paid, failed, cancelled, expired, pending]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - working-directory: website-qa-v2
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Hard safety guard
+        working-directory: website-qa-v2
+        env:
+          STAGING_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+          STAGING_QA_ENABLED: ${{ vars.STAGING_QA_ENABLED }}
+        run: node scripts/staging-guard.mjs
+      - name: Complete Mollie TEST checkout matrix
+        working-directory: website-qa-v2
+        env:
+          STAGING_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+          STAGING_QA_ENABLED: ${{ vars.STAGING_QA_ENABLED }}
+          MOLLIE_TEST_STATUS: ${{ matrix.mollie_status }}
+        run: npm run qa:staging
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: staging-commerce-${{ matrix.mollie_status }}-evidence
+          path: website-qa-v2/results/
+          if-no-files-found: warn
+          retention-days: 30

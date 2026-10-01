@@ -1,0 +1,38 @@
+name: NenoTV Website QA v2 Full
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  public-readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - working-directory: website-qa-v2
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium firefox webkit
+      - name: EN/NL/DE public read-only browser/device matrix
+        working-directory: website-qa-v2
+        env:
+          PUBLIC_BASE_URL: https://nenotv.com
+        run: npm run qa:public
+      - name: Accessibility observation
+        continue-on-error: true
+        working-directory: website-qa-v2
+        env:
+          PUBLIC_BASE_URL: https://nenotv.com
+        run: npm run qa:a11y
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: website-qa-v2-full-evidence
+          path: website-qa-v2/results/
+          if-no-files-found: warn
+          retention-days: 30

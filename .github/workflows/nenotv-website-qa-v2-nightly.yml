@@ -1,0 +1,10 @@
+name: NenoTV Website QA v2 Nightly
+on:
+  schedule:
+    - cron: '35 2 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  readonly:
+    uses: ./.github/workflows/nenotv-website-qa-v2-full.yml
