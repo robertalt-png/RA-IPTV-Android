@@ -57,10 +57,11 @@ public class MainActivity extends Activity {
     private TextView updated;
     private JSONObject data;
     private int currentTab = 0;
+    private int moreSection = 0;
     private int rangeDays = 7;
     private boolean loading = false;
 
-    private final String[] tabs = {"Overzicht","Analytics","App","Testers","Commerce","Systeem"};
+    private final String[] tabs = {"Overzicht","Analytics","App","Meer"};
 
     private final Runnable autoRefresh = new Runnable() {
         @Override public void run() {
@@ -264,12 +265,10 @@ public class MainActivity extends Activity {
         scroll.addView(content, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         root.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        HorizontalScrollView nav = new HorizontalScrollView(this);
-        nav.setHorizontalScrollBarEnabled(false);
-        nav.setBackgroundColor(CARD);
         LinearLayout navRow = new LinearLayout(this);
         navRow.setOrientation(LinearLayout.HORIZONTAL);
         navRow.setPadding(dp(7), dp(7), dp(7), dp(7));
+        navRow.setBackgroundColor(CARD);
         for (int i=0;i<tabs.length;i++) {
             final int index = i;
             Button b = button(tabs[i]);
@@ -279,12 +278,11 @@ public class MainActivity extends Activity {
                 render();
                 styleTabs(navRow);
             });
-            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(dp(105), dp(48));
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(0, dp(48), 1f);
             blp.setMargins(dp(3),0,dp(3),0);
             navRow.addView(b, blp);
         }
-        nav.addView(navRow);
-        root.addView(nav, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(62)));
+        root.addView(navRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(62)));
         setContentView(root);
         styleTabs(navRow);
         requestData(true);
@@ -328,7 +326,7 @@ public class MainActivity extends Activity {
         c.setRequestMethod("GET");
         c.setRequestProperty("Authorization","Bearer " + token);
         c.setRequestProperty("Accept","application/json");
-        c.setRequestProperty("User-Agent","NenoTV-Admin/0.1.0 Android");
+        c.setRequestProperty("User-Agent","NenoTV-Admin/0.1.2 Android");
         int status=c.getResponseCode();
         String body=read(status>=200&&status<300 ? c.getInputStream() : c.getErrorStream());
         c.disconnect();
@@ -400,9 +398,7 @@ public class MainActivity extends Activity {
         switch(currentTab) {
             case 1: renderAnalytics(); break;
             case 2: renderApp(); break;
-            case 3: renderTesters(); break;
-            case 4: renderCommerce(); break;
-            case 5: renderSystem(); break;
+            case 3: renderMore(); break;
             default: renderDashboard();
         }
     }
@@ -480,7 +476,8 @@ public class MainActivity extends Activity {
         if(s.equals("online")||s.equals("live")||s.equals("active")||s.equals("ready")) return "● Online";
         if(s.equals("not_live")||s.equals("shadow")||s.equals("yes")||s.equals("test")) return "● Test";
         if(s.equals("offline")||s.equals("error")||s.equals("failed")) return "● Probleem";
-        if(s.equals("idle")) return "● Rust";
+        if(s.equals("prelaunch")) return "● Uitgeschakeld";
+        if(s.equals("idle")) return "● Niet actief";
         return state;
     }
 
@@ -520,7 +517,7 @@ public class MainActivity extends Activity {
         statusLine(s,"Site Bridge / bot",system==null?"offline":system.optString("site_bridge","offline"),"Beheerverbinding met NenoTV");
         statusLine(s,"App Bridge",system==null?"offline":system.optString("app_bridge","offline"),app==null?"":("v"+app.optString("bridge_version","")));
         String player=(usage!=null&&usage.optInt("active_5m",0)>0)?"active":"idle";
-        statusLine(s,"Playergebruik",player,(usage==null?0:usage.optInt("active_5m",0))+" apparaat/apparaten actief in 5 min");
+        statusLine(s,"Appgebruik",player,(usage==null?0:usage.optInt("active_5m",0))+" echte Android-apparaten actief in 5 min");
 
         section("Vandaag");
         metricPair("Live bezoekers",String.valueOf(analytics==null?0:analytics.optInt("live_visitors",0)),"laatste 5 min",
@@ -563,11 +560,18 @@ public class MainActivity extends Activity {
         rangeButtons();
         JSONObject detail=data.optJSONObject("analytics_detail");
         JSONObject sum=detail==null?null:detail.optJSONObject("summary");
+        JSONObject prev=detail==null?null:detail.optJSONObject("previous");
         section("Bezoekers");
-        metricPair("Bezoekers",String.valueOf(sum==null?0:sum.optInt("visitors",0)),rangeDays+" dagen",
-                "Sessies",String.valueOf(sum==null?0:sum.optInt("sessions",0)),rangeDays+" dagen");
+        metricPair("Bezoekers",String.valueOf(sum==null?0:sum.optInt("visitors",0)),rangeLabel(),
+                "Sessies",String.valueOf(sum==null?0:sum.optInt("sessions",0)),rangeLabel());
         metricPair("Pageviews",String.valueOf(sum==null?0:sum.optInt("pageviews",0)),"",
                 "Landen",String.valueOf(sum==null?0:sum.optInt("countries",0)),"");
+
+        section("Trend");
+        LinearLayout trend=box();
+        row(trend,"Bezoekers",trendText(sum==null?0:sum.optInt("visitors",0),prev==null?0:prev.optInt("visitors",0)));
+        row(trend,"Sessies",trendText(sum==null?0:sum.optInt("sessions",0),prev==null?0:prev.optInt("sessions",0)));
+        row(trend,"Pageviews",trendText(sum==null?0:sum.optInt("pageviews",0),prev==null?0:prev.optInt("pageviews",0)));
 
         section("Per dag");
         LinearLayout daily=box();
@@ -575,7 +579,7 @@ public class MainActivity extends Activity {
         if(days==null||days.length()==0) row(daily,"Nog geen data","—");
         else for(int i=0;i<days.length();i++){
             JSONObject x=days.optJSONObject(i);
-            if(x!=null) row(daily,x.optString("day",""),x.optString("visitors","0")+" bezoekers · "+x.optString("pageviews","0")+" views");
+            if(x!=null) row(daily,shortDay(x.optString("day","")),x.optString("visitors","0")+" bezoekers · "+x.optString("pageviews","0")+" views");
         }
 
         topList("Top landen",detail==null?null:detail.optJSONArray("countries"),true);
@@ -592,8 +596,7 @@ public class MainActivity extends Activity {
         for(int i=0;i<max;i++){
             JSONObject x=arr.optJSONObject(i);
             if(x==null)continue;
-            String label=x.optString("label","—");
-            if(country&&label.equals("ZZ"))label="Onbekend";
+            String label=analyticsLabel(x.optString("label","—"), country);
             row(b,label,x.optString("visitors","0")+" bezoekers · "+x.optString("pageviews","0")+" views");
         }
     }
@@ -604,8 +607,10 @@ public class MainActivity extends Activity {
         section("App & player");
         LinearLayout s=box();
         statusLine(s,"App public",app==null?"not_live":app.optString("status","not_live"),"Publieke release staat bewust nog uit.");
-        statusLine(s,"App Bridge",app==null?"offline":app.optString("bridge_status","offline"),"Laatste contact: "+(app==null?"—":app.optString("last_contact_gmt","—")));
-        row(s,"Laatste versie",app==null?"—":app.optString("latest_version","—"));
+        statusLine(s,"App Bridge",app==null?"offline":app.optString("bridge_status","offline"),"Bridge v"+(app==null?"—":app.optString("bridge_version","—")));
+        row(s,"Huidige testbuild",app==null?"—":app.optString("test_build_version",app.optString("latest_version","—")));
+        row(s,"Laatst echt gezien",app==null?"—":app.optString("latest_seen_version","—"));
+        row(s,"Laatste appcontact",app==null?"—":app.optString("last_contact_gmt","—"));
         row(s,"Laatste resultaat",app==null?"—":app.optString("last_outcome","—"));
 
         section("Gebruik");
@@ -615,6 +620,26 @@ public class MainActivity extends Activity {
                 "Gem. latency",(u==null?0:u.optInt("avg_latency_ms",0))+" ms","");
         metricPair("Requests",String.valueOf(u==null?0:u.optInt("requests",0)),"",
                 "Errors",String.valueOf(u==null?0:u.optInt("errors",0)),"");
+    }
+
+    private void renderMore() {
+        LinearLayout selector=new LinearLayout(this);
+        selector.setOrientation(LinearLayout.HORIZONTAL);
+        selector.setPadding(0,0,0,dp(10));
+        String[] labels={"Testers","Commerce","Systeem"};
+        for(int i=0;i<labels.length;i++){
+            final int idx=i;
+            Button b=button(labels[i]);
+            b.setBackground(bg(i==moreSection?ACCENT:CARD2,12));
+            b.setOnClickListener(v->{ moreSection=idx; render(); });
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(46),1f);
+            lp.setMargins(dp(2),0,dp(2),0);
+            selector.addView(b,lp);
+        }
+        content.addView(selector);
+        if(moreSection==1) renderCommerce();
+        else if(moreSection==2) renderSystem();
+        else renderTesters();
     }
 
     private void renderTesters() {
@@ -648,24 +673,31 @@ public class MainActivity extends Activity {
                 "Actieve Pro",String.valueOf(access==null?0:access.optInt("active_pro",0)),"");
         LinearLayout b=box();
         statusLine(b,"Mollie",c!=null&&c.optBoolean("mollie_test_mode",true)?"test":"live",c!=null&&c.optBoolean("mollie_test_mode",true)?"Testmodus staat aan":"Live betalingen");
-        statusLine(b,"Publieke verkoop",c!=null&&c.optBoolean("public_sales_enabled",false)?"live":"not_live","Prelaunch-gate");
+        statusLine(b,"Publieke verkoop",c!=null&&c.optBoolean("public_sales_enabled",false)?"live":"prelaunch",c!=null&&c.optBoolean("public_sales_enabled",false)?"Verkoop is geopend":"Prelaunch · verkoop staat bewust uit");
         row(b,"Actieve trials",String.valueOf(access==null?0:access.optInt("active_trials",0)));
     }
 
     private void renderSystem() {
         JSONObject s=data.optJSONObject("system");
-        section("Systeem");
+        section("Systeemgezondheid");
+        LinearLayout h=box();
+        statusLine(h,"Site Bridge / bot",s==null?"offline":s.optString("site_bridge","offline"),"");
+        statusLine(h,"App Bridge",s==null?"offline":s.optString("app_bridge","offline"),"");
+        statusLine(h,"Database",s==null?"offline":s.optString("database","offline"),"");
+        statusLine(h,"Cache",s==null?"offline":s.optString("cache","offline"),"");
+        statusLine(h,"Operations automation",s==null?"offline":s.optString("operations_automation","offline"),"");
+        statusLine(h,"Tester automation",s==null?"offline":s.optString("tester_automation","offline"),"");
+
+        section("Versies & modus");
         LinearLayout b=box();
-        statusLine(b,"Site Bridge / bot",s==null?"offline":s.optString("site_bridge","offline"),"");
-        statusLine(b,"App Bridge",s==null?"offline":s.optString("app_bridge","offline"),"");
         row(b,"WordPress",s==null?"—":s.optString("wordpress","—"));
         row(b,"PHP",s==null?"—":s.optString("php","—"));
         row(b,"WooCommerce",s==null?"—":s.optString("woocommerce","—"));
         row(b,"Entitlements",s==null?"—":s.optString("entitlement_mode","—"));
-        row(b,"Woo coming soon",s==null?"—":s.optString("woocommerce_coming_soon","—"));
+        row(b,"Woo prelaunch",s==null?"—":("yes".equalsIgnoreCase(s.optString("woocommerce_coming_soon","yes"))?"aan":"uit"));
         row(b,"Tijdzone",s==null?"—":s.optString("timezone","—"));
 
-        section("Actieve plugins");
+        section("Plugins");
         LinearLayout p=box();
         JSONArray plugins=s==null?null:s.optJSONArray("plugins");
         if(plugins==null||plugins.length()==0)row(p,"Geen data","—");
@@ -687,6 +719,32 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(52));
         lp.setMargins(0,dp(8),0,dp(20));
         content.addView(unpair,lp);
+    }
+
+    private String rangeLabel() {
+        return rangeDays==1 ? "vandaag" : rangeDays+" dagen";
+    }
+
+    private String shortDay(String day) {
+        if(day==null || day.length()<10) return day==null?"":day;
+        return day.substring(8,10)+"-"+day.substring(5,7);
+    }
+
+    private String analyticsLabel(String raw, boolean country) {
+        if(raw==null || raw.isEmpty()) return "Onbekend";
+        if(country && raw.equalsIgnoreCase("ZZ")) return "Onbekend";
+        if(raw.equalsIgnoreCase("direct")) return "Direct";
+        if(raw.equalsIgnoreCase("desktop")) return "Desktop";
+        if(raw.equalsIgnoreCase("mobile")) return "Mobiel";
+        if(raw.equals("/")) return "Homepage";
+        return raw;
+    }
+
+    private String trendText(int current, int previous) {
+        if(previous<=0) return current>0 ? "Nieuwe meting · geen vorige periode" : "Geen verandering";
+        double pct=((current-previous)*100.0)/previous;
+        String sign=pct>0?"+":"";
+        return sign+String.format(Locale.US,"%.0f",pct)+"% · vorige periode "+previous;
     }
 
     private String money(double value,String currency) {
