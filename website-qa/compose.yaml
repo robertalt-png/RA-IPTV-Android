@@ -1,0 +1,54 @@
+name: nenotv-website-qa
+services:
+  db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: nenotv_qa
+      MARIADB_USER: nenotv_qa
+      MARIADB_PASSWORD: local-qa-only
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [isolated]
+    volumes: ["db:/var/lib/mysql"]
+  wordpress:
+    image: wordpress:7.1.2-php8.3-apache
+    ports: ["127.0.0.1:8090:80"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment: &wp_environment
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: nenotv_qa
+      WORDPRESS_DB_PASSWORD: local-qa-only
+      WORDPRESS_DB_NAME: nenotv_qa
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_ENVIRONMENT_TYPE', 'local');
+        define('DISABLE_WP_CRON', true);
+        define('NENOTV_WEBSITE_QA', true);
+    volumes: &wp_volumes
+      - wordpress:/var/www/html
+      - ./guard.php:/var/www/html/wp-content/mu-plugins/nenotv-qa-guard.php:ro
+      - ./bootstrap.php:/qa/bootstrap.php:ro
+    networks: [isolated]
+  cli:
+    image: wordpress:cli-2.12.0-php8.3
+    user: "33:33"
+    profiles: [tools]
+    environment: *wp_environment
+    volumes: *wp_volumes
+    networks: [isolated, downloads]
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports: ["127.0.0.1:8025:8025"]
+    networks: [isolated]
+networks:
+  isolated:
+    internal: true
+  downloads: {}
+volumes:
+  db: {}
+  wordpress: {}
