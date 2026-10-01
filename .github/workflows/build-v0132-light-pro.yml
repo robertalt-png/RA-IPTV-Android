@@ -1,0 +1,263 @@
+name: Build NenoTV v0.13.2 Light + Pro architecture
+
+on:
+  push:
+    branches: [ nenotv-v0.13.2-light-pro-architecture ]
+    paths:
+      - '.github/workflows/build-v0132-light-pro.yml'
+      - 'tools/prepare_v0132_architecture.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  light:
+    name: Pure Light APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Retrieve proven source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p donor base
+          gh run download 36899587775 --repo robertalt-png/RA-IPTV-Android --name NenoTV-Play-v0.13.1-source --dir donor
+          tar -xzf donor/NenoTV-Play-v0.13.1-source.tar.gz -C base
+
+      - name: Prepare pure Light
+        run: |
+          set -euo pipefail
+          cd base/RA_IPTV_Android_v0.1
+          python3 "$GITHUB_WORKSPACE/tools/prepare_v0132_architecture.py" light
+          grep -q "applicationId 'com.nenotv.player'" app/build.gradle
+          grep -q "versionCode 71" app/build.gradle
+          grep -q "versionName '0.13.2-light-test'" app/build.gradle
+          grep -q "LIGHT_BUILD', 'true'" app/build.gradle
+          test ! -d proextras
+          ! grep -q "dynamicFeatures" app/build.gradle
+          ! grep -q "feature-delivery" app/build.gradle
+          grep -Rqs "provider.items" app/src/main/java
+          grep -Rqs "provider.categories" app/src/main/java
+          ! grep -Rqs "ORDER BY CASE WHEN lang_tag=" app/src/main/java
+          ! grep -Rqs "cats.sort((a,b)->Integer.compare(ContentLanguage.rankText" app/src/main/java
+          cat NENOTV_ARCHITECTURE.txt
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Android SDK
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Build pure Light release APK
+        working-directory: base/RA_IPTV_Android_v0.1
+        run: |
+          set -euo pipefail
+          rm -rf app/build build .gradle
+          gradle --no-daemon --no-build-cache --rerun-tasks clean :app:assembleRelease
+
+      - name: Sign Light test APK
+        run: |
+          set -euo pipefail
+          RAW="$(find base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release -type f -name '*.apk' | head -n1)"
+          test -s "$RAW"
+          KS="$RUNNER_TEMP/nenotv-light-test.jks"
+          keytool -genkeypair -v -keystore "$KS" -storepass android -alias nenotvtest -keypass android -keyalg RSA -keysize 2048 -validity 3650 -dname "CN=NenoTV Light QA,O=NenoTV,C=NL" >/dev/null 2>&1
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -f -p 4 "$RAW" NenoTV-Light-v0.13.2-vc71-aligned.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign --ks "$KS" --ks-pass pass:android --key-pass pass:android --ks-key-alias nenotvtest --out NenoTV-Light-v0.13.2-vc71-TEST-SIGNED.apk NenoTV-Light-v0.13.2-vc71-aligned.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs NenoTV-Light-v0.13.2-vc71-TEST-SIGNED.apk | tee light-signature.txt
+          unzip -l NenoTV-Light-v0.13.2-vc71-TEST-SIGNED.apk > light-apk-files.txt
+          if grep -Eqi 'libvlc|libtranslate_jni|liblanguage_id_l2c_jni|proextras' light-apk-files.txt; then echo "Pro/heavy payload leaked into Light"; exit 2; fi
+          sha256sum NenoTV-Light-v0.13.2-vc71-TEST-SIGNED.apk | tee NenoTV-Light-v0.13.2-SHA256.txt
+          cp base/RA_IPTV_Android_v0.1/NENOTV_ARCHITECTURE.txt NenoTV-Light-v0.13.2-ARCHITECTURE.txt
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Light startup smoke
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -euo pipefail
+            adb install -r "$GITHUB_WORKSPACE/NenoTV-Light-v0.13.2-vc71-TEST-SIGNED.apk"
+            adb logcat -c
+            adb shell monkey -p com.nenotv.player -c android.intent.category.LAUNCHER 1 >/dev/null
+            sleep 7
+            adb logcat -d > "$GITHUB_WORKSPACE/light-startup-logcat.txt"
+            if grep -q "FATAL EXCEPTION" "$GITHUB_WORKSPACE/light-startup-logcat.txt"; then cat "$GITHUB_WORKSPACE/light-startup-logcat.txt"; exit 2; fi
+            test -n "$(adb shell pidof com.nenotv.player | tr -d '\r')"
+
+      - name: Archive Light source
+        run: tar -czf NenoTV-Light-v0.13.2-source.tar.gz -C base RA_IPTV_Android_v0.1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NenoTV-Light-v0.13.2
+          path: |
+            NenoTV-Light-v0.13.2-vc71-TEST-SIGNED.apk
+            NenoTV-Light-v0.13.2-SHA256.txt
+            NenoTV-Light-v0.13.2-ARCHITECTURE.txt
+            NenoTV-Light-v0.13.2-source.tar.gz
+            light-signature.txt
+            light-startup-logcat.txt
+          if-no-files-found: error
+          retention-days: 90
+
+  modular:
+    name: Light base + on-demand Pro module
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Retrieve proven source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p donor base
+          gh run download 36899587775 --repo robertalt-png/RA-IPTV-Android --name NenoTV-Play-v0.13.1-source --dir donor
+          tar -xzf donor/NenoTV-Play-v0.13.1-source.tar.gz -C base
+
+      - name: Prepare modular architecture
+        run: |
+          set -euo pipefail
+          cd base/RA_IPTV_Android_v0.1
+          python3 "$GITHUB_WORKSPACE/tools/prepare_v0132_architecture.py" modular
+          grep -q "applicationId 'com.nenotv.player'" app/build.gradle
+          grep -q "versionCode 72" app/build.gradle
+          grep -q "versionName '0.13.2-play1'" app/build.gradle
+          grep -q "dynamicFeatures = \[':proextras'\]" app/build.gradle
+          grep -Rqs "provider.items" app/src/main/java
+          grep -Rqs "provider.categories" app/src/main/java
+          ! grep -RniE 'provider\.items|provider\.categories|XtreamProvider|M3uProvider|HttpText|XtreamUrls|com\.nenotv\.player\.provider' proextras/src/main/java
+          grep -Rqs "class ProLibraryOptimizer" proextras/src/main/java
+          grep -Rqs "ProLibraryBridge.optimize" app/src/main/java
+          cat NENOTV_ARCHITECTURE.txt
+          cat proextras/PRO_LIBRARY_ARCHITECTURE.txt
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Android SDK
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Build modular Play AAB
+        working-directory: base/RA_IPTV_Android_v0.1
+        run: |
+          set -euo pipefail
+          rm -rf app/build proextras/build build .gradle
+          gradle --no-daemon --no-build-cache --rerun-tasks clean :app:bundleRelease
+
+      - name: Verify modular payload
+        run: |
+          set -euo pipefail
+          AAB="base/RA_IPTV_Android_v0.1/app/build/outputs/bundle/release/app-release.aab"
+          test -s "$AAB"
+          python3 - "$AAB" <<'PY'
+          import sys,zipfile,collections
+          p=sys.argv[1]; sums=collections.defaultdict(int); names=[]
+          with zipfile.ZipFile(p) as z:
+              for i in z.infolist(): names.append(i.filename); sums[i.filename.split('/',1)[0]]+=i.compress_size
+          heavy=("libvlc.so","libvlcjni.so","libtranslate_jni.so","liblanguage_id_l2c_jni.so")
+          bad=[n for n in names if n.startswith("base/") and any(h in n for h in heavy)]
+          good=[n for n in names if n.startswith("proextras/") and any(h in n for h in heavy)]
+          if bad: raise SystemExit("Heavy Pro libraries leaked into Light/base: "+str(bad[:10]))
+          if not good: raise SystemExit("Expected Pro native libraries missing")
+          if not any(n.startswith("proextras/") for n in names): raise SystemExit("proextras module absent")
+          open("modular-size.txt","w").write(f'base_compressed_mib={sums["base"]/1024/1024:.2f}\nproextras_compressed_mib={sums["proextras"]/1024/1024:.2f}\n')
+          print(open("modular-size.txt").read())
+          PY
+          cp "$AAB" NenoTV-Play-v0.13.2-play1-vc72-UNSIGNED.aab
+          sha256sum NenoTV-Play-v0.13.2-play1-vc72-UNSIGNED.aab | tee NenoTV-Play-v0.13.2-SHA256.txt
+          cp base/RA_IPTV_Android_v0.1/NENOTV_ARCHITECTURE.txt NenoTV-Play-v0.13.2-ARCHITECTURE.txt
+          cp base/RA_IPTV_Android_v0.1/proextras/PRO_LIBRARY_ARCHITECTURE.txt NenoTV-Pro-Module-v0.13.2-ARCHITECTURE.txt
+          (cd base/RA_IPTV_Android_v0.1 && zip -qr "$GITHUB_WORKSPACE/NenoTV-Pro-Module-v0.13.2-source.zip" proextras)
+
+      - name: Validate bundle
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o bundletool.jar https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar
+          java -jar bundletool.jar validate --bundle=NenoTV-Play-v0.13.2-play1-vc72-UNSIGNED.aab
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Base-only split startup smoke
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -euo pipefail
+            KS="$HOME/.android/nenotv-v0132-qa.jks"
+            if [ ! -f "$KS" ]; then keytool -genkeypair -v -keystore "$KS" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=NenoTV QA,O=NenoTV,C=NL" >/dev/null 2>&1; fi
+            java -jar "$GITHUB_WORKSPACE/bundletool.jar" build-apks --bundle="$GITHUB_WORKSPACE/NenoTV-Play-v0.13.2-play1-vc72-UNSIGNED.aab" --output="$GITHUB_WORKSPACE/v0132.apks" --overwrite --local-testing --ks="$KS" --ks-key-alias=androiddebugkey --ks-pass=pass:android --key-pass=pass:android
+            java -jar "$GITHUB_WORKSPACE/bundletool.jar" install-apks --apks="$GITHUB_WORKSPACE/v0132.apks"
+            adb shell pm path com.nenotv.player | tee "$GITHUB_WORKSPACE/modular-installed-paths.txt"
+            if grep -qi proextras "$GITHUB_WORKSPACE/modular-installed-paths.txt"; then echo "proextras unexpectedly installed with Light base"; exit 2; fi
+            adb logcat -c
+            adb shell monkey -p com.nenotv.player -c android.intent.category.LAUNCHER 1 >/dev/null
+            sleep 7
+            adb logcat -d > "$GITHUB_WORKSPACE/modular-base-startup-logcat.txt"
+            if grep -q "FATAL EXCEPTION" "$GITHUB_WORKSPACE/modular-base-startup-logcat.txt"; then cat "$GITHUB_WORKSPACE/modular-base-startup-logcat.txt"; exit 2; fi
+            test -n "$(adb shell pidof com.nenotv.player | tr -d '\r')"
+
+      - name: Archive modular source
+        run: tar -czf NenoTV-Play-v0.13.2-source.tar.gz -C base RA_IPTV_Android_v0.1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NenoTV-Play-v0.13.2-modular
+          path: |
+            NenoTV-Play-v0.13.2-play1-vc72-UNSIGNED.aab
+            NenoTV-Play-v0.13.2-SHA256.txt
+            NenoTV-Play-v0.13.2-ARCHITECTURE.txt
+            NenoTV-Pro-Module-v0.13.2-ARCHITECTURE.txt
+            NenoTV-Pro-Module-v0.13.2-source.zip
+            NenoTV-Play-v0.13.2-source.tar.gz
+            modular-size.txt
+            modular-installed-paths.txt
+            modular-base-startup-logcat.txt
+          if-no-files-found: error
+          retention-days: 90
