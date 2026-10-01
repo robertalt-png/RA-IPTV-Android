@@ -1241,3 +1241,342 @@ if "TesterBridge.heartbeat(this);" not in mx:
     main.write_text(mx)
 
 print("Prepared NenoTV v0.13.0-trial-dev2 Founding Tester bridge")
+
+
+# v0.13.0 trial-dev3: privacy-friendly Founding Tester monitoring.
+# Tracks only aggregate tester activity: sessions, active seconds/days and broad
+# feature areas. It never sends channel/title/provider/playlist/login details.
+gradle=app/"build.gradle"
+gx=gradle.read_text()
+gx=re.sub(r"versionCode\s+\d+","versionCode 68",gx,count=1)
+gx=re.sub(r"versionName\s+'[^']+'","versionName '0.13.0-trial-dev3'",gx,count=1)
+gradle.write_text(gx)
+
+telemetry=app/"src/main/java/com/robertalt/raiptv/TesterTelemetry.java"
+telemetry.write_text(r'''package com.robertalt.raiptv;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.os.SystemClock;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+
+public final class TesterTelemetry {
+    private static final String PREFS="nenotv_founding_tester";
+    private static final String API="https://nenotv.com/wp-json/nenotv/v1/tester/telemetry";
+    private static final String QUEUE="telemetry_queue_v1";
+    private static final Object LOCK=new Object();
+    private static boolean active=false;
+    private static long sessionStarted=0L;
+    private static long areaStarted=0L;
+    private static String sessionId="";
+    private static String currentArea="";
+    private static final Map<String,Long> areaSeconds=new HashMap<>();
+    private static final Map<String,Integer> areaOpens=new HashMap<>();
+
+    private TesterTelemetry(){}
+
+    private static boolean linked(Context c){
+        SharedPreferences p=c.getApplicationContext().getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+        return !p.getString("tester_id","").isEmpty() && !p.getString("session_token","").isEmpty();
+    }
+
+    public static void beginSession(Context context){
+        final Context app=context.getApplicationContext();
+        if(!linked(app))return;
+        synchronized(LOCK){
+            if(active)return;
+            active=true;
+            sessionStarted=SystemClock.elapsedRealtime();
+            areaStarted=sessionStarted;
+            sessionId=UUID.randomUUID().toString();
+            currentArea="";
+            areaSeconds.clear();
+            areaOpens.clear();
+        }
+        flushPending(app);
+        heartbeat(app);
+    }
+
+    public static void endSession(Context context){
+        final Context app=context.getApplicationContext();
+        final JSONObject payload=new JSONObject();
+        synchronized(LOCK){
+            if(!active)return;
+            long now=SystemClock.elapsedRealtime();
+            finalizeArea(now);
+            long sec=Math.max(1L,Math.min(43200L,(now-sessionStarted)/1000L));
+            try{
+                payload.put("event","session");
+                payload.put("telemetry_session_id",sessionId);
+                payload.put("active_seconds",sec);
+                JSONObject secs=new JSONObject();
+                for(Map.Entry<String,Long> e:areaSeconds.entrySet())secs.put(e.getKey(),Math.max(0L,e.getValue()));
+                JSONObject opens=new JSONObject();
+                for(Map.Entry<String,Integer> e:areaOpens.entrySet())opens.put(e.getKey(),Math.max(0,e.getValue()));
+                payload.put("area_seconds",secs);
+                payload.put("area_opens",opens);
+            }catch(Throwable ignored){}
+            active=false;
+            sessionStarted=0L;
+            areaStarted=0L;
+            sessionId="";
+            currentArea="";
+            areaSeconds.clear();
+            areaOpens.clear();
+        }
+        postOrQueue(app,payload);
+    }
+
+    public static void heartbeat(Context context){
+        if(!linked(context))return;
+        try{
+            JSONObject p=new JSONObject();
+            p.put("event","heartbeat");
+            postOrQueue(context.getApplicationContext(),p);
+        }catch(Throwable ignored){}
+    }
+
+    public static void area(Context context,String raw){
+        if(!linked(context))return;
+        String area=cleanArea(raw);
+        if(area.isEmpty())return;
+        synchronized(LOCK){
+            if(!active)beginSession(context);
+            long now=SystemClock.elapsedRealtime();
+            if(area.equals(currentArea))return;
+            finalizeArea(now);
+            currentArea=area;
+            areaStarted=now;
+            areaOpens.put(area,areaOpens.containsKey(area)?areaOpens.get(area)+1:1);
+        }
+    }
+
+    public static void touch(Context context,String raw){
+        if(!linked(context))return;
+        String area=cleanArea(raw);
+        if(area.isEmpty())return;
+        synchronized(LOCK){
+            if(!active)beginSession(context);
+            areaOpens.put(area,areaOpens.containsKey(area)?areaOpens.get(area)+1:1);
+        }
+    }
+
+    public static void crash(Context context,String type){
+        if(!linked(context) || type==null || type.trim().isEmpty())return;
+        try{
+            JSONObject p=new JSONObject();
+            p.put("event","crash");
+            p.put("telemetry_event_id",UUID.randomUUID().toString());
+            p.put("crash_type",type.trim().substring(0,Math.min(80,type.trim().length())));
+            postOrQueue(context.getApplicationContext(),p);
+        }catch(Throwable ignored){}
+    }
+
+    public static String sectionArea(String section){
+        if(section==null)return "home";
+        String s=section.toLowerCase(Locale.ROOT);
+        if("live".equals(s))return "live";
+        if("epg".equals(s))return "epg";
+        if("vod".equals(s)||"movie".equals(s)||"movies".equals(s))return "movies";
+        if("series".equals(s))return "series";
+        return "home";
+    }
+
+    private static void finalizeArea(long now){
+        if(currentArea.isEmpty()||areaStarted<=0L)return;
+        long sec=Math.max(0L,(now-areaStarted)/1000L);
+        if(sec>0L)areaSeconds.put(currentArea,(areaSeconds.containsKey(currentArea)?areaSeconds.get(currentArea):0L)+sec);
+        areaStarted=now;
+    }
+
+    private static String cleanArea(String raw){
+        if(raw==null)return "";
+        String s=raw.toLowerCase(Locale.ROOT).replaceAll("[^a-z]","");
+        switch(s){
+            case "home":case "live":case "epg":case "movies":case "series":
+            case "search":case "favorites":case "settings":return s;
+            default:return "";
+        }
+    }
+
+    private static JSONObject enrich(Context c,JSONObject base)throws Exception{
+        SharedPreferences p=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+        JSONObject out=new JSONObject(base.toString());
+        out.put("tester_id",p.getString("tester_id",""));
+        out.put("session_token",p.getString("session_token",""));
+        out.put("app_version",BuildConfig.VERSION_NAME);
+        out.put("platform","android");
+        return out;
+    }
+
+    private static void postOrQueue(Context context,JSONObject base){
+        if(base==null||!linked(context))return;
+        final Context app=context.getApplicationContext();
+        final String raw=base.toString();
+        new Thread(()->{
+            try{
+                JSONObject result=post(enrich(app,new JSONObject(raw)));
+                if(!result.optBoolean("ok",false))queue(app,raw);
+            }catch(Throwable e){queue(app,raw);}
+        },"nenotv-tester-telemetry").start();
+    }
+
+    private static void queue(Context c,String raw){
+        synchronized(LOCK){
+            try{
+                SharedPreferences p=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+                JSONArray q=new JSONArray(p.getString(QUEUE,"[]"));
+                q.put(new JSONObject(raw));
+                JSONArray keep=new JSONArray();
+                int start=Math.max(0,q.length()-12);
+                for(int i=start;i<q.length();i++)keep.put(q.getJSONObject(i));
+                p.edit().putString(QUEUE,keep.toString()).apply();
+            }catch(Throwable ignored){}
+        }
+    }
+
+    private static void flushPending(Context context){
+        final Context app=context.getApplicationContext();
+        new Thread(()->{
+            synchronized(LOCK){
+                try{
+                    SharedPreferences p=app.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+                    JSONArray q=new JSONArray(p.getString(QUEUE,"[]"));
+                    if(q.length()==0)return;
+                    JSONArray keep=new JSONArray();
+                    for(int i=0;i<q.length();i++){
+                        JSONObject item=q.getJSONObject(i);
+                        try{
+                            JSONObject result=post(enrich(app,item));
+                            if(!result.optBoolean("ok",false))keep.put(item);
+                        }catch(Throwable e){keep.put(item);}
+                    }
+                    p.edit().putString(QUEUE,keep.toString()).apply();
+                }catch(Throwable ignored){}
+            }
+        },"nenotv-tester-flush").start();
+    }
+
+    private static JSONObject post(JSONObject payload)throws Exception{
+        HttpURLConnection c=(HttpURLConnection)new URL(API).openConnection();
+        c.setConnectTimeout(12000);c.setReadTimeout(12000);c.setRequestMethod("POST");
+        c.setRequestProperty("Accept","application/json");
+        c.setRequestProperty("Content-Type","application/json; charset=utf-8");
+        c.setDoOutput(true);
+        byte[] bytes=payload.toString().getBytes(StandardCharsets.UTF_8);
+        try(OutputStream os=c.getOutputStream()){os.write(bytes);}
+        int status=c.getResponseCode();
+        InputStream in=(status>=200&&status<400)?c.getInputStream():c.getErrorStream();
+        StringBuilder sb=new StringBuilder();
+        if(in!=null)try(BufferedReader br=new BufferedReader(new InputStreamReader(in,StandardCharsets.UTF_8))){
+            String line;while((line=br.readLine())!=null)sb.append(line);
+        }
+        c.disconnect();
+        if(sb.length()==0)return new JSONObject().put("ok",false).put("status",status);
+        return new JSONObject(sb.toString());
+    }
+}
+''')
+
+tester_app=app/"src/main/java/com/robertalt/raiptv/TesterApplication.java"
+tester_app.write_text(r'''package com.robertalt.raiptv;
+
+import android.app.Activity;
+import android.app.Application;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+
+public class TesterApplication extends Application implements Application.ActivityLifecycleCallbacks {
+    private final Handler handler=new Handler(Looper.getMainLooper());
+    private int started=0;
+    private final Runnable finishSession=()->{
+        if(started==0)TesterTelemetry.endSession(getApplicationContext());
+    };
+    private final Runnable heartbeat=new Runnable(){
+        @Override public void run(){
+            if(started>0){
+                TesterTelemetry.heartbeat(getApplicationContext());
+                handler.postDelayed(this,5L*60L*1000L);
+            }
+        }
+    };
+
+    @Override public void onCreate(){
+        super.onCreate();
+        registerActivityLifecycleCallbacks(this);
+    }
+
+    @Override public void onActivityStarted(Activity a){
+        handler.removeCallbacks(finishSession);
+        if(started++==0){
+            TesterTelemetry.beginSession(getApplicationContext());
+            handler.removeCallbacks(heartbeat);
+            handler.postDelayed(heartbeat,5L*60L*1000L);
+        }
+    }
+
+    @Override public void onActivityStopped(Activity a){
+        started=Math.max(0,started-1);
+        if(started==0){
+            handler.removeCallbacks(heartbeat);
+            handler.postDelayed(finishSession,1500L);
+        }
+    }
+
+    @Override public void onActivityCreated(Activity a,Bundle b){}
+    @Override public void onActivityResumed(Activity a){}
+    @Override public void onActivityPaused(Activity a){}
+    @Override public void onActivitySaveInstanceState(Activity a,Bundle b){}
+    @Override public void onActivityDestroyed(Activity a){}
+}
+''')
+
+manifest=app/"src/main/AndroidManifest.xml"
+mm=manifest.read_text()
+if 'android:name=".TesterApplication"' not in mm:
+    mm=mm.replace("<application","<application android:name=\".TesterApplication\"",1)
+manifest.write_text(mm)
+
+main=app/"src/main/java/com/robertalt/raiptv/MainActivity.java"
+mx=main.read_text()
+mx=mx.replace("TesterBridge.heartbeat(this);","TesterBridge.heartbeat(this); String testerCrash=CrashGuard.consumeLastType(this); if(!testerCrash.isEmpty())TesterTelemetry.crash(this,testerCrash);",1)
+mx=mx.replace("void loadHome(){","void loadHome(){ TesterTelemetry.area(this,\"home\");",1)
+mx=mx.replace("void loadSection(String s){","void loadSection(String s){ TesterTelemetry.area(this,TesterTelemetry.sectionArea(s));",1)
+mx=mx.replace("void loadEpg(){","void loadEpg(){ TesterTelemetry.area(this,\"epg\");",1)
+mx=mx.replace("void toggleSearch(){if(search.getVisibility()==View.VISIBLE){","void toggleSearch(){if(search.getVisibility()!=View.VISIBLE)TesterTelemetry.touch(this,\"search\");if(search.getVisibility()==View.VISIBLE){",1)
+mx=mx.replace("if(w==0){library.toggleFavorite(e);","if(w==0){TesterTelemetry.touch(this,\"favorites\");library.toggleFavorite(e);",1)
+mx=mx.replace("CrashGuard.consumeLastType(this);busy(false","busy(false",1)
+mx=mx.replace("@Override protected void onResume(){super.onResume();","@Override protected void onResume(){super.onResume();TesterTelemetry.area(this,TesterTelemetry.sectionArea(section));",1)
+main.write_text(mx)
+
+settings=app/"src/main/java/com/robertalt/raiptv/SettingsActivity.java"
+sx=settings.read_text()
+sx=sx.replace("@Override public void onCreate(Bundle b){super.onCreate(b);","@Override public void onCreate(Bundle b){super.onCreate(b);TesterTelemetry.area(this,\"settings\");",1)
+settings.write_text(sx)
+
+player=app/"src/main/java/com/robertalt/raiptv/PlayerActivity.java"
+px=player.read_text()
+px=px.replace('entry=(MediaEntry)getIntent().getSerializableExtra("media");if(entry==null){finish();return;}title.setText(DisplayText.title(entry));','entry=(MediaEntry)getIntent().getSerializableExtra("media");if(entry==null){finish();return;}TesterTelemetry.area(this,TesterTelemetry.sectionArea(entry.type));title.setText(DisplayText.title(entry));',1)
+player.write_text(px)
+
+tester_activity=app/"src/main/java/com/robertalt/raiptv/TesterLinkActivity.java"
+tx=tester_activity.read_text()
+tx=tx.replace('result.ok ? "NenoTV is gekoppeld aan je test" : "Tester koppelen is niet gelukt",','result.ok ? "NenoTV is gekoppeld aan je test" : "Tester koppelen is niet gelukt",',1)
+tx=tx.replace('Intent i=new Intent(TesterLinkActivity.this,MainActivity.class);','if(result.ok)TesterTelemetry.beginSession(getApplicationContext());\n                Intent i=new Intent(TesterLinkActivity.this,MainActivity.class);',1)
+tester_activity.write_text(tx)
+
+print("Prepared NenoTV v0.13.0-trial-dev3: privacy-friendly Founding Tester monitoring")
