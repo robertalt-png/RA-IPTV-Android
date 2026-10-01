@@ -991,6 +991,13 @@ jobs:
           rm -rf app/build proextras/build build .gradle
           gradle --no-daemon --no-build-cache --rerun-tasks clean :app:bundleRelease
 
+      - name: Export standalone Light APK
+        run: |
+          set -euo pipefail
+          APK="base/RA_IPTV_Android_v0.1/app/build/outputs/apk/release/app-release-unsigned.apk"
+          test -s "$APK"
+          cp "$APK" NenoTV-Light-v0.13.1-unsigned.apk
+
       - name: Verify modular payload placement
         run: |
           set -euo pipefail
@@ -1102,6 +1109,7 @@ jobs:
           name: NenoTV-Play-v0.13.1-build
           path: |
             base/RA_IPTV_Android_v0.1/app/build/outputs/bundle/release/app-release.aab
+            NenoTV-Light-v0.13.1-unsigned.apk
             pro-size-report.txt
             pro-version.txt
           if-no-files-found: error
