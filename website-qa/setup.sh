@@ -3,14 +3,18 @@ set -euo pipefail
 cd "$(dirname "$0")"
 docker compose up -d db wordpress mailpit
 ready=false
-for attempt in $(seq 1 90); do
-  if docker compose run --rm cli core version >/dev/null 2>&1; then
+for attempt in $(seq 1 15); do
+  if docker compose run --rm -T cli core version; then
     ready=true
     break
   fi
   sleep 2
 done
-if [ "$ready" != true ]; then echo 'WordPress did not become ready' >&2; exit 1; fi
+if [ "$ready" != true ]; then
+  docker compose logs --tail=80 wordpress db
+  echo 'WordPress did not become ready' >&2
+  exit 1
+fi
 if ! docker compose run --rm cli core is-installed >/dev/null 2>&1; then
   qa_password="$(openssl rand -hex 24)"
   docker compose run --rm cli core install --url=http://localhost:8090 \
