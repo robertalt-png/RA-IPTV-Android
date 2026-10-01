@@ -230,9 +230,8 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
             set -eu
-            KS="$HOME/.android/nenotv-v0132-qa.jks"
-            if [ ! -f "$KS" ]; then keytool -genkeypair -v -keystore "$KS" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=NenoTV QA,O=NenoTV,C=NL" >/dev/null 2>&1; fi
-            java -jar "$GITHUB_WORKSPACE/bundletool.jar" build-apks --bundle="$GITHUB_WORKSPACE/NenoTV-Play-v0.13.2-play1-vc72-UNSIGNED.aab" --output="$GITHUB_WORKSPACE/v0132.apks" --overwrite --local-testing --ks="$KS" --ks-key-alias=androiddebugkey --ks-pass=pass:android --key-pass=pass:android
+            if [ ! -f "$HOME/.android/nenotv-v0132-qa.jks" ]; then keytool -genkeypair -v -keystore "$HOME/.android/nenotv-v0132-qa.jks" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=NenoTV QA,O=NenoTV,C=NL" >/dev/null 2>&1; fi
+            java -jar "$GITHUB_WORKSPACE/bundletool.jar" build-apks --bundle="$GITHUB_WORKSPACE/NenoTV-Play-v0.13.2-play1-vc72-UNSIGNED.aab" --output="$GITHUB_WORKSPACE/v0132.apks" --overwrite --local-testing --ks="$HOME/.android/nenotv-v0132-qa.jks" --ks-key-alias=androiddebugkey --ks-pass=pass:android --key-pass=pass:android
             java -jar "$GITHUB_WORKSPACE/bundletool.jar" install-apks --apks="$GITHUB_WORKSPACE/v0132.apks"
             adb shell pm path com.nenotv.player | tee "$GITHUB_WORKSPACE/modular-installed-paths.txt"
             if grep -qi proextras "$GITHUB_WORKSPACE/modular-installed-paths.txt"; then echo "proextras unexpectedly installed with Light base"; exit 2; fi
