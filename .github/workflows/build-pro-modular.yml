@@ -1,4 +1,4 @@
-name: Build NenoTV Play v0.13.1 modular
+name: Build NenoTV Play v0.13.1 play2 modular
 # release-gate revision 2
 
 on:
@@ -945,8 +945,8 @@ jobs:
           cd base/RA_IPTV_Android_v0.1
           python3 "$GITHUB_WORKSPACE/tools/finalize_play_release.py"
           grep -q "applicationId 'com.nenotv.player'" app/build.gradle
-          grep -q "versionCode 69" app/build.gradle
-          grep -q "versionName '0.13.1-play1'" app/build.gradle
+          grep -q "versionCode 70" app/build.gradle
+          grep -q "versionName '0.13.1-play2'" app/build.gradle
           ! grep -Rni --exclude-dir=build --exclude='*.png' --exclude='*.jpg' --exclude='*.webp' "nivaro" app proextras
           ! grep -Rni --exclude-dir=build "com.robertalt.raiptv" app proextras
 
@@ -1069,8 +1069,8 @@ jobs:
           PY
           grep -n "applicationId\|versionCode\|versionName\|dynamicFeatures" base/RA_IPTV_Android_v0.1/app/build.gradle | tee pro-version.txt
           grep -q "applicationId 'com.nenotv.player'" base/RA_IPTV_Android_v0.1/app/build.gradle
-          grep -q "versionCode 69" base/RA_IPTV_Android_v0.1/app/build.gradle
-          grep -q "versionName '0.13.1-play1'" base/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "versionCode 70" base/RA_IPTV_Android_v0.1/app/build.gradle
+          grep -q "versionName '0.13.1-play2'" base/RA_IPTV_Android_v0.1/app/build.gradle
           if unzip -p "$AAB" | strings | grep -qi "nivaro"; then
             echo "Legacy Nivaro branding found inside AAB"
             exit 2
