@@ -1,4 +1,4 @@
-full-run-requested-after-live-fixture-duration-fix
-previous_full_run=36755876109
-qa_head=3c4524f1531438a437297d9fe61d492bf3087025
-requested_at=2026-09-30T18:19:07.493Z
+full-run-requested-after-direct-player-view-checks
+previous_full_run=36757722615
+qa_head=2d1d4b3061ed93153480421e95c88ca7f59e0c22
+requested_at=2026-10-01T05:10:43.896Z
