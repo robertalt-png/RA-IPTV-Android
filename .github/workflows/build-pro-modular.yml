@@ -955,7 +955,7 @@ jobs:
           set -euo pipefail
           cd base/RA_IPTV_Android_v0.1
           python3 "$GITHUB_WORKSPACE/tools/optimize_library_sync.py"
-          grep -q "newFixedThreadPool(3)" app/src/main/java/com/nenotv/player/MainActivity.java
+          grep -q "newFixedThreadPool(3)" app/src/main/java/com/robertalt/raiptv/MainActivity.java
 
       - name: Apply Android 26+ compatibility repair
         run: |
