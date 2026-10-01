@@ -30,7 +30,7 @@ jobs:
       - name: Complete all four checkout journeys
         working-directory: website-qa-v2
         env:
-          LOCAL_BASE_URL: http://127.0.0.1:8090
+          LOCAL_BASE_URL: http://localhost:8090
         run: npm run qa:local
       - name: Verify production remains unreachable from isolated WordPress
         working-directory: website-qa
