@@ -74,6 +74,37 @@ method=r'''    void refreshSearchIndex(boolean force){
                             if(startAt>=cats.size())startAt=0;
                         }
 
+                        // Fast path: standard Xtream servers can return a complete section in one request.
+                        // Preserve category names locally; fall back to bounded per-category fetches if bulk fails.
+                        boolean bulkDone=false;
+                        if(!Thread.currentThread().isInterrupted()){
+                            try{
+                                waitWhilePaused();waitForLibraryLoad();
+                                if(!activityPaused&&!Thread.currentThread().isInterrupted()){
+                                    List<MediaEntry> bulk=provider.items(type,"all");
+                                    if(bulk!=null&&!bulk.isEmpty()){
+                                        HashMap<String,String> groupNames=new HashMap<>();
+                                        for(Category c:cats)groupNames.put(safe(c.id),c.name);
+                                        for(MediaEntry e:bulk)if(e!=null){
+                                            String g=groupNames.get(safe(e.categoryId));
+                                            if(g!=null&&!g.trim().isEmpty())e.group=g;
+                                        }
+                                        indexCategoryBusy=true;
+                                        try{searchIndex.replaceSection(key,type,bulk);}finally{indexCategoryBusy=false;}
+                                        SettingsStore.prefs(this).edit().remove(cacheCursorKey(type)).apply();
+                                        globalDone+=Math.max(0,cats.size()-startAt);
+                                        estimatedTitles=searchIndex.count(key);
+                                        final int gd=globalDone,gt=grandTotal,ti=estimatedTitles;
+                                        if(isUiAlive())runOnUiThread(()->showIndexBanner("",gd,gt,ti));
+                                        publishIndexedTop(type);
+                                        reloadIndexedSectionWhenReady(type);
+                                        bulkDone=true;
+                                    }
+                                }
+                            }catch(Exception bulkError){bulkDone=false;}
+                        }
+                        if(bulkDone)continue;
+
                         boolean sectionOk=true;
                         final String fetchType=type;
                         for(int batchStart=startAt;batchStart<cats.size()&&sectionOk;batchStart+=FETCH_WINDOW){
