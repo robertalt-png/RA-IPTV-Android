@@ -1,0 +1,36 @@
+    void loadAllIncremental(String requested){
+        final int token=nextRequest();fullLibraryToken=token;
+        final String key=profileKey();final Provider source=provider;
+        final List<Category> cats=new ArrayList<>(currentCategories);
+        all=new ArrayList<>();showMediaGrid("live".equals(requested));gridAdapter.set(Collections.emptyList(),"live".equals(requested));busy(true,T("library_opening"));
+        exec.execute(()->{
+            final boolean[] published={false};final long[] lastPublish={0};
+            try{
+                for(Category c:cats){
+                    if(!current(token)||Thread.currentThread().isInterrupted())break;
+                    final boolean[] hasVisible={false};
+                    XtreamProvider.BatchReceiver receive=batch->{
+                        if(!current(token)||!key.equals(profileKey()))throw new java.io.InterruptedIOException("view_changed");
+                        for(MediaEntry e:batch)e.group=c.name;
+                        searchIndex.upsert(key,batch);
+                        if(!visibleItems(batch).isEmpty())hasVisible[0]=true;
+                        long now=android.os.SystemClock.elapsedRealtime();
+                        if(hasVisible[0]&&(!published[0]||now-lastPublish[0]>=1000)){
+                            final int count=searchIndex.countSection(key,requested);
+                            final boolean first=!published[0];published[0]=true;lastPublish[0]=now;
+                            runOnUiThread(()->{if(!current(token)||!requested.equals(section))return;if(first)loadCachedSection(requested,token,count);else{cachePagingTotal=count;cachePagingActive=cachePagingOffset<count;busy(false,count+" "+T("loaded"));}});
+                        }
+                    };
+                    if(source instanceof XtreamProvider)((XtreamProvider)source).streamCategory(requested,c.id,receive);
+                    else receive.accept(source.items(requested,c.id));
+                    if(hasVisible[0])break;
+                }
+            }catch(Exception error){runOnUiThread(()->{if(current(token))busy(false,T("loading_interrupted"));});}
+            finally{
+                if(fullLibraryToken==token)fullLibraryToken=0;
+                final int cached=searchIndex.countSection(key,requested);
+                runOnUiThread(()->{if(!current(token)||!key.equals(profileKey()))return;if(!published[0])busy(false,T("index_building"));else{cachePagingTotal=cached;cachePagingActive=cachePagingOffset<cached;}refreshSearchIndex(false);});
+            }
+        });
+    }
+

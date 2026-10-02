@@ -3,6 +3,7 @@ import re, shutil, sys
 from repair_account_manifest import repair_manifest
 from repair_responsiveness import repair_main
 from repair_streaming_import import repair_project
+from repair_import_lifecycle import repair_main as repair_lifecycle, prepare_instrumentation
 
 if len(sys.argv)!=2 or sys.argv[1] not in {'light','modular'}:
     raise SystemExit('usage: prepare_v0132_architecture.py light|modular')
@@ -17,8 +18,8 @@ repair_manifest(app/'src/main/AndroidManifest.xml')
 for p in [app/'build.gradle', java/'MainActivity.java', java/'storage/SearchIndexStore.java']:
     if not p.exists(): raise SystemExit(f'missing {p}')
 
-version_code=71 if mode=='light' else 73
-version_name='0.13.2-light-test' if mode=='light' else '0.13.2-play2'
+version_code=71 if mode=='light' else 74
+version_name='0.13.2-light-test' if mode=='light' else '0.13.2-play3'
 
 gradle=app/'build.gradle'
 s=gradle.read_text()
@@ -205,6 +206,8 @@ g=gradle.read_text()
 if f'versionCode {version_code}' not in g or f"versionName '{version_name}'" not in g: raise SystemExit('version gate failed')
 repair_main(main)
 repair_project(root)
+repair_lifecycle(main)
+prepare_instrumentation(root)
 main_text=main.read_text();idx_text=idx.read_text()
 if 'cats.sort((a,b)->Integer.compare(ContentLanguage.rankText' in main_text: raise SystemExit('Light loader still ranks categories')
 if 'ORDER BY CASE WHEN lang_tag=' in idx_text: raise SystemExit('Light cache still auto-ranks by language')

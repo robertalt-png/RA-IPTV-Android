@@ -1,9 +1,13 @@
     public interface BatchReceiver { void accept(List<MediaEntry> items) throws Exception; }
 
     public long streamSection(String type,BatchReceiver receiver) throws Exception {
+        return streamCategory(type,"all",receiver);
+    }
+
+    public long streamCategory(String type,String category,BatchReceiver receiver) throws Exception {
         String action=type.equals("vod")?"get_vod_streams":type.equals("series")?"get_series":"get_live_streams";
         ArrayList<MediaEntry> batch=new ArrayList<>(80);
-        long count=com.nenotv.player.net.StreamingJsonArray.read(XtreamUrls.api(p.server,p.username,p.password,action,"all"),json->{
+        long count=com.nenotv.player.net.StreamingJsonArray.read(XtreamUrls.api(p.server,p.username,p.password,action,category),json->{
             batch.add(from(new JSONObject(json.toString()),type));
             if(batch.size()==80){receiver.accept(batch);batch.clear();}
         });

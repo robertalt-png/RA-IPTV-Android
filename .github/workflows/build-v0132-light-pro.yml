@@ -10,6 +10,8 @@ on:
       - 'tools/repair_responsiveness.py'
       - 'tools/test_repair_responsiveness.py'
       - 'tools/repair_streaming_import.py'
+      - 'tools/repair_import_lifecycle.py'
+      - 'tools/test_repair_import_lifecycle.py'
       - 'tools/test_repair_streaming_import.py'
       - 'tools/runtime/**'
   workflow_dispatch:
@@ -93,7 +95,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf app/build build .gradle
-          gradle --no-daemon --no-build-cache --rerun-tasks clean :app:assembleRelease
+          gradle --no-daemon --no-build-cache --rerun-tasks clean :app:assembleRelease :app:assembleDebug :app:assembleDebugAndroidTest
 
       - name: Sign Light test APK
         run: |
@@ -134,6 +136,12 @@ jobs:
             adb logcat -d > "$GITHUB_WORKSPACE/light-startup-logcat.txt"
             if grep -q "FATAL EXCEPTION" "$GITHUB_WORKSPACE/light-startup-logcat.txt"; then cat "$GITHUB_WORKSPACE/light-startup-logcat.txt"; exit 2; fi
             test -n "$(adb shell pidof com.nenotv.player | tr -d '\r')"
+            adb uninstall com.nenotv.player
+            adb install "$GITHUB_WORKSPACE/base/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk"
+            adb install "$GITHUB_WORKSPACE/base/RA_IPTV_Android_v0.1/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+            adb shell am instrument -w com.nenotv.player.test/com.nenotv.player.ImportInstrumentation | tee "$GITHUB_WORKSPACE/library-import-tests.txt"
+            grep -q 'NENOTV_IMPORT_TESTS=passed' "$GITHUB_WORKSPACE/library-import-tests.txt"
+
 
       - name: Archive Light source
         run: tar --exclude='*/build' --exclude='*/.gradle' -czf NenoTV-Light-v0.13.2-source.tar.gz -C base RA_IPTV_Android_v0.1
@@ -148,6 +156,7 @@ jobs:
             NenoTV-Light-v0.13.2-source.tar.gz
             light-signature.txt
             light-startup-logcat.txt
+            library-import-tests.txt
           if-no-files-found: error
           retention-days: 90
 
@@ -176,8 +185,8 @@ jobs:
           cd base/RA_IPTV_Android_v0.1
           python3 "$GITHUB_WORKSPACE/tools/prepare_v0132_architecture.py" modular
           grep -q "applicationId 'com.nenotv.player'" app/build.gradle
-          grep -q "versionCode 73" app/build.gradle
-          grep -q "versionName '0.13.2-play2'" app/build.gradle
+          grep -q "versionCode 74" app/build.gradle
+          grep -q "versionName '0.13.2-play3'" app/build.gradle
           grep -q "dynamicFeatures = \[':proextras'\]" app/build.gradle
           grep -Rqs "provider.items" app/src/main/java
           grep -Rqs "provider.categories" app/src/main/java
@@ -208,7 +217,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf app/build proextras/build build .gradle
-          gradle --no-daemon --no-build-cache --rerun-tasks clean :app:bundleRelease
+          gradle --no-daemon --no-build-cache --rerun-tasks clean :app:bundleRelease :app:assembleDebug :app:assembleDebugAndroidTest
 
       - name: Verify modular payload
         run: |
@@ -229,8 +238,8 @@ jobs:
           open("modular-size.txt","w").write(f'base_compressed_mib={sums["base"]/1024/1024:.2f}\nproextras_compressed_mib={sums["proextras"]/1024/1024:.2f}\n')
           print(open("modular-size.txt").read())
           PY
-          cp "$AAB" NenoTV-Play-v0.13.2-play2-vc73-UNSIGNED.aab
-          sha256sum NenoTV-Play-v0.13.2-play2-vc73-UNSIGNED.aab | tee NenoTV-Play-v0.13.2-SHA256.txt
+          cp "$AAB" NenoTV-Play-v0.13.2-play3-vc74-UNSIGNED.aab
+          sha256sum NenoTV-Play-v0.13.2-play3-vc74-UNSIGNED.aab | tee NenoTV-Play-v0.13.2-SHA256.txt
           cp base/RA_IPTV_Android_v0.1/NENOTV_ARCHITECTURE.txt NenoTV-Play-v0.13.2-ARCHITECTURE.txt
           cp base/RA_IPTV_Android_v0.1/proextras/PRO_LIBRARY_ARCHITECTURE.txt NenoTV-Pro-Module-v0.13.2-ARCHITECTURE.txt
           (cd base/RA_IPTV_Android_v0.1 && zip -qr "$GITHUB_WORKSPACE/NenoTV-Pro-Module-v0.13.2-source.zip" proextras -x 'proextras/build/*')
@@ -239,7 +248,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -fL --retry 3 -o bundletool.jar https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar
-          java -jar bundletool.jar validate --bundle=NenoTV-Play-v0.13.2-play2-vc73-UNSIGNED.aab
+          java -jar bundletool.jar validate --bundle=NenoTV-Play-v0.13.2-play3-vc74-UNSIGNED.aab
 
       - name: Enable KVM
         run: |
@@ -259,7 +268,7 @@ jobs:
           script: |
             set -eu
             if [ ! -f "$HOME/.android/nenotv-v0132-qa.jks" ]; then keytool -genkeypair -v -keystore "$HOME/.android/nenotv-v0132-qa.jks" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=NenoTV QA,O=NenoTV,C=NL" >/dev/null 2>&1; fi
-            java -jar "$GITHUB_WORKSPACE/bundletool.jar" build-apks --bundle="$GITHUB_WORKSPACE/NenoTV-Play-v0.13.2-play2-vc73-UNSIGNED.aab" --output="$GITHUB_WORKSPACE/v0132.apks" --overwrite --local-testing --ks="$HOME/.android/nenotv-v0132-qa.jks" --ks-key-alias=androiddebugkey --ks-pass=pass:android --key-pass=pass:android
+            java -jar "$GITHUB_WORKSPACE/bundletool.jar" build-apks --bundle="$GITHUB_WORKSPACE/NenoTV-Play-v0.13.2-play3-vc74-UNSIGNED.aab" --output="$GITHUB_WORKSPACE/v0132.apks" --overwrite --local-testing --ks="$HOME/.android/nenotv-v0132-qa.jks" --ks-key-alias=androiddebugkey --ks-pass=pass:android --key-pass=pass:android
             java -jar "$GITHUB_WORKSPACE/bundletool.jar" install-apks --apks="$GITHUB_WORKSPACE/v0132.apks"
             adb shell pm path com.nenotv.player | tee "$GITHUB_WORKSPACE/modular-installed-paths.txt"
             if grep -qi proextras "$GITHUB_WORKSPACE/modular-installed-paths.txt"; then echo "proextras unexpectedly installed with Light base"; exit 2; fi
@@ -269,6 +278,12 @@ jobs:
             adb logcat -d > "$GITHUB_WORKSPACE/modular-base-startup-logcat.txt"
             if grep -q "FATAL EXCEPTION" "$GITHUB_WORKSPACE/modular-base-startup-logcat.txt"; then cat "$GITHUB_WORKSPACE/modular-base-startup-logcat.txt"; exit 2; fi
             test -n "$(adb shell pidof com.nenotv.player | tr -d '\r')"
+            adb uninstall com.nenotv.player
+            adb install "$GITHUB_WORKSPACE/base/RA_IPTV_Android_v0.1/app/build/outputs/apk/debug/app-debug.apk"
+            adb install "$GITHUB_WORKSPACE/base/RA_IPTV_Android_v0.1/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+            adb shell am instrument -w com.nenotv.player.test/com.nenotv.player.ImportInstrumentation | tee "$GITHUB_WORKSPACE/library-import-tests.txt"
+            grep -q 'NENOTV_IMPORT_TESTS=passed' "$GITHUB_WORKSPACE/library-import-tests.txt"
+
 
       - name: Archive modular source
         run: tar --exclude='*/build' --exclude='*/.gradle' -czf NenoTV-Play-v0.13.2-source.tar.gz -C base RA_IPTV_Android_v0.1
@@ -277,7 +292,7 @@ jobs:
         with:
           name: NenoTV-Play-v0.13.2-modular
           path: |
-            NenoTV-Play-v0.13.2-play2-vc73-UNSIGNED.aab
+            NenoTV-Play-v0.13.2-play3-vc74-UNSIGNED.aab
             NenoTV-Play-v0.13.2-SHA256.txt
             NenoTV-Play-v0.13.2-ARCHITECTURE.txt
             NenoTV-Pro-Module-v0.13.2-ARCHITECTURE.txt
@@ -286,5 +301,6 @@ jobs:
             modular-size.txt
             modular-installed-paths.txt
             modular-base-startup-logcat.txt
+            library-import-tests.txt
           if-no-files-found: error
           retention-days: 90

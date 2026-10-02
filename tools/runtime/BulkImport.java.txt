@@ -10,6 +10,8 @@
                                 for(Category c:cats)groupNames.put(safe(c.id),c.name);
                                 final int[] received={0};final long[] lastPublish={0};
                                 importProvider.streamSection(type,batch->{
+                                    waitWhilePaused();waitForLibraryLoad();
+                                    com.nenotv.player.net.StreamingJsonArray.checkCancelled();
                                     for(MediaEntry e:batch){String g=groupNames.get(safe(e.categoryId));if(g!=null)e.group=g;}
                                     searchIndex.importBatch(importSession,key,type,batch);
                                     received[0]+=batch.size();

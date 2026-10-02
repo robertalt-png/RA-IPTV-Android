@@ -1,0 +1,21 @@
+                        String fallbackSession=searchIndex.beginSectionImport();
+                        try{
+                            final String importSession=fallbackSession;
+                            for(Category c:cats){
+                                waitWhilePaused();waitForLibraryLoad();
+                                com.nenotv.player.net.StreamingJsonArray.checkCancelled();
+                                ((XtreamProvider)indexProvider).streamCategory(type,c.id,batch->{
+                                    waitWhilePaused();waitForLibraryLoad();
+                                    for(MediaEntry e:batch)e.group=c.name;
+                                    searchIndex.importBatch(importSession,key,type,batch);
+                                });
+                                globalDone++;
+                                final int gd=globalDone,gt=grandTotal,ti=estimatedTitles;
+                                runOnUiThread(()->{if(isUiAlive()&&key.equals(profileKey()))showIndexBanner("",gd,gt,ti);});
+                            }
+                            searchIndex.finishSectionImport(importSession,key,type);fallbackSession=null;
+                            SettingsStore.prefs(this).edit().remove(cacheCursorKey(key,type)).apply();
+                            if(key.equals(profileKey())){publishIndexedTop(type);reloadIndexedSectionWhenReady(type);}
+                        }finally{
+                            if(fallbackSession!=null)searchIndex.abortSectionImport(fallbackSession);
+                        }
