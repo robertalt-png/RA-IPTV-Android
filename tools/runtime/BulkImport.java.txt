@@ -1,0 +1,35 @@
+                        boolean bulkDone=false;
+                        if(provider instanceof XtreamProvider&&!Thread.currentThread().isInterrupted()){
+                            final XtreamProvider importProvider=(XtreamProvider)provider;
+                            String session=null;
+                            try{
+                                waitWhilePaused();waitForLibraryLoad();
+                                com.nenotv.player.net.StreamingJsonArray.checkCancelled();
+                                final String importSession=searchIndex.beginSectionImport();session=importSession;
+                                HashMap<String,String> groupNames=new HashMap<>();
+                                for(Category c:cats)groupNames.put(safe(c.id),c.name);
+                                final int[] received={0};final long[] lastPublish={0};
+                                importProvider.streamSection(type,batch->{
+                                    for(MediaEntry e:batch){String g=groupNames.get(safe(e.categoryId));if(g!=null)e.group=g;}
+                                    searchIndex.importBatch(importSession,key,type,batch);
+                                    received[0]+=batch.size();
+                                    long now=android.os.SystemClock.elapsedRealtime();
+                                    if(now-lastPublish[0]>=500){
+                                        lastPublish[0]=now;final int loaded=received[0];
+                                        runOnUiThread(()->{if(isUiAlive()&&key.equals(profileKey()))showStreamingBanner(loaded);});
+                                    }
+                                });
+                                searchIndex.finishSectionImport(importSession,key,type);session=null;
+                                SettingsStore.prefs(this).edit().remove(cacheCursorKey(type)).apply();
+                                globalDone+=Math.max(0,cats.size()-startAt);
+                                estimatedTitles=searchIndex.count(key);
+                                final int gd=globalDone,gt=grandTotal,ti=estimatedTitles;
+                                runOnUiThread(()->{if(isUiAlive()&&key.equals(profileKey()))showIndexBanner("",gd,gt,ti);});
+                                if(key.equals(profileKey())){publishIndexedTop(type);reloadIndexedSectionWhenReady(type);}bulkDone=true;
+                            }catch(Exception bulkError){
+                                if(session!=null){try{searchIndex.abortSectionImport(session);}catch(Exception cleanupError){bulkError.addSuppressed(cleanupError);}}
+                                if(Thread.currentThread().isInterrupted())break;
+                            }
+                        }
+                        if(bulkDone)continue;
+

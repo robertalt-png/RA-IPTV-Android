@@ -1,0 +1,40 @@
+    public String beginSectionImport() {
+        SQLiteDatabase db=getWritableDatabase();
+        db.execSQL("CREATE TABLE IF NOT EXISTS import_entries(session TEXT NOT NULL,profile TEXT NOT NULL,item_key TEXT NOT NULL,type TEXT NOT NULL,name TEXT,name_norm TEXT,hay_norm TEXT,lang_tag TEXT NOT NULL DEFAULT '',lang_scanned INTEGER NOT NULL DEFAULT 1,payload TEXT NOT NULL,started INTEGER NOT NULL,PRIMARY KEY(session,item_key))");
+        db.delete("import_entries","started<?",new String[]{Long.toString(System.currentTimeMillis()-86400000L)});
+        return java.util.UUID.randomUUID().toString();
+    }
+
+    public void importBatch(String session,String profile,String section,List<MediaEntry> items) throws java.io.InterruptedIOException {
+        com.nenotv.player.net.StreamingJsonArray.checkCancelled();
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        try {
+            for(MediaEntry e:items){
+                com.nenotv.player.net.StreamingJsonArray.checkCancelled();
+                if(!section.equals(e.type))throw new IllegalArgumentException("import_section_mismatch");
+                upsertInternal(db,"import_entries",session,profile,e);
+            }
+            db.setTransactionSuccessful();
+        } finally {db.endTransaction();}
+    }
+
+    public int finishSectionImport(String session,String profile,String section) throws java.io.InterruptedIOException {
+        com.nenotv.player.net.StreamingJsonArray.checkCancelled();
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        try {
+            int count;
+            try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM import_entries WHERE session=? AND profile=? AND type=?",new String[]{session,profile,section})){c.moveToFirst();count=c.getInt(0);}
+            db.delete("entries","profile=? AND type=?",new String[]{profile,section});
+            db.execSQL("INSERT INTO entries(profile,item_key,type,name,name_norm,hay_norm,lang_tag,lang_scanned,payload) SELECT profile,item_key,type,name,name_norm,hay_norm,lang_tag,lang_scanned,payload FROM import_entries WHERE session=? AND profile=? AND type=?",new Object[]{session,profile,section});
+            ContentValues m=new ContentValues();m.put("profile",profile);m.put("section",section);m.put("updated",System.currentTimeMillis());m.put("item_count",count);
+            if(db.insertWithOnConflict("meta",null,m,SQLiteDatabase.CONFLICT_REPLACE)<0)throw new IllegalStateException("import_meta_failed");
+            db.delete("import_entries","session=?",new String[]{session});
+            com.nenotv.player.net.StreamingJsonArray.checkCancelled();
+            db.setTransactionSuccessful();return count;
+        } finally {db.endTransaction();}
+    }
+
+    public void abortSectionImport(String session) {
+        if(session!=null)getWritableDatabase().delete("import_entries","session=?",new String[]{session});
+    }
+

@@ -6,6 +6,12 @@ on:
     paths:
       - '.github/workflows/build-v0132-light-pro.yml'
       - 'tools/prepare_v0132_architecture.py'
+      - 'tools/repair_account_manifest.py'
+      - 'tools/repair_responsiveness.py'
+      - 'tools/test_repair_responsiveness.py'
+      - 'tools/repair_streaming_import.py'
+      - 'tools/test_repair_streaming_import.py'
+      - 'tools/runtime/**'
   workflow_dispatch:
 
 permissions:
@@ -13,12 +19,31 @@ permissions:
   actions: read
 
 jobs:
+  streaming-parser:
+    name: Streaming parser cancellation and large-list checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Compile and test incremental parser
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o "$RUNNER_TEMP/gson.jar" https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2.jar
+          javac -cp "$RUNNER_TEMP/gson.jar" -d "$RUNNER_TEMP/parser-classes" tools/runtime/StreamingJsonArray.java tools/runtime/StreamingJsonArrayTest.java
+          java -Xmx64m -cp "$RUNNER_TEMP/gson.jar:$RUNNER_TEMP/parser-classes" com.nenotv.player.net.StreamingJsonArrayTest
   light:
     name: Pure Light APK
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+
+      - name: Test source repairs
+        run: python3 -m unittest discover -s tools -p 'test_repair_*.py' -v
 
       - name: Retrieve proven source
         env:
@@ -133,6 +158,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Test source repairs
+        run: python3 -m unittest discover -s tools -p 'test_repair_*.py' -v
+
       - name: Retrieve proven source
         env:
           GH_TOKEN: ${{ github.token }}
@@ -148,8 +176,8 @@ jobs:
           cd base/RA_IPTV_Android_v0.1
           python3 "$GITHUB_WORKSPACE/tools/prepare_v0132_architecture.py" modular
           grep -q "applicationId 'com.nenotv.player'" app/build.gradle
-          grep -q "versionCode 72" app/build.gradle
-          grep -q "versionName '0.13.2-play1'" app/build.gradle
+          grep -q "versionCode 73" app/build.gradle
+          grep -q "versionName '0.13.2-play2'" app/build.gradle
           grep -q "dynamicFeatures = \[':proextras'\]" app/build.gradle
           grep -Rqs "provider.items" app/src/main/java
           grep -Rqs "provider.categories" app/src/main/java
@@ -201,8 +229,8 @@ jobs:
           open("modular-size.txt","w").write(f'base_compressed_mib={sums["base"]/1024/1024:.2f}\nproextras_compressed_mib={sums["proextras"]/1024/1024:.2f}\n')
           print(open("modular-size.txt").read())
           PY
-          cp "$AAB" NenoTV-Play-v0.13.2-play1-vc72-UNSIGNED.aab
-          sha256sum NenoTV-Play-v0.13.2-play1-vc72-UNSIGNED.aab | tee NenoTV-Play-v0.13.2-SHA256.txt
+          cp "$AAB" NenoTV-Play-v0.13.2-play2-vc73-UNSIGNED.aab
+          sha256sum NenoTV-Play-v0.13.2-play2-vc73-UNSIGNED.aab | tee NenoTV-Play-v0.13.2-SHA256.txt
           cp base/RA_IPTV_Android_v0.1/NENOTV_ARCHITECTURE.txt NenoTV-Play-v0.13.2-ARCHITECTURE.txt
           cp base/RA_IPTV_Android_v0.1/proextras/PRO_LIBRARY_ARCHITECTURE.txt NenoTV-Pro-Module-v0.13.2-ARCHITECTURE.txt
           (cd base/RA_IPTV_Android_v0.1 && zip -qr "$GITHUB_WORKSPACE/NenoTV-Pro-Module-v0.13.2-source.zip" proextras -x 'proextras/build/*')
@@ -211,7 +239,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -fL --retry 3 -o bundletool.jar https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar
-          java -jar bundletool.jar validate --bundle=NenoTV-Play-v0.13.2-play1-vc72-UNSIGNED.aab
+          java -jar bundletool.jar validate --bundle=NenoTV-Play-v0.13.2-play2-vc73-UNSIGNED.aab
 
       - name: Enable KVM
         run: |
@@ -231,7 +259,7 @@ jobs:
           script: |
             set -eu
             if [ ! -f "$HOME/.android/nenotv-v0132-qa.jks" ]; then keytool -genkeypair -v -keystore "$HOME/.android/nenotv-v0132-qa.jks" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=NenoTV QA,O=NenoTV,C=NL" >/dev/null 2>&1; fi
-            java -jar "$GITHUB_WORKSPACE/bundletool.jar" build-apks --bundle="$GITHUB_WORKSPACE/NenoTV-Play-v0.13.2-play1-vc72-UNSIGNED.aab" --output="$GITHUB_WORKSPACE/v0132.apks" --overwrite --local-testing --ks="$HOME/.android/nenotv-v0132-qa.jks" --ks-key-alias=androiddebugkey --ks-pass=pass:android --key-pass=pass:android
+            java -jar "$GITHUB_WORKSPACE/bundletool.jar" build-apks --bundle="$GITHUB_WORKSPACE/NenoTV-Play-v0.13.2-play2-vc73-UNSIGNED.aab" --output="$GITHUB_WORKSPACE/v0132.apks" --overwrite --local-testing --ks="$HOME/.android/nenotv-v0132-qa.jks" --ks-key-alias=androiddebugkey --ks-pass=pass:android --key-pass=pass:android
             java -jar "$GITHUB_WORKSPACE/bundletool.jar" install-apks --apks="$GITHUB_WORKSPACE/v0132.apks"
             adb shell pm path com.nenotv.player | tee "$GITHUB_WORKSPACE/modular-installed-paths.txt"
             if grep -qi proextras "$GITHUB_WORKSPACE/modular-installed-paths.txt"; then echo "proextras unexpectedly installed with Light base"; exit 2; fi
@@ -249,7 +277,7 @@ jobs:
         with:
           name: NenoTV-Play-v0.13.2-modular
           path: |
-            NenoTV-Play-v0.13.2-play1-vc72-UNSIGNED.aab
+            NenoTV-Play-v0.13.2-play2-vc73-UNSIGNED.aab
             NenoTV-Play-v0.13.2-SHA256.txt
             NenoTV-Play-v0.13.2-ARCHITECTURE.txt
             NenoTV-Pro-Module-v0.13.2-ARCHITECTURE.txt
