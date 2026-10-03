@@ -25,3 +25,16 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 }
+
+
+afterEvaluate {
+    tasks.named("assembleRelease").configure {
+        doLast {
+            copy {
+                from("$buildDir/outputs/apk/release/app-release-unsigned.apk")
+                into(rootProject.projectDir.parentFile)
+                rename { "NenoTV-Admin-v0.2.0.apk" }
+            }
+        }
+    }
+}
