@@ -90,7 +90,8 @@ public final class SourceStore {
             if(o!=null&&use.equals(o.optString("id"))){found=i;priority=o.optInt("priority",i);break;}
         }
         Entry entry=new Entry(use,copy(profile),true,priority,System.currentTimeMillis());
-        if(found>=0)a.put(found,toJson(entry));else a.put(toJson(entry));
+        try{if(found>=0)a.put(found,toJson(entry));else a.put(toJson(entry));}
+        catch(Exception ex){throw new IllegalStateException("SOURCE_STORE_UPDATE_FAILED",ex);}
         String active=makeActive?use:prefs.getString(KEY_ACTIVE,"");
         if(active.isEmpty())active=use;
         write(a,active);
@@ -133,7 +134,7 @@ public final class SourceStore {
         JSONArray a=readArray();
         for(int i=0;i<a.length();i++){
             JSONObject o=a.optJSONObject(i);
-            if(o!=null&&id.equals(o.optString("id"))){o.put("enabled",enabled);a.put(i,o);break;}
+            if(o!=null&&id.equals(o.optString("id"))){try{o.put("enabled",enabled);a.put(i,o);}catch(Exception ex){throw new IllegalStateException("SOURCE_STORE_UPDATE_FAILED",ex);}break;}
         }
         write(a,prefs.getString(KEY_ACTIVE,""));
     }
@@ -163,13 +164,15 @@ public final class SourceStore {
     }
 
     private JSONObject toJson(Entry e){
-        JSONObject o=new JSONObject();
-        o.put("id",e.id);o.put("enabled",e.enabled);o.put("priority",e.priority);o.put("updated_at",e.updatedAt);
-        Profile p=e.profile;
-        o.put("type",p.type.name());o.put("name",safe(p.name));o.put("server",safe(p.server));
-        o.put("username",safe(p.username));o.put("password",safe(p.password));o.put("m3u",safe(p.m3uUrl));
-        o.put("epg",safe(p.epgUrl));o.put("bridge",safe(p.bridgeUrl));o.put("bridge_token",safe(p.bridgeToken));
-        return o;
+        try{
+            JSONObject o=new JSONObject();
+            o.put("id",e.id);o.put("enabled",e.enabled);o.put("priority",e.priority);o.put("updated_at",e.updatedAt);
+            Profile p=e.profile;
+            o.put("type",p.type.name());o.put("name",safe(p.name));o.put("server",safe(p.server));
+            o.put("username",safe(p.username));o.put("password",safe(p.password));o.put("m3u",safe(p.m3uUrl));
+            o.put("epg",safe(p.epgUrl));o.put("bridge",safe(p.bridgeUrl));o.put("bridge_token",safe(p.bridgeToken));
+            return o;
+        }catch(Exception ex){throw new IllegalStateException("SOURCE_STORE_ENCODE_FAILED",ex);}
     }
 
     private Entry fromJson(JSONObject o){
