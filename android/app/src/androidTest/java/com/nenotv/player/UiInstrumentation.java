@@ -152,7 +152,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
                     check(a.activationCode.getError()!=null&&!a.requestRunning,"Invalid code contacted account server");
                     a.activationCode.setText("");a.activationCode.setError(null);a.activationCode.clearFocus();
                     a.busy(true);
-                    check(!a.link.isEnabled()&&!a.claim.isEnabled()&&!a.trial.isEnabled()&&!a.refresh.isEnabled(),"Account permits concurrent requests");
+                    check(!a.link.isEnabled()&&!a.email.isEnabled()&&!a.trial.isEnabled()&&!a.refresh.isEnabled(),"Account permits concurrent requests");
                     a.busy(false);
                     assertUnclippedText(a.link);
                     if(Build.VERSION.SDK_INT>=30){

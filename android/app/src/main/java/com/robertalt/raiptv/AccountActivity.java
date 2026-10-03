@@ -15,8 +15,8 @@ import java.util.concurrent.*;
 public class AccountActivity extends Activity {
     LinearLayout box;
     TextView statusText,detailText,deviceText,serverText;
-    EditText email,order,activationCode;
-    Button claim,refresh,trial,link;
+    EditText email,activationCode;
+    Button refresh,trial,link;
     boolean requestRunning;
     ExecutorService exec=Executors.newSingleThreadExecutor();
     EntitlementStore ent;
@@ -79,18 +79,19 @@ public class AccountActivity extends Activity {
         link=b(T("link_device"));
         link.setOnClickListener(v->redeemCode());
         addButton(link);
+        serverText=t("",12);
+        serverText.setTextColor(0xFFA7AFBC);
+        serverText.setPadding(0,dp(8),0,0);
+        serverText.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        box.addView(serverText);
 
         Button my=b(myNenoLabel());
         my.setOnClickListener(v->openWeb(myNenoUrl()));
         addButton(my);
 
-        sec(T("activate_restore"));
+        sec(T("request_trial"));
         email=input(T("email_address"),android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
         email.setText(ent.accountEmail());
-        order=input(T("order_id_optional"),android.text.InputType.TYPE_CLASS_TEXT);
-        claim=b(T("activate_pro"));
-        claim.setOnClickListener(v->claim());
-        addButton(claim);
 
         trial=b(T("request_trial"));
         trial.setOnClickListener(v->startTrial());
@@ -108,10 +109,6 @@ public class AccountActivity extends Activity {
         deviceText=t("",14);
         deviceText.setTextColor(0xFFA7AFBC);
         box.addView(deviceText);
-        serverText=t("",12);
-        serverText.setTextColor(0xFF8D96A4);
-        serverText.setPadding(0,dp(8),0,0);
-        box.addView(serverText);
         setContentView(sv);
         ScreenInsets.browsing(this);
         refreshUi();
@@ -155,11 +152,11 @@ public class AccountActivity extends Activity {
 
     void busy(boolean on){
         requestRunning=on;
-        claim.setEnabled(!on);
         refresh.setEnabled(!on);
         trial.setEnabled(!on);
         link.setEnabled(!on);
         activationCode.setEnabled(!on);
+        email.setEnabled(!on);
         if(on)serverText.setText(T("checking_status"));
     }
 
@@ -171,22 +168,6 @@ public class AccountActivity extends Activity {
         exec.execute(()->{
             try{
                 new EntitlementClient(this).startTrial(e);
-                accountResult("status_updated",true);
-            }catch(Exception ex){
-                accountResult("activation_failed",false);
-            }
-        });
-    }
-
-    void claim(){
-        if(requestRunning)return;
-        String e=email.getText().toString().trim();
-        String o=order.getText().toString().trim();
-        if(e.isEmpty()){email.setError(T("email_required"));return;}
-        busy(true);
-        exec.execute(()->{
-            try{
-                new EntitlementClient(this).claim(e,o);
                 accountResult("status_updated",true);
             }catch(Exception ex){
                 accountResult("activation_failed",false);
