@@ -37,11 +37,11 @@
                 runOnMainSync(()->{
                     texture[0]=new android.graphics.SurfaceTexture(0);texture[0].setDefaultBufferSize(1280,720);
                     surface[0]=new android.view.Surface(texture[0]);
-                    player[0]=new androidx.media3.exoplayer.ExoPlayer.Builder(c).build();
+                    player[0]=new androidx.media3.exoplayer.ExoPlayer.Builder(c).setMediaSourceFactory(DemoSource.mediaSourceFactory(c,item)).build();
                     player[0].setVideoSurface(surface[0]);
                     player[0].addListener(new androidx.media3.common.Player.Listener(){
                         @Override public void onRenderedFirstFrame(){frame.set(true);}
-                        @Override public void onPlayerError(androidx.media3.common.PlaybackException e){error.set(e.getErrorCodeName());}
+                        @Override public void onPlayerError(androidx.media3.common.PlaybackException e){error.set(e.getErrorCodeName()+": "+String.valueOf(e.getCause()));}
                     });
                     player[0].setMediaItem(androidx.media3.common.MediaItem.fromUri(item.url));player[0].prepare();player[0].play();
                 });

@@ -27,7 +27,12 @@ for e in catalogue:
     +'public static final int LIVE_COUNT='+str(sum(e['type']=='live' for e in catalogue))+';\n'
     +'public static final int FILM_COUNT='+str(sum(e['type']=='vod' for e in catalogue))+';\n'
     +'public static final String PLAYLIST='+json.dumps(playlist)+';\n'
-    +'public static void decorate(com.nenotv.player.model.MediaEntry e){'+''.join(statements)+'}\nprivate DemoSource(){}\n}\n')
+    +'public static void decorate(com.nenotv.player.model.MediaEntry e){'+''.join(statements)+'}\n'
+    +'public static androidx.media3.exoplayer.source.DefaultMediaSourceFactory mediaSourceFactory(android.content.Context c, com.nenotv.player.model.MediaEntry e){'
+    +'androidx.media3.exoplayer.source.DefaultMediaSourceFactory factory=new androidx.media3.exoplayer.source.DefaultMediaSourceFactory(c);'
+    +'if(e!=null&&e.url!=null&&PLAYLIST.contains("\\n"+e.url+"\\n")){'
+    +'androidx.media3.datasource.DefaultHttpDataSource.Factory http=new androidx.media3.datasource.DefaultHttpDataSource.Factory().setUserAgent("NenoTV/0.13.10 (https://nenotv.com; info@nenotv.com) Android Media3");'
+    +'factory.setDataSourceFactory(new androidx.media3.datasource.DefaultDataSource.Factory(c,http));}return factory;}\nprivate DemoSource(){}\n}\n')
 provider = java / 'provider/M3uProvider.java'
 replace(provider, 'all=new ArrayList<>(r.items);', 'all=new ArrayList<>(r.items);if(com.nenotv.player.DemoSource.URL.equals(p.m3uUrl))for(MediaEntry e:all)com.nenotv.player.DemoSource.decorate(e);')
 s = provider.read_text()
@@ -79,6 +84,7 @@ replace(main, '@Override protected void onResume(){super.onResume();',
 replace(main, 'library.recent(e);Intent i=ProModuleInstaller.playerIntent(this);',
         'if(DemoPolicy.blockPlayback(this)){recreate();return;}library.recent(e);Intent i=ProModuleInstaller.playerIntent(this);')
 player = java / 'PlayerActivity.java'
+replace(player, 'new ExoPlayer.Builder(this).build()', 'new ExoPlayer.Builder(this).setMediaSourceFactory(DemoSource.mediaSourceFactory(this,entry)).build()')
 replace(player, 'super.onCreate(b);', 'super.onCreate(b);if(DemoPolicy.blockPlayback(this)){finish();return;}')
 # Check while watching too; a session cannot stay open beyond its expiry.
 s = player.read_text()
