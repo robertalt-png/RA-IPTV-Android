@@ -66,21 +66,7 @@ jobs:
           gzip -dc "$GITHUB_WORKSPACE/.github/patches/v0133-common.patch.gz" | git apply --check -
           gzip -dc "$GITHUB_WORKSPACE/.github/patches/v0133-common.patch.gz" | git apply -
           python3 "$GITHUB_WORKSPACE/tools/finalize_v0133.py" light
-          grep -q "applicationId 'com.nenotv.player'" app/build.gradle
-          grep -q "versionCode 75" app/build.gradle
-          grep -q "versionName '0.13.3-light-test'" app/build.gradle
-          grep -q "LIGHT_BUILD', 'true'" app/build.gradle
-          grep -q 'onboarding=simplified_xtream_m3u_demo' NENOTV_ARCHITECTURE.txt
-          grep -q 'import_resume=durable_sqlite_checkpoint' NENOTV_ARCHITECTURE.txt
-          grep -q 'try_demo_30_days' app/src/main/java/com/robertalt/raiptv/UiText.java
-          grep -q 'import_progress' app/src/main/java/com/robertalt/raiptv/storage/SearchIndexStore.java
-          test ! -d proextras
-          ! grep -q "dynamicFeatures" app/build.gradle
-          ! grep -q "feature-delivery" app/build.gradle
-          grep -Rqs "provider.items" app/src/main/java
-          grep -Rqs "provider.categories" app/src/main/java
-          ! grep -Rqs "ORDER BY CASE WHEN lang_tag=" app/src/main/java
-          ! grep -Rqs "cats.sort((a,b)->Integer.compare(ContentLanguage.rankText" app/src/main/java
+          python3 "$GITHUB_WORKSPACE/tools/verify_v0133.py" light
           cat NENOTV_ARCHITECTURE.txt
 
       - uses: actions/setup-java@v4
@@ -205,19 +191,7 @@ jobs:
           gzip -dc "$GITHUB_WORKSPACE/.github/patches/v0133-common.patch.gz" | git apply --check -
           gzip -dc "$GITHUB_WORKSPACE/.github/patches/v0133-common.patch.gz" | git apply -
           python3 "$GITHUB_WORKSPACE/tools/finalize_v0133.py" modular
-          grep -q "applicationId 'com.nenotv.player'" app/build.gradle
-          grep -q "versionCode 76" app/build.gradle
-          grep -q "versionName '0.13.3-play1'" app/build.gradle
-          grep -q "dynamicFeatures = \[':proextras'\]" app/build.gradle
-          grep -q 'onboarding=simplified_xtream_m3u_demo' NENOTV_ARCHITECTURE.txt
-          grep -q 'import_resume=durable_sqlite_checkpoint' NENOTV_ARCHITECTURE.txt
-          grep -q 'try_demo_30_days' app/src/main/java/com/robertalt/raiptv/UiText.java
-          grep -q 'import_progress' app/src/main/java/com/robertalt/raiptv/storage/SearchIndexStore.java
-          grep -Rqs "provider.items" app/src/main/java
-          grep -Rqs "provider.categories" app/src/main/java
-          ! grep -RniE 'provider\.items|provider\.categories|XtreamProvider|M3uProvider|HttpText|XtreamUrls|com\.nenotv\.player\.provider' proextras/src/main/java
-          grep -Rqs "class ProLibraryOptimizer" proextras/src/main/java
-          grep -Rqs "ProLibraryBridge.optimize" app/src/main/java
+          python3 "$GITHUB_WORKSPACE/tools/verify_v0133.py" modular
           cat NENOTV_ARCHITECTURE.txt
           cat proextras/PRO_LIBRARY_ARCHITECTURE.txt
 
