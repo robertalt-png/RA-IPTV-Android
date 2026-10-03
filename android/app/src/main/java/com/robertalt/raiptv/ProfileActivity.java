@@ -6,14 +6,14 @@ import java.util.concurrent.*;
 
 public class ProfileActivity extends Activity {
     EditText name,server,user,pass,m3u,epg; RadioButton xtream,m3uRadio,demoRadio; TextView status;
-    LinearLayout xtreamFields,m3uFields,advancedFields; SecureProfileStore store; ExecutorService exec=Executors.newSingleThreadExecutor();
+    LinearLayout xtreamFields,m3uFields,advancedFields; SecureProfileStore store; SourceStore sources; String sourceId=""; boolean newSource=false; Profile editingProfile; ExecutorService exec=Executors.newSingleThreadExecutor();
 
     String T(String en,String nl,String de){
         String l=SettingsStore.language(this); if("nl".equals(l))return nl; if("de".equals(l))return de; return en;
     }
 
     @Override public void onCreate(Bundle b){
-        super.onCreate(b); setContentView(R.layout.activity_profile); UiText.applyDirection(this); store=new SecureProfileStore(this);
+        super.onCreate(b); setContentView(R.layout.activity_profile); UiText.applyDirection(this); store=new SecureProfileStore(this); sources=new SourceStore(this); sourceId=getIntent().getStringExtra("source_id"); if(sourceId==null)sourceId=""; newSource=getIntent().getBooleanExtra("new_source",false);
         name=findViewById(R.id.nameField); server=findViewById(R.id.serverField); user=findViewById(R.id.userField); pass=findViewById(R.id.passField);
         m3u=findViewById(R.id.m3uField); epg=findViewById(R.id.epgField); xtream=findViewById(R.id.xtreamRadio); m3uRadio=findViewById(R.id.m3uRadio);
         demoRadio=findViewById(R.id.demoRadio); status=findViewById(R.id.profileStatus); xtreamFields=findViewById(R.id.xtreamFields);
@@ -47,8 +47,13 @@ public class ProfileActivity extends Activity {
     }
 
     void load(){
-        if(!store.exists()){xtream.setChecked(true);return;}
-        Profile p=store.load(); xtream.setChecked(p.type==Profile.Type.XTREAM); m3uRadio.setChecked(p.type==Profile.Type.M3U);
+        if(newSource){xtream.setChecked(true);editingProfile=null;return;}
+        Profile p=null;
+        if(!sourceId.isEmpty())for(SourceStore.Entry e:sources.list())if(sourceId.equals(e.id)){p=e.profile;break;}
+        if(p==null&&store.exists())p=store.load();
+        if(p==null){xtream.setChecked(true);return;}
+        editingProfile=p;
+        xtream.setChecked(p.type==Profile.Type.XTREAM); m3uRadio.setChecked(p.type==Profile.Type.M3U);
         name.setText(p.name); server.setText(p.server); user.setText(p.username); pass.setText(p.password); m3u.setText(p.m3uUrl); epg.setText(p.epgUrl);
     }
 
@@ -60,7 +65,7 @@ public class ProfileActivity extends Activity {
     }
 
     Profile collect(){
-        Profile old=store.exists()?store.load():new Profile(); Profile p=new Profile();
+        Profile old=editingProfile!=null?editingProfile:(store.exists()?store.load():new Profile()); Profile p=new Profile();
         if(demoRadio.isChecked()){
             p.type=Profile.Type.M3U; p.name="NenoTV Demo"; p.m3uUrl=BuildConfig.NENOTV_DEMO_M3U_URL; p.epgUrl="";
         }else if(m3uRadio.isChecked()){
@@ -93,6 +98,7 @@ public class ProfileActivity extends Activity {
                     if(expiry<0L)throw new IllegalStateException(T("Your 30-day demo has ended.","Uw 30 dagen demo is afgelopen.","Ihre 30-Tage-Demo ist beendet."));
                 }
                 store.save(p);
+                sourceId=sources.upsert(sourceId,p,true);
                 runOnUiThread(()->{setResult(RESULT_OK);finish();});
             }catch(Exception e){
                 runOnUiThread(()->{connecting=false;xtream.setEnabled(true);m3uRadio.setEnabled(true);applyLanguage();findViewById(R.id.saveButton).setEnabled(true);status.setText(T("Could not connect: ","Kan geen verbinding maken: ","Verbindung fehlgeschlagen: ")+friendly(e));});
