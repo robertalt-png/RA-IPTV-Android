@@ -16,11 +16,11 @@ import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
+import android.widget.AdapterView;\nimport android.widget.ArrayAdapter;\nimport android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
+import android.widget.ScrollView;\nimport android.widget.Spinner;
 import android.widget.Space;
 import android.widget.TextView;
 
@@ -29,7 +29,7 @@ import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.InputStreamReader;\nimport java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -53,12 +53,12 @@ public class MainActivity extends Activity {
     private static final int GREEN = Color.rgb(52, 211, 153);
     private static final int ORANGE = Color.rgb(251, 191, 36);
     private static final int RED = Color.rgb(248, 113, 113);
-    private static final int ACCENT = Color.rgb(45, 212, 191);
+    private static final int ACCENT = Color.rgb(47, 128, 237);
     private static final int BLUE = Color.rgb(96, 165, 250);
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final String[] tabNames = {"Overzicht", "Bezoekers", "App", "Testers", "Commerce", "Systeem"};
+    private final String[] tabNames = {"Overzicht", "Analytics", "App", "Meer"};
 
     private SharedPreferences prefs;
     private JSONObject data;
@@ -94,7 +94,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (prefs != null && !getToken().isEmpty() && content != null) refresh();
+        if (!getToken().isEmpty() && content != null) refresh();
     }
 
     @Override
@@ -137,7 +137,7 @@ public class MainActivity extends Activity {
         EditText token = new EditText(this);
         token.setTextColor(TEXT);
         token.setHintTextColor(MUTED);
-        token.setHint("Admin-code plakken");
+        token.setHint("Koppelcode");
         token.setSingleLine(true);
         token.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
         token.setPadding(dp(16), 0, dp(16), 0);
@@ -155,14 +155,13 @@ public class MainActivity extends Activity {
         pairLp.topMargin = dp(18);
         box.addView(pair, pairLp);
         pair.setOnClickListener(v -> {
-            String value = token.getText().toString().trim();
-            if (value.length() < 20) {
-                showPairing("De admin-code lijkt niet compleet.");
+            String value = token.getText().toString().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "");
+            if (value.length() != 10) {
+                showPairing("Vul de 10 tekens van de NenoTV koppelcode in.");
                 return;
             }
-            prefs.edit().putString(PREF_TOKEN, value).apply();
-            showAdminShell();
-            refresh();
+            pair.setEnabled(false);
+            pairCode(value);
         });
 
         TextView privacy = text("Alleen lezen. De app kan niets aanpassen of verwijderen.", 12, MUTED, false);
@@ -171,6 +170,54 @@ public class MainActivity extends Activity {
         box.addView(privacy);
 
         setContentView(scroll);
+    }
+
+
+    private void pairCode(String code) {
+        executor.execute(() -> {
+            HttpURLConnection connection = null;
+            try {
+                URL url = new URL(PAIR_URL);
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setUseCaches(false);
+                connection.setConnectTimeout(10000);
+                connection.setReadTimeout(12000);
+                connection.setRequestMethod("POST");
+                connection.setDoOutput(true);
+                connection.setRequestProperty("Accept", "application/json");
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                connection.setRequestProperty("User-Agent", "NenoTV-Admin/0.2.0 Android");
+                JSONObject body = new JSONObject();
+                body.put("code", code);
+                try (OutputStream out = connection.getOutputStream()) {
+                    out.write(body.toString().getBytes(StandardCharsets.UTF_8));
+                }
+                int status = connection.getResponseCode();
+                InputStream stream = status >= 200 && status < 300 ? connection.getInputStream() : connection.getErrorStream();
+                JSONObject response = new JSONObject(readAll(stream));
+                if (status >= 200 && status < 300 && response.optBoolean("ok")) {
+                    String token = response.optString("token", "");
+                    if (token.isEmpty()) throw new Exception("Geen toegangssleutel ontvangen");
+                    SecureStore.putToken(this, token);
+                    runOnUiThread(() -> {
+                        showAdminShell();
+                        refresh();
+                    });
+                    return;
+                }
+                String err = response.optString("error", "");
+                String msg = "Koppelen mislukt.";
+                if ("invalid_or_expired_code".equals(err)) msg = "De koppelcode is onjuist of verlopen.";
+                else if ("rate_limited".equals(err)) msg = "Te veel pogingen. Probeer later opnieuw.";
+                final String message = msg;
+                runOnUiThread(() -> showPairing(message));
+            } catch (Exception e) {
+                final String message = e.getMessage() == null ? "Koppelen mislukt." : e.getMessage();
+                runOnUiThread(() -> showPairing(message));
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        });
     }
 
     private void showAdminShell() {
@@ -193,6 +240,29 @@ public class MainActivity extends Activity {
         refreshButton.setTextSize(22);
         header.addView(refreshButton, new LinearLayout.LayoutParams(dp(50), dp(44)));
         refreshButton.setOnClickListener(v -> refresh());
+
+
+        LinearLayout rangeRow = horizontal();
+        rangeRow.setGravity(Gravity.CENTER_VERTICAL);
+        rangeRow.setPadding(dp(16), 0, dp(16), dp(10));
+        rangeRow.addView(text("Periode", 13, MUTED, true), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        Spinner range = new Spinner(this);
+        ArrayAdapter<String> rangeAdapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"Vandaag", "7 dagen", "30 dagen"});
+        range.setAdapter(rangeAdapter);
+        range.setSelection(rangeDays == 1 ? 0 : (rangeDays == 7 ? 1 : 2));
+        range.setBackground(roundRect(CARD_2, 12));
+        rangeRow.addView(range, new LinearLayout.LayoutParams(dp(150), dp(44)));
+        root.addView(rangeRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        range.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            private boolean first = true;
+            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                rangeDays = position == 0 ? 1 : (position == 1 ? 7 : 30);
+                if (first) { first = false; return; }
+                refresh();
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
 
         HorizontalScrollView tabsScroll = new HorizontalScrollView(this);
         tabsScroll.setHorizontalScrollBarEnabled(false);
@@ -255,7 +325,7 @@ public class MainActivity extends Activity {
         executor.execute(() -> {
             HttpURLConnection connection = null;
             try {
-                URL url = new URL(API_URL + "?days=7&fresh=" + System.currentTimeMillis());
+                URL url = new URL(API_URL + "?days=" + rangeDays + "&fresh=" + System.currentTimeMillis());
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setUseCaches(false);
                 connection.setConnectTimeout(10000);
@@ -274,7 +344,7 @@ public class MainActivity extends Activity {
                 if (code == 401 || code == 403) {
                     runOnUiThread(() -> {
                         loading = false;
-                        prefs.edit().remove(PREF_TOKEN).apply();
+                        SecureStore.clear(this);
                         showPairing("Deze admin-code is niet geldig.");
                     });
                     return;
@@ -320,9 +390,7 @@ public class MainActivity extends Activity {
         switch (selectedTab) {
             case 1: renderAnalytics(); break;
             case 2: renderApp(); break;
-            case 3: renderTesters(); break;
-            case 4: renderCommerce(); break;
-            case 5: renderSystem(); break;
+            case 3: renderSystem(); break;
             default: renderOverview();
         }
     }
@@ -441,7 +509,7 @@ public class MainActivity extends Activity {
                 metric("Pageviews", num(today.optInt("pageviews")), "vandaag", TEXT)
         );
 
-        addSectionTitle("Laatste 7 dagen");
+        addSectionTitle(rangeDays == 1 ? "Vandaag" : "Laatste " + rangeDays + " dagen");
         addMetricPair(
                 metric("Bezoekers", num(summary.optInt("visitors")), "uniek", TEXT),
                 metric("Pageviews", num(summary.optInt("pageviews")), num(summary.optInt("countries")) + " landen", TEXT)
@@ -607,7 +675,7 @@ public class MainActivity extends Activity {
         lp.topMargin = dp(14);
         content.addView(reset, lp);
         reset.setOnClickListener(v -> {
-            prefs.edit().remove(PREF_TOKEN).apply();
+            SecureStore.clear(this);
             data = null;
             showPairing(null);
         });
