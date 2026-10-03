@@ -1,0 +1,63 @@
+    private void demoSuite(Bundle result) throws Exception {
+        android.content.Context c=getTargetContext();
+        com.nenotv.player.storage.SecureProfileStore profiles=new com.nenotv.player.storage.SecureProfileStore(c);
+        profiles.clear();
+        SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_started_at").remove("demo_expires_at").putString("language","nl").commit();
+        require(DemoSource.URL.equals(BuildConfig.NENOTV_DEMO_M3U_URL),"Build uses an unreviewed demo source");
+        ProfileActivity activity=(ProfileActivity)startActivitySync(new Intent(c,ProfileActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        waitForIdleSync();
+        runOnMainSync(()->{
+            require(activity.demoRadio.isEnabled(),"Demo button disabled");
+            activity.demoRadio.performClick();
+            activity.demoRadio.performClick();
+        });
+        long deadline=android.os.SystemClock.elapsedRealtime()+15000;
+        while(!profiles.exists()&&android.os.SystemClock.elapsedRealtime()<deadline)Thread.sleep(100);
+        require(profiles.exists(),"One-tap demo did not save profile");
+        com.nenotv.player.model.Profile p=profiles.load();
+        require(DemoPolicy.isDemo(p),"Saved profile is not demo");
+        long expiry=DemoPolicy.expiresAt(c);
+        require(expiry>System.currentTimeMillis(),"Demo did not start");
+        require(DemoPolicy.startOrKeep(c,System.currentTimeMillis())==expiry,"Repeated tap extended demo");
+        com.nenotv.player.provider.M3uProvider provider=new com.nenotv.player.provider.M3uProvider(p,"nl");
+        provider.authenticate();
+        java.util.List<MediaEntry> entries=provider.items("live","all");
+        require(entries.size()==2,"Packaged playlist count");
+        for(MediaEntry item:entries){
+            final androidx.media3.exoplayer.ExoPlayer[] player={null};
+            final android.graphics.SurfaceTexture[] texture={null};
+            final android.view.Surface[] surface={null};
+            final java.util.concurrent.atomic.AtomicBoolean frame=new java.util.concurrent.atomic.AtomicBoolean();
+            final java.util.concurrent.atomic.AtomicReference<String> error=new java.util.concurrent.atomic.AtomicReference<>();
+            try{
+                runOnMainSync(()->{
+                    texture[0]=new android.graphics.SurfaceTexture(0);texture[0].setDefaultBufferSize(1280,720);
+                    surface[0]=new android.view.Surface(texture[0]);
+                    player[0]=new androidx.media3.exoplayer.ExoPlayer.Builder(c).build();
+                    player[0].setVideoSurface(surface[0]);
+                    player[0].addListener(new androidx.media3.common.Player.Listener(){
+                        @Override public void onRenderedFirstFrame(){frame.set(true);}
+                        @Override public void onPlayerError(androidx.media3.common.PlaybackException e){error.set(e.getErrorCodeName());}
+                    });
+                    player[0].setMediaItem(androidx.media3.common.MediaItem.fromUri(item.url));player[0].prepare();player[0].play();
+                });
+                long end=android.os.SystemClock.elapsedRealtime()+45000;
+                final java.util.concurrent.atomic.AtomicBoolean played=new java.util.concurrent.atomic.AtomicBoolean();
+                while(!played.get()&&error.get()==null&&android.os.SystemClock.elapsedRealtime()<end){
+                    runOnMainSync(()->played.set(frame.get()&&player[0].getCurrentPosition()>=1500&&player[0].getAudioFormat()!=null));
+                    Thread.sleep(100);
+                }
+                require(error.get()==null,"Demo playback error: "+item.tvgId+": "+error.get());
+                require(played.get(),"Demo did not render video and decode audio: "+item.tvgId);
+            }finally{runOnMainSync(()->{if(player[0]!=null)player[0].release();if(surface[0]!=null)surface[0].release();if(texture[0]!=null)texture[0].release();});}
+        }
+        p.name="Renamed demo";profiles.save(p);
+        SettingsStore.prefs(c).edit().putLong("demo_expires_at",System.currentTimeMillis()-1).commit();
+        require(DemoPolicy.blockPlayback(c),"Renaming bypassed demo expiry");
+        require(DemoPolicy.startOrKeep(c,System.currentTimeMillis())<0,"Expired demo restarted");
+        p.m3uUrl="https://example.com/own.m3u";profiles.save(p);
+        require(!DemoPolicy.blockPlayback(c),"Demo expiry blocked own source");
+        profiles.clear();
+        result.putString("NENOTV_DEMO_TESTS","passed");
+        finish(Activity.RESULT_OK,result);
+    }
