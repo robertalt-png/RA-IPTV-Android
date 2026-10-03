@@ -336,6 +336,11 @@ void scheduleBackgroundIndex(){
     }
     if(matches.isEmpty()){busy(false,T("no_results"));scheduleBackgroundIndex();return;}
 
+    if(provider instanceof XtreamProvider&&!epg){
+        refreshSearchIndex(false);
+        return;
+    }
+
     exec.execute(()->{
         try{
             List<MediaEntry>ready=Collections.emptyList();
@@ -376,10 +381,12 @@ void scheduleBackgroundIndex(){
         else if(epg){showEpgByMode(Collections.emptyList());busy(true,T("other")+" · "+T("channels_loading"));}
         else{showMediaGrid("live".equals(requested));gridAdapter.set(Collections.emptyList(),"live".equals(requested));busy(true,T("other")+" · "+T("library_opening"));}
         if(matches.isEmpty()){if(cached<=0)busy(false,T("no_results"));return;}
+        if(provider instanceof XtreamProvider&&!epg){refreshSearchIndex(false);return;}
         exec.execute(()->{try{for(Category c:matches){if(!current(token)||Thread.currentThread().isInterrupted())break;try{List<MediaEntry>batch=provider.items(requested,c.id);for(MediaEntry e:batch)if(e!=null)e.group=c.name;searchIndex.upsert(profileKey(),batch);}catch(Exception ignored){}}final int count=searchIndex.countOther(profileKey(),requested);final List<MediaEntry> loadedPage=epg?sortItems(visibleItems(searchIndex.otherPage(profileKey(),requested,0,Math.min(250,count),SettingsStore.sort(this)))):Collections.emptyList();runOnUiThread(()->{if(!current(token)||!"other".equals(currentCategoryId))return;if(epg){List<MediaEntry>x=loadedPage;all=x;showEpgByMode(x);busy(false,x.size()+" "+T("channels")+" · "+T("other"));}else if(count>0)loadCachedOther(requested,token,count);else busy(false,T("no_results"));});}catch(Throwable ex){runOnUiThread(()->{if(current(token))busy(false,T("error_prefix")+": "+friendlyThrowable(ex));});}});
     }
 
     void loadAllIncremental(String requested){
+        if(provider instanceof XtreamProvider){refreshSearchIndex(false);return;}
         final int token=nextRequest();fullLibraryToken=token;
         final String key=profileKey();final Provider source=provider;
         final List<Category> cats=new ArrayList<>(currentCategories);
@@ -534,9 +541,18 @@ void scheduleBackgroundIndex(){
     String safe(String s){return s==null?"":s;} String profileKey(){if(profile==null)return "none";String base=profile.type.name()+"|"+safe(profile.server)+"|"+safe(profile.username)+"|"+safe(profile.m3uUrl);return Integer.toHexString(base.hashCode())+":"+profile.type.name();} String cacheCursorKey(String type){return cacheCursorKey(profileKey(),type);} String cacheCursorKey(String key,String type){return "cache_cursor_"+key+"_"+type;}
     void publishIndexedTop(String type){
         long now=android.os.SystemClock.elapsedRealtime();if(now-lastIndexUiPublish<1200)return;lastIndexUiPublish=now;
-        final String key=profileKey(),sort=SettingsStore.sort(this),pref=SettingsStore.contentLanguage(this),expected="lang:"+SettingsStore.primaryLanguage(this);final int total=searchIndex.countSection(key,type);if(total<=0)return;
-        List<MediaEntry>ready=visibleItems(searchIndex.sectionPage(key,type,0,CACHE_PAGE_SIZE,sort,pref));if(expected.equals(currentCategoryId)){int n=searchIndex.countLanguage(key,type,SettingsStore.primaryLanguage(this));ready=n>0?visibleItems(searchIndex.languagePage(key,type,SettingsStore.primaryLanguage(this),0,Math.min(CACHE_PAGE_SIZE,n),sort)):Collections.emptyList();}if(ready.isEmpty())return;final ArrayList<MediaEntry>shown=new ArrayList<>(ready);
-        runOnUiThread(()->{if(!isUiAlive()||!type.equals(section)||(latestSearchQuery!=null&&!latestSearchQuery.isEmpty())||currentCategories.isEmpty())return;if(!"all".equals(currentCategoryId)&&!expected.equals(currentCategoryId))return;if(grid.getVisibility()!=View.VISIBLE||grid.getFirstVisiblePosition()>2)return;stopCachePaging();all=new ArrayList<>(shown);showMediaGrid("live".equals(type));gridAdapter.set(shown,"live".equals(type));MediaEntry first=shown.get(0);if(selectedHero==null||selectedHero.uniqueKey().equals(indexAutoHeroKey)){previewAuto(first);indexAutoHeroKey=first.uniqueKey();}busy(false,total+" "+T("results"));});
+        final String key=profileKey(),sort=SettingsStore.sort(this),pref=SettingsStore.contentLanguage(this),expected=currentCategoryId;
+        int total=searchIndex.countSection(key,type);if(total<=0)return;
+        List<MediaEntry>ready;
+        if(expected.startsWith("lang:")||"multi".equals(expected)){
+            String tag=expected.startsWith("lang:")?expected.substring(5):"multi";
+            total=searchIndex.countLanguage(key,type,tag);ready=visibleItems(searchIndex.languagePage(key,type,tag,0,CACHE_PAGE_SIZE,sort));
+        }else if("other".equals(expected)){
+            total=searchIndex.countOther(key,type);ready=visibleItems(searchIndex.otherPage(key,type,0,CACHE_PAGE_SIZE,sort));
+        }else if("all".equals(expected))ready=visibleItems(searchIndex.sectionPage(key,type,0,CACHE_PAGE_SIZE,sort,pref));
+        else return;
+        if(ready.isEmpty())return;final ArrayList<MediaEntry>shown=new ArrayList<>(ready);final int shownTotal=total;
+        runOnUiThread(()->{if(!isUiAlive()||!key.equals(profileKey())||!type.equals(section)||(latestSearchQuery!=null&&!latestSearchQuery.isEmpty())||currentCategories.isEmpty())return;if(!expected.equals(currentCategoryId))return;if(grid.getVisibility()!=View.VISIBLE||grid.getFirstVisiblePosition()>2)return;stopCachePaging();all=new ArrayList<>(shown);cachePagingSection=type;cachePagingTag=expected.startsWith("lang:")?expected.substring(5):"all".equals(expected)?"":expected;cachePagingOffset=Math.min(CACHE_PAGE_SIZE,shownTotal);cachePagingTotal=shownTotal;cachePagingActive=cachePagingOffset<shownTotal;showMediaGrid("live".equals(type));gridAdapter.set(shown,"live".equals(type));MediaEntry first=shown.get(0);if(selectedHero==null||selectedHero.uniqueKey().equals(indexAutoHeroKey)){previewAuto(first);indexAutoHeroKey=first.uniqueKey();}busy(false,shownTotal+" "+T("results"));});
     }
 
     void reloadIndexedSectionWhenReady(String type){
@@ -638,7 +654,9 @@ void scheduleBackgroundIndex(){
                         // Fast path: standard Xtream servers can return a complete section in one request.
                         // Preserve category names locally; fall back to bounded per-category fetches if bulk fails.
                         boolean bulkDone=false;
-                        if(indexProvider instanceof XtreamProvider&&!Thread.currentThread().isInterrupted()){
+                        SearchIndexStore.ImportProgress resumeProgress=searchIndex.importProgress(key,type);
+                        boolean resumeCategories=!requestedForce&&resumeProgress!=null&&!safe(resumeProgress.cursor).isEmpty();
+                        if(indexProvider instanceof XtreamProvider&&!resumeCategories&&!Thread.currentThread().isInterrupted()){
                             final XtreamProvider importProvider=(XtreamProvider)indexProvider;
                             String session=null;
                             try{
@@ -648,20 +666,20 @@ void scheduleBackgroundIndex(){
                                 HashMap<String,String> groupNames=new HashMap<>();
                                 for(Category c:cats)groupNames.put(safe(c.id),c.name);
                                 final int[] received={0};final long[] lastPublish={0};
+                                final boolean publishPartial=!searchIndex.isComplete(key,type);
                                 importProvider.streamSection(type,batch->{
                                     waitWhilePaused();waitForLibraryLoad();
                                     com.nenotv.player.net.StreamingJsonArray.checkCancelled();
                                     for(MediaEntry e:batch){String g=groupNames.get(safe(e.categoryId));if(g!=null)e.group=g;}
-                                    searchIndex.importBatch(importSession,key,type,batch);
-                                    if(!searchIndex.isComplete(key,type))searchIndex.upsert(key,batch);
+                                    searchIndex.importBatch(importSession,key,type,batch,publishPartial);
                                     received[0]+=batch.size();
-                                    int persisted=searchIndex.countSection(key,type);
-                                    SettingsStore.prefs(this).edit().putInt("first_sync_titles_"+key,searchIndex.count(key)).apply();
-                                    searchIndex.checkpointImport(key,type,importSession,"",Math.max(received[0],persisted));
                                     long now=android.os.SystemClock.elapsedRealtime();
-                                    if(now-lastPublish[0]>=500){
+                                    if(now-lastPublish[0]>=1000){
                                         lastPublish[0]=now;final int loaded=received[0];
-                                        runOnUiThread(()->{if(isUiAlive()&&key.equals(profileKey()))showStreamingBanner(loaded);});
+                                        searchIndex.checkpointImport(key,type,importSession,"",loaded);
+                                        SettingsStore.prefs(this).edit().putInt("first_sync_titles_"+key,searchIndex.count(key)).apply();
+                                        runOnUiThread(()->{if(isUiAlive()&&key.equals(profileKey()))showStreamingBanner(type,loaded);});
+                                        if(publishPartial&&key.equals(profileKey()))publishIndexedTop(type);
                                     }
                                 });
                                 searchIndex.finishSectionImport(importSession,key,type);session=null;
@@ -673,6 +691,7 @@ void scheduleBackgroundIndex(){
                                 runOnUiThread(()->{if(isUiAlive()&&key.equals(profileKey()))showIndexBanner("",gd,gt,ti);});
                                 if(key.equals(profileKey())){publishIndexedTop(type);reloadIndexedSectionWhenReady(type);}bulkDone=true;
                             }catch(Exception bulkError){
+                                android.util.Log.w("NenoTVImport","Bulk import failed for "+type+": "+bulkError.getClass().getSimpleName());
                                 if(session!=null){try{searchIndex.abortSectionImport(session);}catch(Exception cleanupError){bulkError.addSuppressed(cleanupError);}}
                                 if(Thread.currentThread().isInterrupted())break;
                             }
@@ -684,6 +703,7 @@ void scheduleBackgroundIndex(){
                         String fallbackSession=searchIndex.beginSectionImport(progress==null?null:progress.session);
                         try{
                             final String importSession=fallbackSession;
+                            final boolean publishPartial=!searchIndex.isComplete(key,type);
                             int resumeAt=startAt;
                             String resumeCursor=progress==null?"":safe(progress.cursor);
                             if(!resumeCursor.isEmpty()){for(int ci=0;ci<cats.size();ci++)if(resumeCursor.equals(cats.get(ci).id)){resumeAt=Math.max(resumeAt,ci+1);break;}}
@@ -703,8 +723,7 @@ void scheduleBackgroundIndex(){
                                         ((XtreamProvider)indexProvider).streamCategory(type,category.id,batch->{
                                             waitWhilePaused();waitForLibraryLoad();
                                             for(MediaEntry e:batch)e.group=category.name;
-                                            searchIndex.importBatch(importSession,key,type,batch);
-                                            if(!searchIndex.isComplete(key,type))searchIndex.upsert(key,batch);
+                                            searchIndex.importBatch(importSession,key,type,batch,publishPartial);
                                         });
                                         return categoryIndex;
                                     });
@@ -734,6 +753,7 @@ void scheduleBackgroundIndex(){
                                         searchIndex.checkpointImport(key,type,importSession,"",staged);
                                     }
                                     progressEdit.apply();
+                                    if(publishPartial&&key.equals(profileKey()))publishIndexedTop(type);
                                     final int gd=globalDone,gt=grandTotal,ti=searchIndex.count(key);
                                     runOnUiThread(()->{if(isUiAlive()&&key.equals(profileKey()))showIndexBanner("",gd,gt,ti);});
                                     while(nextCategory<cats.size()&&inFlight<categoryWindowSize){
@@ -745,8 +765,7 @@ void scheduleBackgroundIndex(){
                                             ((XtreamProvider)indexProvider).streamCategory(type,category.id,batch->{
                                                 waitWhilePaused();waitForLibraryLoad();
                                                 for(MediaEntry e:batch)e.group=category.name;
-                                                searchIndex.importBatch(importSession,key,type,batch);
-                                                if(!searchIndex.isComplete(key,type))searchIndex.upsert(key,batch);
+                                                searchIndex.importBatch(importSession,key,type,batch,publishPartial);
                                             });
                                             return categoryIndex;
                                         });
@@ -864,10 +883,10 @@ TextView addInfoBlock(LinearLayout b,String l,String x){TextView h=new TextView(
     boolean isAdultLocked(MediaEntry e){return e!=null&&!SettingsStore.adultsAllowed(this)&&(SettingsStore.isAdultLabel(e.group)||SettingsStore.isAdultLabel(e.name));}
     List<MediaEntry> visibleItems(List<MediaEntry>src){List<MediaEntry>o=new ArrayList<>();if(src==null)return o;for(MediaEntry e:src)if(!isAdultLocked(e))o.add(e);return o;}
     int hiddenCount(List<MediaEntry>a,List<MediaEntry>b){return Math.max(0,(a==null?0:a.size())-(b==null?0:b.size()));}
-    void showStreamingBanner(int titles){
+    void showStreamingBanner(String type,int titles){
         if(indexBanner==null||indexBannerText==null)return;
         indexBanner.setVisibility(View.VISIBLE);
-        indexBannerText.setText(T("loading"));
+        indexBannerText.setText(label(type)+" · "+titles+" "+T("loaded"));
         if(indexBannerProgress!=null)indexBannerProgress.setIndeterminate(true);
     }
     void showIndexBanner(String type,int done,int cats,int titles){

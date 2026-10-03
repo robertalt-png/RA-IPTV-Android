@@ -68,12 +68,19 @@ public class SearchIndexStore extends SQLiteOpenHelper {
         upsertInternal(db,"entries",null,profile,e);
     }
     private void upsertInternal(SQLiteDatabase db,String table,String session,String profile,MediaEntry e){
+        upsertInternal(db,table,session,profile,e,false);
+    }
+    private void upsertInternal(SQLiteDatabase db,String table,String session,String profile,MediaEntry e,boolean visible){
         try{
             ContentValues v=new ContentValues();v.put("profile",profile);v.put("item_key",e.uniqueKey());v.put("type",e.type);v.put("name",safe(e.name));
             String nameNorm=norm(e.name);String hay=norm(safe(e.name)+" "+safe(e.plot)+" "+safe(e.group)+" "+safe(e.seriesTitle)+" "+safe(e.tvgName));
             v.put("name_norm",nameNorm);v.put("hay_norm",hay);v.put("lang_tag",ContentLanguage.detectTag(e));v.put("lang_scanned",1);v.put("payload",encode(e));
             if(session!=null){v.put("session",session);v.put("started",System.currentTimeMillis());}
             if(db.insertWithOnConflict(table,null,v,SQLiteDatabase.CONFLICT_REPLACE)<0)throw new IllegalStateException("cache_write_failed");
+            if(visible){
+                v.remove("session");v.remove("started");
+                if(db.insertWithOnConflict("entries",null,v,SQLiteDatabase.CONFLICT_REPLACE)<0)throw new IllegalStateException("cache_write_failed");
+            }
         }catch(Exception failure){throw new IllegalStateException("cache_write_failed",failure);}
     }
 
@@ -138,13 +145,16 @@ public class SearchIndexStore extends SQLiteOpenHelper {
     }
 
     public void importBatch(String session,String profile,String section,List<MediaEntry> items) throws java.io.InterruptedIOException {
+        importBatch(session,profile,section,items,false);
+    }
+    public void importBatch(String session,String profile,String section,List<MediaEntry> items,boolean visible) throws java.io.InterruptedIOException {
         com.nenotv.player.net.StreamingJsonArray.checkCancelled();
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
         try {
             for(MediaEntry e:items){
                 com.nenotv.player.net.StreamingJsonArray.checkCancelled();
                 if(!section.equals(e.type))throw new IllegalArgumentException("import_section_mismatch");
-                upsertInternal(db,"import_entries",session,profile,e);
+                upsertInternal(db,"import_entries",session,profile,e,visible);
             }
             db.setTransactionSuccessful();
         } finally {db.endTransaction();}

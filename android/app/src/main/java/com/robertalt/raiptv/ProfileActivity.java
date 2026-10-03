@@ -26,17 +26,18 @@ public class ProfileActivity extends Activity {
     }
 
     void applyLanguage(){
-        ((TextView)findViewById(R.id.profileTitle)).setText(T("TV source","TV-bron","TV-Quelle"));
-        ((TextView)findViewById(R.id.profileIntro)).setText(T("How would you like to start?","Hoe wilt u NenoTV gebruiken?","Wie möchten Sie NenoTV verwenden?"));
-        xtream.setText("Xtream Codes"); m3uRadio.setText("M3U");
+        ((TextView)findViewById(R.id.profileTitle)).setText("NenoTV");
+        ((TextView)findViewById(R.id.profileIntro)).setText(T("Choose your TV source","Kies uw tv-aanbod","TV-Angebot auswählen"));
+        xtream.setText(T("Own provider · Xtream Codes","Eigen aanbieder · Xtream Codes","Eigener Anbieter · Xtream Codes"));
+        m3uRadio.setText(T("Own playlist · M3U","Eigen afspeellijst · M3U","Eigene Wiedergabeliste · M3U"));
         String demo=BuildConfig.NENOTV_DEMO_M3U_URL;
         boolean configured=demo!=null&&!demo.trim().isEmpty();
         boolean expired=DemoPolicy.expired(this);
         demoRadio.setText(!configured
-            ?T("30-day free demo · not configured yet","30 dagen gratis demo · nog niet geconfigureerd","30 Tage kostenlose Demo · noch nicht eingerichtet")
+            ?T("NenoTV TV & films · unavailable","NenoTV tv & films · niet beschikbaar","NenoTV TV & Filme · nicht verfügbar")
             :expired
                 ?T("30-day demo ended · add your own TV source","30 dagen demo afgelopen · voeg uw eigen TV-bron toe","30-Tage-Demo beendet · eigene TV-Quelle hinzufügen")
-                :T("Try NenoTV free for 30 days","NenoTV 30 dagen gratis proberen","NenoTV 30 Tage kostenlos testen"));
+                :T("NenoTV TV & films · 30 days free","NenoTV tv & films · 30 dagen gratis","NenoTV TV & Filme · 30 Tage kostenlos"));
         demoRadio.setEnabled(configured&&!expired);
         server.setHint(T("Server address","Serveradres","Serveradresse")); user.setHint(T("Username","Gebruikersnaam","Benutzername"));
         pass.setHint(T("Password","Wachtwoord","Passwort")); m3u.setHint("M3U-URL");
@@ -51,9 +52,10 @@ public class ProfileActivity extends Activity {
         Profile p=null;
         if(!sourceId.isEmpty())for(SourceStore.Entry e:sources.list())if(sourceId.equals(e.id)){p=e.profile;break;}
         if(p==null&&store.exists())p=store.load();
-        if(p==null){xtream.setChecked(true);return;}
+        if(p==null){if(demoRadio.isEnabled())demoRadio.setChecked(true);else xtream.setChecked(true);return;}
         editingProfile=p;
-        xtream.setChecked(p.type==Profile.Type.XTREAM); m3uRadio.setChecked(p.type==Profile.Type.M3U);
+        boolean ownDemo=p.type==Profile.Type.M3U&&BuildConfig.NENOTV_DEMO_M3U_URL.equals(p.m3uUrl)&&demoRadio.isEnabled();
+        if(ownDemo)demoRadio.setChecked(true);else if(p.type==Profile.Type.M3U)m3uRadio.setChecked(true);else xtream.setChecked(true);
         name.setText(p.name); server.setText(p.server); user.setText(p.username); pass.setText(p.password); m3u.setText(p.m3uUrl); epg.setText(p.epgUrl);
     }
 
@@ -61,6 +63,10 @@ public class ProfileActivity extends Activity {
         boolean isDemo=demoRadio.isChecked(), isM3u=m3uRadio.isChecked();
         xtreamFields.setVisibility(!isDemo&&!isM3u?View.VISIBLE:View.GONE);
         m3uFields.setVisibility(isM3u?View.VISIBLE:View.GONE);
+        findViewById(R.id.nenoOffer).setVisibility(isDemo?View.VISIBLE:View.GONE);
+        findViewById(R.id.advancedButton).setVisibility(isDemo?View.GONE:View.VISIBLE);
+        ((TextView)findViewById(R.id.nenoOffer)).setText(T("Europe by Satellite · Europe by Satellite +\nOpen films: Sintel, Spring, Tears of Steel and more","Europe by Satellite · Europe by Satellite +\nOpen films: Sintel, Spring, Tears of Steel en meer","Europe by Satellite · Europe by Satellite +\nOpen Movies: Sintel, Spring, Tears of Steel und mehr"));
+        ((Button)findViewById(R.id.saveButton)).setText(isDemo?T("Start watching","Start kijken","Jetzt ansehen"):T("Connect and continue","Verbinden en doorgaan","Verbinden und fortfahren"));
         if(isDemo)advancedFields.setVisibility(View.GONE);
     }
 
@@ -101,7 +107,7 @@ public class ProfileActivity extends Activity {
                 sourceId=sources.upsert(sourceId,p,true);
                 runOnUiThread(()->{setResult(RESULT_OK);finish();});
             }catch(Exception e){
-                runOnUiThread(()->{connecting=false;xtream.setEnabled(true);m3uRadio.setEnabled(true);applyLanguage();findViewById(R.id.saveButton).setEnabled(true);status.setText(T("Could not connect: ","Kan geen verbinding maken: ","Verbindung fehlgeschlagen: ")+friendly(e));});
+                runOnUiThread(()->{connecting=false;xtream.setEnabled(true);m3uRadio.setEnabled(true);applyLanguage();updateMode();findViewById(R.id.saveButton).setEnabled(true);status.setText(T("Could not connect: ","Kan geen verbinding maken: ","Verbindung fehlgeschlagen: ")+friendly(e));});
             }
         });
     }

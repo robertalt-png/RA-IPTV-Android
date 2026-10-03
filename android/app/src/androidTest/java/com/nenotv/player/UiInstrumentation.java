@@ -31,7 +31,42 @@ public final class UiInstrumentation extends ImportInstrumentation {
         Thread.sleep(350);Bitmap bitmap=getUiAutomation().takeScreenshot();check(bitmap!=null,"Screenshot missing: "+name);
         File folder=new File(getTargetContext().getExternalFilesDir(null),"qa");folder.mkdirs();try(FileOutputStream f=new FileOutputStream(new File(folder,name+".png"))){bitmap.compress(Bitmap.CompressFormat.PNG,100,f);}bitmap.recycle();
     }
+    void onboarding(Bundle result)throws Exception{
+        Context c=getTargetContext();
+        SecureProfileStore profiles=new SecureProfileStore(c);
+        profiles.clear();
+        SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();
+        for(String language:new String[]{"nl","en","de"}){
+            SettingsStore.setPrimaryLanguage(c,language);
+            ProfileActivity a=(ProfileActivity)startActivitySync(new Intent(c,ProfileActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            waitForIdleSync();
+            runOnMainSync(()->{
+                check(a.demoRadio.isEnabled()&&a.demoRadio.isChecked(),"NenoTV offer not selected on fresh install");
+                check(a.xtreamFields.getVisibility()==View.GONE&&a.m3uFields.getVisibility()==View.GONE,"Technical fields shown before source selection");
+                check(a.findViewById(R.id.nenoOffer).getVisibility()==View.VISIBLE,"NenoTV catalogue missing");
+                check(a.findViewById(R.id.advancedButton).getVisibility()==View.GONE,"Advanced settings shown for built-in offer");
+                assertUnclippedText(a.demoRadio);assertUnclippedText(a.xtream);assertUnclippedText(a.m3uRadio);
+            });
+            snapshot("onboarding-"+language);
+            runOnMainSync(()->{
+                a.xtream.performClick();
+                check(a.xtreamFields.getVisibility()==View.VISIBLE&&a.m3uFields.getVisibility()==View.GONE,"Xtream fields missing");
+                a.m3uRadio.performClick();
+                check(a.m3uFields.getVisibility()==View.VISIBLE&&a.xtreamFields.getVisibility()==View.GONE,"M3U fields missing");
+                a.finish();
+            });
+        }
+        Profile demo=new Profile();demo.type=Profile.Type.M3U;demo.m3uUrl=BuildConfig.NENOTV_DEMO_M3U_URL;demo.name="Saved NenoTV";profiles.save(demo);
+        ProfileActivity saved=(ProfileActivity)startActivitySync(new Intent(c,ProfileActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));waitForIdleSync();
+        runOnMainSync(()->{check(saved.demoRadio.isChecked(),"Saved NenoTV offer reopened as own M3U");saved.finish();});
+        ProfileActivity added=(ProfileActivity)startActivitySync(new Intent(c,ProfileActivity.class).putExtra("new_source",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));waitForIdleSync();
+        runOnMainSync(()->{check(added.xtream.isChecked(),"Adding own source changed default");added.finish();});
+        result.putString("NENOTV_ONBOARDING","passed");
+    }
     void core(Bundle result)throws Exception{
+        XtreamImportChecks.run(getTargetContext());
+        result.putString("NENOTV_XTREAM_IMPORT","passed");
+        onboarding(result);
         Context c=getTargetContext();
         for(String unknown:new String[]{"0","0.0","null","NaN","Infinity","-1","11",""})check(MediaEntry.formatRating(unknown).isEmpty(),"Unknown rating shown: "+unknown);
         check(!MediaEntry.formatRating("8,2").isEmpty(),"Comma score disappeared");

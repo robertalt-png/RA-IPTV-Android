@@ -29,11 +29,11 @@ public final class StreamingJsonArray {
     }
 
     public static long read(String address, Receiver receiver) throws Exception {
-        final long started = System.nanoTime();
+        final NetworkBudget budget = new NetworkBudget();
         URL url = new URL(address);
         for (int redirects = 0; redirects <= 5; redirects++) {
             checkCancelled();
-            if (System.nanoTime() - started > MAX_TIME_NS) throw new IOException("import_timeout");
+            budget.check();
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             try {
                 connection.setConnectTimeout(15000);
@@ -55,8 +55,11 @@ public final class StreamingJsonArray {
                 if (status < 200 || status >= 300) throw new IOException("HTTP_" + status);
                 try (InputStream raw = connection.getInputStream()) {
                     InputStream input = "gzip".equalsIgnoreCase(connection.getContentEncoding()) ? new GZIPInputStream(raw) : raw;
-                    try (InputStream limited = new BoundedInput(input, started)) {
-                        return parse(limited, receiver);
+                    try (InputStream limited = new BoundedInput(input, budget)) {
+                        return parse(limited, item->{
+                            long started=System.nanoTime();
+                            try{receiver.accept(item);}finally{budget.processingNs+=System.nanoTime()-started;}
+                        });
                     }
                 }
             } finally {
@@ -85,15 +88,23 @@ public final class StreamingJsonArray {
         }
     }
 
+    private static final class NetworkBudget {
+        final long started=System.nanoTime();
+        long processingNs;
+        void check() throws IOException {
+            checkCancelled();
+            if(System.nanoTime()-started-processingNs>MAX_TIME_NS)throw new IOException("import_timeout");
+        }
+    }
     private static final class BoundedInput extends FilterInputStream {
-        private final long started;
+        private final NetworkBudget budget;
         private long bytes;
 
-        BoundedInput(InputStream input, long started) { super(input); this.started = started; }
+        BoundedInput(InputStream input, NetworkBudget budget) { super(input); this.budget = budget; }
 
         private void check(int count) throws IOException {
             checkCancelled();
-            if (System.nanoTime() - started > MAX_TIME_NS) throw new IOException("import_timeout");
+            budget.check();
             if (count > 0) bytes += count;
             if (bytes > MAX_BYTES) throw new IOException("response_too_large");
         }
