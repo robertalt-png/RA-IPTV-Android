@@ -98,6 +98,15 @@ public final class UiInstrumentation extends ImportInstrumentation {
         runOnMainSync(()->{WindowInsets in=basic.getWindow().getDecorView().getRootWindowInsets();if(Build.VERSION.SDK_INT>=30)check(in!=null&&!in.isVisible(WindowInsets.Type.systemBars()),"Light player is not fullscreen");basic.showControls();check(basic.forward.getText().toString().contains("10"),"Forward control is unclear");basic.forward.performClick();});Thread.sleep(300);runOnMainSync(()->{check(basic.exo.getCurrentPosition()>=10000,"Forward did not seek 10 seconds");basic.rewind.performClick();});Thread.sleep(300);runOnMainSync(()->check(basic.exo.getCurrentPosition()<5000,"Rewind did not seek back"));snapshot("light-player");runOnMainSync(basic::finish);waitForIdleSync();
         c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE).edit().putString("level","PRO").commit();
         check(ProLibraryBridge.isActive(a),"Pro entitlement did not enable module");
+        SourceStore sourceStore=new SourceStore(c);
+        com.nenotv.player.model.Profile qaA=new com.nenotv.player.model.Profile();qaA.type=com.nenotv.player.model.Profile.Type.M3U;qaA.name="QA Source A";qaA.m3uUrl=DemoSource.URL;
+        com.nenotv.player.model.Profile qaB=new com.nenotv.player.model.Profile();qaB.type=com.nenotv.player.model.Profile.Type.XTREAM;qaB.name="QA Source B";qaB.server="https://example.invalid";qaB.username="qa";qaB.password="secret";
+        String qaAId=sourceStore.upsert("",qaA,true),qaBId=sourceStore.upsert("",qaB,false);
+        check(sourceStore.list().size()>=2,"Pro multi-source registry did not retain multiple sources");
+        check(sourceStore.setActive(qaBId)&&"QA Source B".equals(new SecureProfileStore(c).load().name),"Active Pro source did not mirror into Light provider profile");
+        org.json.JSONArray syncCopy=sourceStore.exportForSync();check(syncCopy.length()>=2,"Source sync export lost entries");
+        sourceStore.mergeFromCloud(syncCopy);check(sourceStore.list().size()>=2,"Source sync merge lost entries");
+        sourceStore.remove(qaAId);sourceStore.remove(qaBId);
         // Build the provider before selecting the packaged entry.
         com.nenotv.player.provider.M3uProvider provider=new com.nenotv.player.provider.M3uProvider(profile());provider.authenticate();MediaEntry item=provider.items("vod","all").get(0);
         Intent i=ProModuleInstaller.playerIntent(a);i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);i.putExtra("media",item);
