@@ -20,11 +20,13 @@ NenoTV remains one Android app. Light is the base application and owns provider 
 Includes the existing Pro media/player capabilities plus:
 
 - Multiple encrypted IPTV sources.
+- Optional Smart Merge: active source stays first/fast, secondary sources load afterward, duplicates are collapsed and alternate stream URLs are preserved as playback fallbacks.
 - Existing single source is migrated automatically into the source registry.
 - Select active source without changing the Light provider/import architecture.
 - Enable/disable and prioritize sources.
 - Add/edit/remove sources.
 - My NenoTV source sync using the existing NenoTV device/account identity.
+- Smart EPG: up to 8 encrypted extra XMLTV/EPG URLs per source, automatically matched by tvg-id/channel name only when normal provider EPG is empty.
 - Source vault is encrypted at rest on the NenoTV server.
 - My NenoTV displays source name/type only; credentials are never shown back in full.
 - Advanced EPG/timeline remains Pro-gated.
@@ -34,7 +36,7 @@ Includes the existing Pro media/player capabilities plus:
 
 ## Server integration
 
-Entitlement Core 0.1.15 / DB schema 4 adds an encrypted source vault keyed to the account entitlement. Public app endpoints:
+Entitlement Core 0.1.16 / DB schema 4 provides the encrypted source vault keyed to the account entitlement. v0.1.16 preserves Smart EPG URLs and existing optional bridge settings during source sync. Public app endpoints:
 
 - POST /wp-json/nenotv/v1/sources/pull
 - POST /wp-json/nenotv/v1/sources/push
@@ -46,4 +48,5 @@ Both require a valid active linked device ID + device key and an active Pro/tria
 - Do not enable production entitlement mode merely to test this branch.
 - Do not upload a QA-signed APK to Play.
 - Play AAB remains the canonical package; Pro is delivered on demand.
-- Final release requires the full existing phone/tablet/TV regression matrix plus explicit multi-source tests.
+- QA exports include a Light-only APK and a Pro universal APK, both generated from the exact same Play AAB with the disposable QA key.
+- Final release requires the full existing phone/tablet/TV regression matrix plus explicit Light APK separation, multi-source dedupe/fallback, Smart EPG fallback and My NenoTV sync-payload tests.
