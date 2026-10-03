@@ -127,6 +127,18 @@ LAYOUT = r'''<?xml version="1.0" encoding="utf-8"?>
 </ScrollView>
 '''
 
+def patch_uitext(path: Path):
+    s=path.read_text(encoding="utf-8")
+    pairs=[
+      ('{"bridge_token_optional","Bridge token (optional)"},','{"bridge_token_optional","Bridge token (optional)"},\n        {"bridge_help","Optional advanced setting for an external NAS subtitle bridge. Not required for normal TV, M3U or Xtream use."},'),
+      ('{"bridge_token_optional","Bridge-token (optioneel)"},','{"bridge_token_optional","Bridge-token (optioneel)"},\n        {"bridge_help","Optionele geavanceerde instelling voor een externe NAS-ondertitelingsbridge. Niet nodig voor normaal TV-, M3U- of Xtream-gebruik."},'),
+      ('{"bridge_token_optional","Bridge-Token (optional)"},','{"bridge_token_optional","Bridge-Token (optional)"},\n        {"bridge_help","Optionale erweiterte Einstellung für eine externe NAS-Untertitel-Bridge. Für die normale Nutzung mit TV, M3U oder Xtream nicht erforderlich."},')
+    ]
+    for old,new in pairs:
+        if old in s and '"bridge_help"' not in s[s.find(old):s.find(old)+500]:
+            s=s.replace(old,new,1)
+    path.write_text(s,encoding="utf-8")
+
 def patch_settings(path: Path):
     s=path.read_text(encoding="utf-8")
     marker='    sec(T("maintenance"));'
@@ -141,9 +153,11 @@ root=Path(".")
 profile=root/"app/src/main/java/com/robertalt/raiptv/ProfileActivity.java"
 layout=root/"app/src/main/res/layout/activity_profile.xml"
 settings=root/"app/src/main/java/com/robertalt/raiptv/SettingsActivity.java"
-for p in (profile,layout,settings):
+ui=root/"app/src/main/java/com/robertalt/raiptv/UiText.java"
+for p in (profile,layout,settings,ui):
     if not p.exists(): raise SystemExit(f"missing {p}")
 profile.write_text(PROFILE,encoding="utf-8")
 layout.write_text(LAYOUT,encoding="utf-8")
 patch_settings(settings)
+patch_uitext(ui)
 print("Applied explicit v0.13.3 source onboarding")
