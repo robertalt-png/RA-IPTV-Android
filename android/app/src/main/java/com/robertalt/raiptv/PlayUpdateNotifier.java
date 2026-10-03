@@ -3,9 +3,7 @@ package com.nenotv.player;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.net.Uri;
-import android.os.SystemClock;
 import com.google.android.play.core.appupdate.AppUpdateInfo;
 import com.google.android.play.core.appupdate.AppUpdateManager;
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory;
@@ -15,23 +13,27 @@ import com.google.android.play.core.install.model.AppUpdateType;
 import com.google.android.play.core.install.model.InstallStatus;
 import com.google.android.play.core.install.model.UpdateAvailability;
 import com.nenotv.player.storage.SettingsStore;
+import com.nenotv.player.storage.EntitlementStore;
+import com.nenotv.player.storage.UpdateRequirementStore;
+import java.text.DateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 /** Google Play decides availability for this account/device, including its test track. */
 public final class PlayUpdateNotifier {
     public static final int REQUEST_CODE = 9301;
     private final Activity activity;
     private final AppUpdateManager manager;
-    private final SharedPreferences prefs;
+    private final UpdateRequirementStore requirements;
+    private final Runnable accessChanged;
     private final InstallStateUpdatedListener listener;
     private AlertDialog dialog;
     private boolean resumed, closed, checking, flowActive;
-    private long lastCheck = -1;
-    private int offeredVersion;
-    private long restartDeferredUntil;
 
-    public PlayUpdateNotifier(Activity activity) {
+    public PlayUpdateNotifier(Activity activity, Runnable accessChanged) {
         this.activity = activity;
-        prefs = activity.getSharedPreferences("nenotv_update_notifications", Activity.MODE_PRIVATE);
+        this.accessChanged = accessChanged;
+        requirements = new UpdateRequirementStore(activity);
         manager = AppUpdateManagerFactory.create(activity.getApplicationContext());
         listener = state -> {
             if (state.installStatus() == InstallStatus.DOWNLOADED) {
@@ -40,7 +42,6 @@ public final class PlayUpdateNotifier {
             } else if (state.installStatus() == InstallStatus.FAILED
                     || state.installStatus() == InstallStatus.CANCELED) {
                 flowActive = false;
-                if (offeredVersion > 0) defer(offeredVersion);
             }
         };
         manager.registerListener(listener);
@@ -49,27 +50,31 @@ public final class PlayUpdateNotifier {
     public void onResume() {
         resumed = true;
         if (closed || checking) return;
-        long now = SystemClock.elapsedRealtime();
-        // Always check after returning from Play's flow; otherwise limit background work.
-        if (!flowActive && lastCheck >= 0 && now - lastCheck < 60_000) return;
         checking = true;
-        lastCheck = now;
         manager.getAppUpdateInfo().addOnSuccessListener(info -> {
             checking = false;
             if (!usable()) return;
+            int version = info.availableVersionCode();
+            if (info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
+                    || info.installStatus() == InstallStatus.DOWNLOADED) {
+                requirements.observe(version, info.clientVersionStalenessDays());
+            } else if (info.updateAvailability() == UpdateAvailability.UPDATE_NOT_AVAILABLE) {
+                requirements.noEligibleUpdate();
+            }
+            accessChanged.run();
             if (info.installStatus() == InstallStatus.DOWNLOADED) {
                 flowActive = false;
                 showRestart();
                 return;
             }
-            if (info.updateAvailability() != UpdateAvailability.UPDATE_AVAILABLE || flowActive) return;
-            int version = info.availableVersionCode();
-            if (UpdatePromptPolicy.shouldPrompt(BuildConfig.VERSION_CODE, version,
-                    prefs.getInt("deferred_version", 0), prefs.getLong("deferred_at", 0),
-                    System.currentTimeMillis())) showUpdate(info);
+            if (flowActive) return;
+            if (info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
+                    && UpdatePromptPolicy.shouldPrompt(BuildConfig.VERSION_CODE, version)) showUpdate(info);
+            else showKnownUpdateOrRestoration();
         }).addOnFailureListener(error -> {
-            // Offline, non-Play installs and unsupported devices must never block playback.
             checking = false;
+            // Enforce only a previously confirmed deadline when Play is temporarily offline.
+            if (usable()) { accessChanged.run(); showKnownUpdateOrRestoration(); }
         });
     }
 
@@ -79,21 +84,19 @@ public final class PlayUpdateNotifier {
 
     private void showUpdate(AppUpdateInfo info) {
         if (!usable() || dialog != null) return;
-        offeredVersion = info.availableVersionCode();
         dialog = new AlertDialog.Builder(activity)
-                .setTitle(text("Nieuwe NenoTV-versie beschikbaar", "New NenoTV version available", "Neue NenoTV-Version verfügbar"))
-                .setMessage(text("Er staat een update voor je klaar in Google Play. Je kunt nu bijwerken of later verder kijken.",
-                        "An update is ready for you in Google Play. Update now or keep watching and update later.",
-                        "Ein Update steht bei Google Play bereit. Jetzt aktualisieren oder später weitersehen."))
+                .setTitle(requirements.isBasicOnly()
+                        ? text("NenoTV werkt tijdelijk als Basic", "NenoTV is temporarily Basic", "NenoTV ist vorübergehend Basic")
+                        : text("Nieuwe NenoTV-versie beschikbaar", "New NenoTV version available", "Neue NenoTV-Version verfügbar"))
+                .setMessage(updateMessage())
                 .setPositiveButton(text("Bijwerken", "Update", "Aktualisieren"), (d, w) -> startUpdate(info))
-                .setNegativeButton(text("Later", "Later", "Später"), (d, w) -> defer(offeredVersion))
-                .setOnCancelListener(d -> defer(offeredVersion)).create();
+                .setNegativeButton(text("Verder kijken", "Keep watching", "Weitersehen"), (d, w) -> {}).create();
         dialog.setOnDismissListener(d -> dialog = null);
         dialog.show();
     }
 
     private void startUpdate(AppUpdateInfo info) {
-        if (info.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)) {
+        if (info != null && info.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)) {
             try {
                 flowActive = manager.startUpdateFlowForResult(info, activity,
                         AppUpdateOptions.newBuilder(AppUpdateType.FLEXIBLE).build(), REQUEST_CODE);
@@ -101,7 +104,10 @@ public final class PlayUpdateNotifier {
             } catch (Exception ignored) { }
         }
         // Only reached after Play positively reports a newer eligible version.
-        defer(offeredVersion);
+        openPlay(activity);
+    }
+
+    public static void openPlay(Activity activity) {
         try {
             activity.startActivity(new Intent(Intent.ACTION_VIEW,
                     Uri.parse("market://details?id=" + activity.getPackageName())).setPackage("com.android.vending"));
@@ -114,29 +120,60 @@ public final class PlayUpdateNotifier {
     }
 
     private void showRestart() {
-        if (!usable() || dialog != null || SystemClock.elapsedRealtime() < restartDeferredUntil) return;
+        if (!usable() || dialog != null) return;
         dialog = new AlertDialog.Builder(activity)
                 .setTitle(text("Update klaar", "Update ready", "Update bereit"))
-                .setMessage(text("Herstart NenoTV om de nieuwe versie te gebruiken.",
-                        "Restart NenoTV to use the new version.", "Starte NenoTV neu, um die neue Version zu verwenden."))
+                .setMessage(text("Herstart NenoTV om de update te installeren. Alleen downloaden is nog niet voldoende.\n\n",
+                        "Restart NenoTV to install the update. Downloading alone is not enough.\n\n",
+                        "Starte NenoTV neu, um das Update zu installieren. Herunterladen allein reicht noch nicht.\n\n") + updateMessage())
                 .setPositiveButton(text("Herstarten", "Restart", "Neustarten"), (d, w) -> manager.completeUpdate())
-                .setNegativeButton(text("Later", "Later", "Später"), (d, w) -> postponeRestart())
-                .setOnCancelListener(d -> postponeRestart()).create();
+                .setNegativeButton(text("Later", "Later", "Später"), (d, w) -> {}).create();
         dialog.setOnDismissListener(d -> dialog = null);
         dialog.show();
     }
 
-    private void postponeRestart() { restartDeferredUntil = SystemClock.elapsedRealtime() + 60_000; }
-    private void defer(int version) {
-        prefs.edit().putInt("deferred_version", version).putLong("deferred_at", System.currentTimeMillis()).apply();
+    private String updateMessage() {
+        String language = SettingsStore.language(activity);
+        String date = DateFormat.getDateInstance(DateFormat.MEDIUM, Locale.forLanguageTag(language))
+                .format(new Date(requirements.deadline()));
+        String restoration = text("Na installatie krijg je automatisch je eerdere toegang terug, zolang je abonnement of testerrechten nog geldig zijn.",
+                "After installation, your previous access returns automatically, provided your subscription or tester rights are still valid.",
+                "Nach der Installation erhältst du deinen bisherigen Zugang automatisch zurück, sofern dein Abonnement oder deine Testerrechte noch gültig sind.");
+        if (requirements.isBasicOnly()) return text(
+                "De termijn van 60 dagen is verstreken. Je gebruikt NenoTV nu als Basic totdat je de update installeert. Je account en instellingen blijven bewaard.\n\n",
+                "The 60-day deadline has passed. NenoTV now runs as Basic until you install the update. Your account and settings are preserved.\n\n",
+                "Die 60-Tage-Frist ist abgelaufen. NenoTV läuft als Basic, bis du das Update installierst. Dein Konto und deine Einstellungen bleiben erhalten.\n\n") + restoration;
+        long days = requirements.daysRemaining();
+        return text("Installeer de update uiterlijk ", "Install the update by ", "Installiere das Update bis ")
+                + date + text(" (nog ", " (", " (noch ") + days
+                + text(" dagen). Daarna werkt NenoTV tijdelijk als Basic.\n\n",
+                        " days remaining). After that, NenoTV temporarily runs as Basic.\n\n",
+                        " Tage). Danach läuft NenoTV vorübergehend als Basic.\n\n") + restoration;
+    }
+
+    private void showKnownUpdateOrRestoration() {
+        if (!usable() || dialog != null || flowActive) return;
+        if (requirements.hasPendingUpdate()) { showUpdate(null); return; }
+        if (!requirements.hasRestorationNotice()) return;
+        boolean pro = new EntitlementStore(activity).isPro();
+        dialog = new AlertDialog.Builder(activity)
+                .setTitle(text("NenoTV bijgewerkt", "NenoTV updated", "NenoTV aktualisiert"))
+                .setMessage(pro ? text("Je update is geïnstalleerd. Je eerdere Pro-toegang is automatisch hersteld.",
+                        "Your update is installed. Your previous Pro access has been restored automatically.",
+                        "Dein Update ist installiert. Dein bisheriger Pro-Zugang wurde automatisch wiederhergestellt.")
+                        : text("Je update is geïnstalleerd. De tijdelijke updatebeperking is opgeheven. Je gebruikt Basic omdat je geen geldige Pro- of testerrechten hebt.",
+                        "Your update is installed. The temporary update restriction has ended. You are using Basic because you have no valid Pro or tester rights.",
+                        "Dein Update ist installiert. Die vorübergehende Update-Einschränkung ist aufgehoben. Ohne gültige Pro- oder Testerrechte nutzt du Basic."))
+                .setPositiveButton("OK", (d, w) -> requirements.acknowledgeRestoration())
+                .setOnCancelListener(d -> requirements.acknowledgeRestoration()).create();
+        dialog.setOnDismissListener(d -> dialog = null);
+        dialog.show();
     }
     public void onActivityResult(int requestCode, int resultCode) {
         if (requestCode != REQUEST_CODE) return;
         if (resultCode != Activity.RESULT_OK) {
             flowActive = false;
-            defer(offeredVersion);
         }
-        lastCheck = -1;
     }
     public void onPause() {
         resumed = false;

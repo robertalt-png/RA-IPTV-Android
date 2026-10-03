@@ -1,0 +1,49 @@
+name: Verify update deadline and Basic access
+on:
+  push:
+    branches: [nenotv-update-notifications]
+    paths: ['android/**', 'tools/tests/UpdatePromptPolicyTest.java', '.github/workflows/verify-update-access.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Check deadline boundaries and reminders
+        run: bash tools/test-update-policy.sh
+      - name: Compile app and access integration tests
+        working-directory: android
+        run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Verify Basic fallback and restoration on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            adb install android/app/build/outputs/apk/debug/app-debug.apk
+            adb install android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb shell am instrument -w -e phase update com.nenotv.player.test/com.nenotv.player.UiInstrumentation | tee update-access-results.txt
+            grep -q 'NENOTV_UPDATE_ACCESS=passed' update-access-results.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: update-access-verification
+          path: update-access-results.txt

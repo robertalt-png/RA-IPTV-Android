@@ -11,9 +11,11 @@ import java.util.UUID;
 public final class EntitlementStore {
     public enum Level { FREE, PRO_TRIAL, PRO }
     private final SharedPreferences prefs;
+    private final UpdateRequirementStore updates;
 
     public EntitlementStore(Context c){
         prefs=c.getApplicationContext().getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE);
+        updates=new UpdateRequirementStore(c);
         ensureDeviceIdentity();
     }
 
@@ -37,7 +39,9 @@ public final class EntitlementStore {
     public long expiresAt(){return prefs.getLong("expires_at",0L);}
 
     public Level level(){
+        if(updates.isBasicOnly())return Level.FREE;
         Level value=parse(prefs.getString("level","FREE"));
+        if(value==Level.PRO&&expiresAt()>0&&System.currentTimeMillis()>=expiresAt())return Level.FREE;
         if(value==Level.PRO_TRIAL){
             long end=expiresAt();
             if(end>0&&System.currentTimeMillis()>=end){
