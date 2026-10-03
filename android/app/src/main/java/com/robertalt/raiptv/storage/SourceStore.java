@@ -153,51 +153,6 @@ public final class SourceStore {
         }else if(enabled&&(active==null||active.isEmpty()))setActive(id);
     }
 
-    public synchronized JSONObject syncPayload(Context context){
-        JSONObject out=new JSONObject();
-        JSONArray sources=new JSONArray();
-        for(Entry e:list()){
-            JSONObject s=new JSONObject();
-            try{
-                Profile p=e.profile;
-                s.put("id",e.id);s.put("type",p.type.name());s.put("name",safe(p.name));
-                s.put("server",safe(p.server));s.put("username",safe(p.username));s.put("password",safe(p.password));
-                s.put("m3u",safe(p.m3uUrl));s.put("epg",safe(p.epgUrl));s.put("enabled",e.enabled);s.put("priority",e.priority);
-                sources.put(s);
-            }catch(Exception ex){throw new IllegalStateException("SOURCE_SYNC_ENCODE_FAILED",ex);}
-        }
-        try{
-            out.put("sources",sources);
-            out.put("active_id",activeId());
-            out.put("primary_language",SettingsStore.primaryLanguage(context));
-            out.put("content_language",SettingsStore.contentLanguage(context));
-        }catch(Exception ex){throw new IllegalStateException("SOURCE_SYNC_ENCODE_FAILED",ex);}
-        return out;
-    }
-
-    public synchronized void applySync(JSONObject data){
-        if(data==null)return;
-        JSONArray input=data.optJSONArray("sources");
-        if(input==null)return;
-        JSONArray next=new JSONArray();
-        for(int i=0;i<input.length()&&i<20;i++){
-            JSONObject s=input.optJSONObject(i);if(s==null)continue;
-            Profile p=new Profile();
-            try{p.type=Profile.Type.valueOf(s.optString("type","XTREAM").toUpperCase(java.util.Locale.ROOT));}catch(Exception ignored){p.type=Profile.Type.XTREAM;}
-            p.name=s.optString("name","TV source");p.server=s.optString("server","");p.username=s.optString("username","");
-            p.password=s.optString("password","");p.m3uUrl=s.optString("m3u","");p.epgUrl=s.optString("epg","");
-            String id=s.optString("id",UUID.randomUUID().toString());
-            Entry e=new Entry(id,p,s.optBoolean("enabled",true),s.optInt("priority",i),System.currentTimeMillis());
-            next.put(toJson(e));
-        }
-        String active=data.optString("active_id","");
-        if(active.isEmpty()&&next.length()>0)active=next.optJSONObject(0).optString("id","");
-        write(next,active);
-        if(!active.isEmpty())setActive(active);
-        String primary=data.optString("primary_language","");
-        if(SettingsStore.supportedLanguage(primary))SettingsStore.setPrimaryLanguage(app,primary);
-    }
-
     public synchronized void move(String id,int delta){
         List<Entry> all=list();
         int at=-1;
