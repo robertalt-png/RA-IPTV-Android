@@ -46,6 +46,7 @@ adb shell am force-stop com.nenotv.player
 adb shell am instrument -w -e phase resume com.nenotv.player.test/com.nenotv.player.UiInstrumentation | tee qa-results/ui-resume.txt
 rg -q 'NENOTV_UI_RESUME=passed' qa-results/ui-resume.txt
 adb shell am instrument -w -e phase pro com.nenotv.player.test/com.nenotv.player.UiInstrumentation | tee qa-results/pro-runtime.txt
+rg -q 'NENOTV_PRO_LANGUAGE=passed' qa-results/pro-runtime.txt
 rg -q 'NENOTV_PRO_SOURCES=passed' qa-results/pro-runtime.txt
 rg -q 'NENOTV_PRO_SMART_SOURCES=passed' qa-results/pro-runtime.txt
 rg -q 'NENOTV_PRO_SMART_EPG=passed' qa-results/pro-runtime.txt
