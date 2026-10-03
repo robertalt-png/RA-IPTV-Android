@@ -40,6 +40,10 @@ permissions:
   contents: read
   actions: read
 
+concurrency:
+  group: nenotv-v0138-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   streaming-parser:
     name: Streaming parser cancellation and large-list checks
