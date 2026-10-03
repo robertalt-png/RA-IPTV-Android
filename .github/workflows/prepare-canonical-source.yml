@@ -1,0 +1,27 @@
+name: Prepare canonical NenoTV source
+on:
+  push:
+    branches: [nenotv-v0.13.11-one-app-polish]
+    paths: ['.github/workflows/prepare-canonical-source.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve tested single-app source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir donor
+          gh run download 37109459128 --repo robertalt-png/RA-IPTV-Android --name NenoTV-Play-v0.13.10-modular --dir donor
+          test -s donor/NenoTV-Play-v0.13.10-source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NenoTV-canonical-v0.13.10-source
+          path: donor/NenoTV-Play-v0.13.10-source.tar.gz
+          retention-days: 90
