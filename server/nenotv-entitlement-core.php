@@ -874,7 +874,11 @@ final class NenoTV_Entitlement_Core {
         global $wpdb;
         $lock='nenotv_bind_'.substr(hash('sha256',self::dev_table()),0,40);
         if((int)$wpdb->get_var($wpdb->prepare('SELECT GET_LOCK(%s, 3)',$lock))!==1)return ['ok'=>false,'error'=>'device_busy','message'=>'Please retry linking this device.'];
-        try{return self::bind_device_unlocked($ent,$p);}
+        try{
+            $current=self::find_by_id((int)$ent['id']);
+            if(!is_array($current)||!self::entitlement_is_active($current))return ['ok'=>false,'error'=>'pro_inactive','message'=>'NenoTV access is no longer active.'];
+            return self::bind_device_unlocked($current,$p);
+        }
         finally{$wpdb->get_var($wpdb->prepare('SELECT RELEASE_LOCK(%s)',$lock));}
     }
 

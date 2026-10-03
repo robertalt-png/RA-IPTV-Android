@@ -38,6 +38,21 @@ public final class EntitlementClient {
     }
 
     private JSONObject post(String path,JSONObject body) throws Exception {
+        JSONObject out=request(path,body);
+        applyEntitlement(out);
+        return out;
+    }
+
+    void applyEntitlement(JSONObject out)throws IOException{
+        JSONObject entitlement=out.optJSONObject("entitlement");
+        if(entitlement==null)entitlement=out;
+        String level=entitlement.optString("level","");
+        if(!java.util.Arrays.asList("free","pro","pro_trial","trial").contains(level))
+            throw new IOException("Unexpected entitlement response");
+        store.applyServer(entitlement);
+    }
+
+    JSONObject request(String path,JSONObject body)throws Exception{
         body.put("device_id",store.deviceId());
         body.put("public_device_id",store.publicDeviceId());
         body.put("device_key",store.deviceKey());
@@ -52,16 +67,18 @@ public final class EntitlementClient {
             out=postUrl(base+"/index.php?rest_route=/nenotv/v1/"+path,body);
         }
 
-        JSONObject entitlement=out.optJSONObject("entitlement");
-        if(entitlement==null)entitlement=out;
-        String level=entitlement.optString("level","");
-        if(!java.util.Arrays.asList("free","pro","pro_trial","trial").contains(level))
-            throw new IOException("Unexpected entitlement response");
-        store.applyServer(entitlement);
         return out;
     }
 
     private static final class MissingRoute extends IOException {}
+
+    public static final class ServiceException extends IOException {
+        public final String code;
+        ServiceException(String code,int status){
+            super("NenoTV account request failed (HTTP "+status+")");
+            this.code=code.matches("[a-z_]{1,64}")?code:"account_unavailable";
+        }
+    }
 
     private JSONObject postUrl(String url,JSONObject body) throws Exception {
         HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();
@@ -98,7 +115,7 @@ public final class EntitlementClient {
 
         if(code==404&&"rest_no_route".equals(out.optString("code")))throw new MissingRoute();
         if(code<200||code>=300||!out.optBoolean("ok",false))
-            throw new IOException("NenoTV account request failed (HTTP "+code+")");
+            throw new ServiceException(out.optString("error","account_unavailable"),code);
         return out;
         }finally{c.disconnect();}
     }

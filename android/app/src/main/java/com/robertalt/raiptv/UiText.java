@@ -10,6 +10,15 @@ public final class UiText {
     private UiText(){}
     private static Map<String,String> map(String[][] rows){LinkedHashMap<String,String> m=new LinkedHashMap<>();for(String[] r:rows)m.put(r[0],r[1]);return Collections.unmodifiableMap(m);}
     private static final Map<String,String> EN=map(new String[][]{
+        {"pair_by_phone","Link via phone"},
+        {"pair_qr","My NenoTV pairing QR code"},
+        {"pair_waiting","Waiting for confirmation"},
+        {"pair_complete","Device linked with My NenoTV"},
+        {"pair_expired","Pairing code expired"},
+        {"pair_new_code","New pairing code"},
+        {"pair_unavailable","Pairing is not available for this account yet"},
+        {"pair_device_limit","No device places available"},
+        {"open_my_nenotv","Open My NenoTV"},
         {"account_and_pro","Account & NenoTV Pro"},
         {"email_address","Email address"},
         {"request_trial","Try Pro for 30 days"},
@@ -312,6 +321,15 @@ public final class UiText {
         {"m3u_live_only","Only live TV is available for this M3U profile"},
     });
     private static final Map<String,String> NL=map(new String[][]{
+        {"pair_by_phone","Koppelen via telefoon"},
+        {"pair_qr","Mijn NenoTV-koppelcode"},
+        {"pair_waiting","Wachten op bevestiging"},
+        {"pair_complete","Apparaat gekoppeld met Mijn NenoTV"},
+        {"pair_expired","Koppelcode verlopen"},
+        {"pair_new_code","Nieuwe koppelcode"},
+        {"pair_unavailable","Koppelen is nog niet beschikbaar voor dit account"},
+        {"pair_device_limit","Geen apparaatplaatsen beschikbaar"},
+        {"open_my_nenotv","Open Mijn NenoTV"},
         {"account_and_pro","Account & NenoTV Pro"},
         {"email_address","E-mailadres"},
         {"request_trial","30 dagen Pro proberen"},
@@ -910,6 +928,15 @@ public final class UiText {
         {"m3u_live_only","Solo TV en directo está disponible para este perfil M3U"},
     });
     private static final Map<String,String> DE=map(new String[][]{
+        {"pair_by_phone","Per Telefon verbinden"},
+        {"pair_qr","Mein NenoTV-Verbindungscode"},
+        {"pair_waiting","Warten auf Bestatigung"},
+        {"pair_complete","Gerat mit Mein NenoTV verbunden"},
+        {"pair_expired","Verbindungscode abgelaufen"},
+        {"pair_new_code","Neuer Verbindungscode"},
+        {"pair_unavailable","Verbindung fur dieses Konto noch nicht verfugbar"},
+        {"pair_device_limit","Keine Gerateplatze verfugbar"},
+        {"open_my_nenotv","Mein NenoTV offnen"},
         {"link_my_nenotv","Mit Mein NenoTV verbinden"},
         {"activation_code","Aktivierungscode"},
         {"link_device","Gerat verbinden"},

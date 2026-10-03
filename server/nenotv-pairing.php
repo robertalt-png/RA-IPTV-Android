@@ -74,7 +74,7 @@ trait NenoTV_Pairing {
             $session=[
                 'device_id'=>$p['device_id'], 'key_hash'=>self::key_hash($p['device_key']),
                 'public_device_id'=>$p['public_device_id']??'', 'platform'=>$p['platform']??'android',
-                'name'=>substr(sanitize_text_field((string)($raw['device_name']??'NenoTV')),0,80),
+                'name'=>substr(sanitize_text_field(is_scalar($raw['device_name']??null)?(string)$raw['device_name']:'NenoTV'),0,80),
                 'token_hash'=>self::key_hash($token), 'expires'=>time()+300,
                 'entitlement_id'=>0, 'state'=>'pending',
             ];
@@ -134,6 +134,7 @@ trait NenoTV_Pairing {
             $session['entitlement_id']=(int)$ent['id'];$session['state']='approved';
             if(!update_option('nenotv_pair_'.$code,$session,false))wp_die('Approval could not be saved.');
         }finally{self::pairing_unlock($code);}
+        set_transient('nenotv_pair_notice_'.get_current_user_id(),1,MINUTE_IN_SECONDS);
         wp_safe_redirect(home_url('/nenotv-pair/?approved=1'));exit;
     }
 
@@ -157,7 +158,10 @@ trait NenoTV_Pairing {
         ]);
         get_header();
         echo '<main class="nv-pro-account"><h1>'.esc_html($s['title']).'</h1>';
-        if(!empty($_GET['approved']))echo '<p>'.esc_html($s['done']).'</p>';
+        if(!empty($_GET['approved'])&&get_transient('nenotv_pair_notice_'.get_current_user_id())){
+            delete_transient('nenotv_pair_notice_'.get_current_user_id());
+            echo '<p>'.esc_html($s['done']).'</p>';
+        }
         elseif(self::mode()!=='live')echo '<p>'.esc_html($s['inactive']).'</p>';
         else{
             $code=self::pairing_code(is_scalar($_GET['code']??null)?(string)$_GET['code']:'');

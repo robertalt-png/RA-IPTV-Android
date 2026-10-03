@@ -140,6 +140,8 @@ public final class UiInstrumentation extends ImportInstrumentation {
     void accountChecks()throws Exception{
         Context c=getTargetContext();
         com.nenotv.player.entitlement.EntitlementClientChecks.run(c);
+        com.nenotv.player.entitlement.PairingClientChecks.run(c);
+        pairingScreens();
         for(String language:new String[]{"nl","en","de"}){
             for(String key:new String[]{"account_and_pro","email_address","request_trial","refresh_status","this_device","device_code","trial_remaining","days","pro_active","devices","free_description","checking_status","status_updated","activation_success","activation_failed","server_unavailable","email_required","view_pro","link_my_nenotv","activation_code","link_device","activation_code_invalid"})
                 check(("en".equals(language)&&"days".equals(key))||!key.equals(UiText.t(language,key)),"Missing account translation: "+language+":"+key);
@@ -166,6 +168,47 @@ public final class UiInstrumentation extends ImportInstrumentation {
                 snapshot("account-"+language);
             }finally{runOnMainSync(a::finish);waitForIdleSync();}
         }
+    }
+    void pairingScreens()throws Exception{
+        PairingActivity.Factory original=PairingActivity.factory;
+        java.util.concurrent.atomic.AtomicReference<String> state=new java.util.concurrent.atomic.AtomicReference<>("pending");
+        PairingActivity.factory=context->new PairingActivity.Access(){
+            public com.nenotv.player.entitlement.PairingClient.Session start()throws Exception{return com.nenotv.player.entitlement.PairingClientChecks.fixtureSession();}
+            public String status(com.nenotv.player.entitlement.PairingClient.Session session){return state.get();}
+            public void cancel(com.nenotv.player.entitlement.PairingClient.Session session){}
+        };
+        try{
+            for(String language:new String[]{"nl","en","de"}){
+                SettingsStore.setPrimaryLanguage(getTargetContext(),language);state.set("pending");
+                PairingActivity a=(PairingActivity)startActivitySync(new Intent(getTargetContext(),PairingActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                try{
+                    java.util.concurrent.atomic.AtomicBoolean ready=new java.util.concurrent.atomic.AtomicBoolean();
+                    long end=SystemClock.elapsedRealtime()+5000;
+                    while(!ready.get()&&SystemClock.elapsedRealtime()<end){runOnMainSync(()->ready.set(a.session!=null&&!a.busy));Thread.sleep(50);}
+                    check(ready.get(),"Pairing screen did not render code");waitForIdleSync();
+                    runOnMainSync(()->{
+                        check(a.qr.getVisibility()==View.VISIBLE&&a.open.isEnabled(),"QR pairing controls missing");
+                        check(!a.code.isSaveEnabled(),"Pairing code saved in screen state");
+                        assertUnclippedText(a.code);assertUnclippedText(a.status);assertUnclippedText(a.retry);
+                        check(a.bitmap!=null&&a.bitmap.getWidth()==512,"QR bitmap missing");
+                    });
+                    int[] pixels=new int[512*512];runOnMainSync(()->a.bitmap.getPixels(pixels,0,512,0,0,512,512));
+                    com.google.zxing.BinaryBitmap qr=new com.google.zxing.BinaryBitmap(new com.google.zxing.common.HybridBinarizer(new com.google.zxing.RGBLuminanceSource(512,512,pixels)));
+                    check("https://nenotv.com/nenotv-pair/?code=ABCDEF0123".equals(new com.google.zxing.MultiFormatReader().decode(qr).getText()),"QR does not encode pairing URL");
+                    snapshot("pairing-"+language);
+                    if("nl".equals(language)){
+                        runOnMainSync(()->{a.expire();check(a.session==null&&!a.open.isEnabled()&&a.qr.getVisibility()==View.GONE,"Expired QR remained active");a.startPairing();});
+                        ready.set(false);end=SystemClock.elapsedRealtime()+5000;
+                        while(!ready.get()&&SystemClock.elapsedRealtime()<end){runOnMainSync(()->ready.set(a.session!=null&&!a.busy));Thread.sleep(50);}
+                        check(ready.get(),"New pairing code not rendered");
+                        state.set("complete");runOnMainSync(a::pollStatus);
+                        ready.set(false);end=SystemClock.elapsedRealtime()+5000;
+                        while(!ready.get()&&SystemClock.elapsedRealtime()<end){runOnMainSync(()->ready.set(a.complete));Thread.sleep(50);}
+                        runOnMainSync(()->check(a.complete&&a.qr.getVisibility()==View.GONE&&!a.open.isEnabled(),"Completed pairing still exposed code"));
+                    }
+                }finally{runOnMainSync(a::finish);waitForIdleSync();}
+            }
+        }finally{PairingActivity.factory=original;}
     }
     void core(Bundle result)throws Exception{
         XtreamImportChecks.run(getTargetContext());

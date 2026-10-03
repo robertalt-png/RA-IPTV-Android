@@ -72,6 +72,9 @@ public class AccountActivity extends Activity {
         box.addView(detailText,new LinearLayout.LayoutParams(-1,-2));
 
         sec(T("link_my_nenotv"));
+        Button phone=b(T("pair_by_phone"));
+        phone.setOnClickListener(v->startActivity(new Intent(this,PairingActivity.class)));
+        addButton(phone);
         activationCode=input(T("activation_code"),android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
         activationCode.setSaveEnabled(false);
         if(Build.VERSION.SDK_INT>=26)activationCode.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
