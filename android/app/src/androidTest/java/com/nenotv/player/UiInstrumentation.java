@@ -141,6 +141,8 @@ public final class UiInstrumentation extends ImportInstrumentation {
         Context c=getTargetContext();
         com.nenotv.player.entitlement.EntitlementClientChecks.run(c);
         for(String language:new String[]{"nl","en","de"}){
+            for(String key:new String[]{"account_and_pro","email_address","request_trial","refresh_status","this_device","device_code","trial_remaining","days","pro_active","devices","free_description","checking_status","status_updated","activation_success","activation_failed","server_unavailable","email_required","view_pro","link_my_nenotv","activation_code","link_device","activation_code_invalid"})
+                check(("en".equals(language)&&"days".equals(key))||!key.equals(UiText.t(language,key)),"Missing account translation: "+language+":"+key);
             SettingsStore.setPrimaryLanguage(c,language);
             AccountActivity a=(AccountActivity)startActivitySync(new Intent(c,AccountActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             try{
@@ -154,6 +156,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
                     a.busy(true);
                     check(!a.link.isEnabled()&&!a.email.isEnabled()&&!a.trial.isEnabled()&&!a.refresh.isEnabled(),"Account permits concurrent requests");
                     a.busy(false);
+                    a.serverText.setText("");
                     assertUnclippedText(a.link);
                     if(Build.VERSION.SDK_INT>=30){
                         int[] position=new int[2];a.box.getLocationOnScreen(position);
