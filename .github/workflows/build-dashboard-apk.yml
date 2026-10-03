@@ -36,9 +36,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gradle -p dashboard-app --no-daemon :app:assembleDebug
-          test -f dashboard-app/app/build/outputs/apk/debug/app-debug.apk
-          cp dashboard-app/app/build/outputs/apk/debug/app-debug.apk NenoTV-Admin-v0.2.0.apk
+          gradle -p dashboard-app --no-daemon :app:assembleRelease
+          test -f dashboard-app/app/build/outputs/apk/release/app-release-unsigned.apk
+          cp dashboard-app/app/build/outputs/apk/release/app-release-unsigned.apk NenoTV-Admin-v0.2.0-unsigned.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
