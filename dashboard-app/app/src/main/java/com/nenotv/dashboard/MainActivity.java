@@ -61,7 +61,7 @@ public class MainActivity extends Activity {
     private final String[] tabNames = {"Overzicht", "Analytics", "App", "Meer"};
 
     private SharedPreferences prefs;
-    private JSONObject data;
+    private SharedPreferences prefs;\n    private JSONObject data;
     private LinearLayout content;
     private LinearLayout tabStrip;
     private TextView updatedView;
@@ -94,7 +94,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (!getToken().isEmpty() && content != null) refresh();
+        if (prefs != null && !getToken().isEmpty() && content != null) refresh();
     }
 
     @Override
@@ -198,7 +198,7 @@ public class MainActivity extends Activity {
                 if (status >= 200 && status < 300 && response.optBoolean("ok")) {
                     String token = response.optString("token", "");
                     if (token.isEmpty()) throw new Exception("Geen toegangssleutel ontvangen");
-                    SecureStore.putToken(this, token);
+                    prefs.edit().putString(PREF_TOKEN, token).apply();
                     runOnUiThread(() -> {
                         showAdminShell();
                         refresh();
@@ -344,7 +344,7 @@ public class MainActivity extends Activity {
                 if (code == 401 || code == 403) {
                     runOnUiThread(() -> {
                         loading = false;
-                        SecureStore.clear(this);
+                        prefs.edit().remove(PREF_TOKEN).apply();
                         showPairing("Deze admin-code is niet geldig.");
                     });
                     return;
@@ -675,7 +675,7 @@ public class MainActivity extends Activity {
         lp.topMargin = dp(14);
         content.addView(reset, lp);
         reset.setOnClickListener(v -> {
-            SecureStore.clear(this);
+            prefs.edit().remove(PREF_TOKEN).apply();
             data = null;
             showPairing(null);
         });
