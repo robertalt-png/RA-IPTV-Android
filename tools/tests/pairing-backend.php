@@ -111,6 +111,11 @@ try{NenoTV_Entitlement_Core::pairing_approve();throw new LogicException('No safe
 check($options[$key]['state']==='approved'&&count($wpdb->devices)===0,'Approval bound without app proof');
 $done=request('status',$poll);check($done->data['state']==='complete'&&count($wpdb->devices)===1,'Approved device not bound');
 check($done->data['entitlement']['used_devices']===1&&$done->data['entitlement']['free_devices']===0,'Incorrect device places');
+$payloadMethod=new ReflectionMethod(NenoTV_Entitlement_Core::class,'pro_payload');
+$verifiedPayload=$payloadMethod->invoke(null,$wpdb->entitlements[1]);
+check($verifiedPayload['used_devices']===1&&$verifiedPayload['free_devices']===0,'Refresh omitted device places');
+$trialRow=array_merge($wpdb->entitlements[1],['plan'=>'trial','level'=>'pro_trial']);
+check($payloadMethod->invoke(null,$trialRow)['used_devices']===1,'Trial omitted occupied device places');
 check(request('status',$poll)->data['state']==='complete'&&count($wpdb->devices)===1,'Poll not idempotent');
 check(count($wpdb->events)===1&&!str_contains(json_encode($wpdb->events),$token),'Pairing audit duplicated or stored proof');
 $wpdb->devices[1]['status']='revoked';

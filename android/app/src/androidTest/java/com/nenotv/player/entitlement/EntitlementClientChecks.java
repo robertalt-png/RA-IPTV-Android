@@ -35,6 +35,21 @@ public final class EntitlementClientChecks {
                 check("paired@example.invalid".equals(prefs.getString("account_email",""))&&prefs.getInt("max_devices",0)==5,"Activation did not apply verified entitlement");
                 check(fixture.calls.get()==(fallback?2:1),"Unexpected activation request count");
             }
+            com.nenotv.player.storage.EntitlementStore store=new com.nenotv.player.storage.EntitlementStore(context);
+            for(String counts:new String[]{"3","0","5"}){
+                store.applyServer(new org.json.JSONObject("{\"level\":\"pro\",\"max_devices\":5,\"used_devices\":"+counts+"}"));
+                check(store.usedDevices()==Integer.parseInt(counts)&&store.freeDevices()==5-Integer.parseInt(counts),"Device places not persisted");
+                check(store.deviceStatusAt()>0,"Device places have no verification time");
+            }
+            for(String counts:new String[]{"-1","26","1.5","\"3\"","null"}){
+                store.applyServer(new org.json.JSONObject("{\"level\":\"pro\",\"max_devices\":5,\"used_devices\":"+counts+"}"));
+                check(store.usedDevices()==-1&&store.freeDevices()==-1,"Malformed device count shown as verified");
+            }
+            store.applyServer(new org.json.JSONObject("{\"level\":\"pro\",\"max_devices\":5,\"used_devices\":2}"));
+            store.applyServer(new org.json.JSONObject("{\"level\":\"pro\",\"max_devices\":1}"));
+            check(store.usedDevices()==-1,"Changed account inherited previous device count");
+            store.applyServer(new org.json.JSONObject("{\"level\":\"free\",\"used_devices\":0}"));
+            check(store.usedDevices()==-1&&store.deviceStatusAt()==0,"Basic response retained Pro device places");
         }finally{
             SharedPreferences.Editor editor=prefs.edit().clear();
             for(Map.Entry<String,?> entry:previous.entrySet()){

@@ -36,6 +36,9 @@ public final class EntitlementStore {
     public String deviceKey(){return prefs.getString("device_key","");}
     public String accountEmail(){return prefs.getString("account_email","");}
     public int maxDevices(){return prefs.getInt("max_devices",1);}
+    public int usedDevices(){return prefs.getInt("used_devices",-1);}
+    public int freeDevices(){return usedDevices()<0?-1:Math.max(0,maxDevices()-usedDevices());}
+    public long deviceStatusAt(){return prefs.getLong("device_status_at",0L);}
     public long expiresAt(){return prefs.getLong("expires_at",0L);}
 
     public Level level(){
@@ -81,7 +84,16 @@ public final class EntitlementStore {
         SharedPreferences.Editor ed=prefs.edit().putString("level",level.name()).putLong("expires_at",expiry);
         if(o.has("email"))ed.putString("account_email",o.optString("email",""));
         if(o.has("account_email"))ed.putString("account_email",o.optString("account_email",""));
-        if(o.has("max_devices"))ed.putInt("max_devices",Math.max(1,o.optInt("max_devices",1)));
+        int maximum=Math.max(1,Math.min(25,o.optInt("max_devices",1)));
+        ed.putInt("max_devices",maximum);
+        Object used=o.opt("used_devices");
+        if(level!=Level.FREE&&used instanceof Number&&((Number)used).doubleValue()==((Number)used).intValue()
+                &&((Number)used).intValue()>=0&&((Number)used).intValue()<=25){
+            ed.putInt("used_devices",((Number)used).intValue()).putLong("device_status_at",System.currentTimeMillis());
+        }else{
+            // An older server or a changed account must not inherit another account's counts.
+            ed.remove("used_devices").remove("device_status_at");
+        }
         ed.apply();
     }
 

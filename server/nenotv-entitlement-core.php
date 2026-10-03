@@ -726,6 +726,7 @@ final class NenoTV_Entitlement_Core {
             'trial_state'=>$active ? 'active' : 'expired',
             'plan'=>'trial',
             'max_devices'=>(int)($row['max_devices'] ?? 1),
+            'used_devices'=>self::count_active_devices((int)$row['id']),
             'expires_at_ms'=>$expires_ms,
             'server_time_ms'=>time()*1000,
             'email'=>(string)($row['email'] ?? ''),
@@ -736,7 +737,8 @@ final class NenoTV_Entitlement_Core {
         if (self::is_trial($row)) return self::trial_payload($row);
         $expires_ms = 0;
         if (!empty($row['expires_at'])) { $ts = strtotime($row['expires_at'] . ' UTC'); if ($ts) $expires_ms = $ts * 1000; }
-        return ['level'=>'pro','status'=>'active','plan'=>(string)($row['plan'] ?? 'unconfigured'),'max_devices'=>(int)$row['max_devices'],'expires_at_ms'=>$expires_ms,'server_time_ms'=>time()*1000,'email'=>(string)$row['email']];
+        $used = self::count_active_devices((int)$row['id']);
+        return ['level'=>'pro','status'=>'active','plan'=>(string)($row['plan'] ?? 'unconfigured'),'max_devices'=>(int)$row['max_devices'],'used_devices'=>$used,'free_devices'=>max(0,(int)$row['max_devices']-$used),'expires_at_ms'=>$expires_ms,'server_time_ms'=>time()*1000,'email'=>(string)$row['email']];
     }
 
     private static function find_trial_by_email(string $email): ?array {

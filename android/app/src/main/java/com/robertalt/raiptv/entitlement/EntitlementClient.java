@@ -4,10 +4,9 @@ import android.content.Context;
 import com.nenotv.player.BuildConfig;
 import com.nenotv.player.storage.EntitlementStore;
 import org.json.JSONObject;
-import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -126,14 +125,14 @@ public final class EntitlementClient {
 
     private String read(InputStream in,int responseLimit)throws IOException{
         if(in==null)return "";
-        try(BufferedReader r=new BufferedReader(new InputStreamReader(in,StandardCharsets.UTF_8))){
-            StringBuilder b=new StringBuilder();
-            String s;
-            while((s=r.readLine())!=null){
-                b.append(s);
-                if(b.length()>responseLimit)throw new IOException("Account response too large");
+        try(InputStream r=in;ByteArrayOutputStream b=new ByteArrayOutputStream()){
+            byte[] chunk=new byte[4096];
+            int count;
+            while((count=r.read(chunk,0,Math.min(chunk.length,responseLimit-b.size()+1)))!=-1){
+                if(count>responseLimit-b.size())throw new IOException("Account response too large");
+                b.write(chunk,0,count);
             }
-            return b.toString();
+            return new String(b.toByteArray(),StandardCharsets.UTF_8);
         }
     }
 }

@@ -147,8 +147,16 @@ public class AccountActivity extends Activity {
     void refreshUi(){
         EntitlementStore.Level l=ent.level();
         statusText.setText(ent.statusLabel(this));
-        if(l==EntitlementStore.Level.PRO_TRIAL)detailText.setText(T("trial_remaining")+": "+ent.trialDaysRemaining()+" "+T("days"));
-        else if(l==EntitlementStore.Level.PRO)detailText.setText(T("pro_active")+" · "+T("devices")+": "+ent.maxDevices());
+        String places="";
+        if(ent.isPro()){
+            places="\n"+(l==EntitlementStore.Level.PRO_TRIAL?T("trial_plan"):ent.maxDevices()==1?"Solo":"Multi")
+                    +" · "+T("devices")+": "+ent.maxDevices();
+            if(ent.usedDevices()>=0)places+="\n"+T("device_places_used")+": "+ent.usedDevices()+" · "+T("device_places_free")+": "+ent.freeDevices()
+                    +"\n"+T("device_status_checked")+": "+android.text.format.DateFormat.getDateFormat(this).format(new java.util.Date(ent.deviceStatusAt()))
+                    +" "+android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date(ent.deviceStatusAt()));
+        }
+        if(l==EntitlementStore.Level.PRO_TRIAL)detailText.setText(T("trial_remaining")+": "+ent.trialDaysRemaining()+" "+T("days")+places);
+        else if(l==EntitlementStore.Level.PRO)detailText.setText(T("pro_active")+places);
         else detailText.setText(T("free_description"));
         deviceText.setText(T("device_code")+": "+ent.publicDeviceId());
     }
