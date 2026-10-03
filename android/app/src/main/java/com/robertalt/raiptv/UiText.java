@@ -10,6 +10,10 @@ public final class UiText {
     private UiText(){}
     private static Map<String,String> map(String[][] rows){LinkedHashMap<String,String> m=new LinkedHashMap<>();for(String[] r:rows)m.put(r[0],r[1]);return Collections.unmodifiableMap(m);}
     private static final Map<String,String> EN=map(new String[][]{
+        {"link_my_nenotv","Link with My NenoTV"},
+        {"activation_code","Activation code"},
+        {"link_device","Link device"},
+        {"activation_code_invalid","Enter a complete NENO activation code"},
         {"season","Season"},
         {"all_seasons","All seasons"},
         {"remaining","remaining"},
@@ -290,6 +294,10 @@ public final class UiText {
         {"m3u_live_only","Only live TV is available for this M3U profile"},
     });
     private static final Map<String,String> NL=map(new String[][]{
+        {"link_my_nenotv","Koppel met Mijn NenoTV"},
+        {"activation_code","Activatiecode"},
+        {"link_device","Apparaat koppelen"},
+        {"activation_code_invalid","Voer een volledige NENO-activatiecode in"},
         {"season","Seizoen"},
         {"all_seasons","Alle seizoenen"},
         {"remaining","resterend"},
@@ -866,6 +874,10 @@ public final class UiText {
         {"m3u_live_only","Solo TV en directo está disponible para este perfil M3U"},
     });
     private static final Map<String,String> DE=map(new String[][]{
+        {"link_my_nenotv","Mit Mein NenoTV verbinden"},
+        {"activation_code","Aktivierungscode"},
+        {"link_device","Gerat verbinden"},
+        {"activation_code_invalid","Vollstandigen NENO-Aktivierungscode eingeben"},
         {"season","Staffel"},
         {"all_seasons","Alle Staffeln"},
         {"remaining","verbleibend"},

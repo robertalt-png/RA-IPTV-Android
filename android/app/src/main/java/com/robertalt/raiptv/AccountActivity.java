@@ -15,8 +15,9 @@ import java.util.concurrent.*;
 public class AccountActivity extends Activity {
     LinearLayout box;
     TextView statusText,detailText,deviceText,serverText;
-    EditText email,order;
-    Button claim,refresh;
+    EditText email,order,activationCode;
+    Button claim,refresh,trial,link;
+    boolean requestRunning;
     ExecutorService exec=Executors.newSingleThreadExecutor();
     EntitlementStore ent;
 
@@ -70,29 +71,38 @@ public class AccountActivity extends Activity {
         detailText.setBackgroundColor(0xFF151A21);
         box.addView(detailText,new LinearLayout.LayoutParams(-1,-2));
 
+        sec(T("link_my_nenotv"));
+        activationCode=input(T("activation_code"),android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        activationCode.setSaveEnabled(false);
+        if(Build.VERSION.SDK_INT>=26)activationCode.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+        activationCode.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(128)});
+        link=b(T("link_device"));
+        link.setOnClickListener(v->redeemCode());
+        addButton(link);
+
+        Button my=b(myNenoLabel());
+        my.setOnClickListener(v->openWeb(myNenoUrl()));
+        addButton(my);
+
         sec(T("activate_restore"));
         email=input(T("email_address"),android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
         email.setText(ent.accountEmail());
         order=input(T("order_id_optional"),android.text.InputType.TYPE_CLASS_TEXT);
         claim=b(T("activate_pro"));
         claim.setOnClickListener(v->claim());
-        box.addView(claim,new LinearLayout.LayoutParams(-1,dp(52)));
+        addButton(claim);
 
-        Button trial=b(T("request_trial"));
+        trial=b(T("request_trial"));
         trial.setOnClickListener(v->startTrial());
-        box.addView(trial,new LinearLayout.LayoutParams(-1,dp(52)));
+        addButton(trial);
 
         Button pro=b(T("view_pro"));
         pro.setOnClickListener(v->openWeb("https://nenotv.com/pro?device="+Uri.encode(ent.publicDeviceId())));
-        box.addView(pro,new LinearLayout.LayoutParams(-1,dp(52)));
-
-        Button my=b(myNenoLabel());
-        my.setOnClickListener(v->openWeb(myNenoUrl()));
-        box.addView(my,new LinearLayout.LayoutParams(-1,dp(52)));
+        addButton(pro);
 
         refresh=b(T("refresh_status"));
         refresh.setOnClickListener(v->refreshServer());
-        box.addView(refresh,new LinearLayout.LayoutParams(-1,dp(52)));
+        addButton(refresh);
 
         sec(T("this_device"));
         deviceText=t("",14);
@@ -103,7 +113,13 @@ public class AccountActivity extends Activity {
         serverText.setPadding(0,dp(8),0,0);
         box.addView(serverText);
         setContentView(sv);
+        ScreenInsets.browsing(this);
         refreshUi();
+    }
+
+    void addButton(Button button){
+        button.setMinHeight(dp(52));
+        box.addView(button,new LinearLayout.LayoutParams(-1,-2));
     }
 
     EditText input(String hint,int type){
@@ -138,26 +154,32 @@ public class AccountActivity extends Activity {
     }
 
     void busy(boolean on){
+        requestRunning=on;
         claim.setEnabled(!on);
         refresh.setEnabled(!on);
+        trial.setEnabled(!on);
+        link.setEnabled(!on);
+        activationCode.setEnabled(!on);
         if(on)serverText.setText(T("checking_status"));
     }
 
     void startTrial(){
+        if(requestRunning)return;
         String e=email.getText().toString().trim();
         if(e.isEmpty()){email.setError(T("email_required"));return;}
         busy(true);
         exec.execute(()->{
             try{
                 new EntitlementClient(this).startTrial(e);
-                runOnUiThread(()->{busy(false);serverText.setText(T("status_updated"));refreshUi();ProModuleInstaller.syncEntitlement(this);});
+                accountResult("status_updated",true);
             }catch(Exception ex){
-                runOnUiThread(()->{busy(false);serverText.setText(T("activation_failed"));});
+                accountResult("activation_failed",false);
             }
         });
     }
 
     void claim(){
+        if(requestRunning)return;
         String e=email.getText().toString().trim();
         String o=order.getText().toString().trim();
         if(e.isEmpty()){email.setError(T("email_required"));return;}
@@ -165,21 +187,22 @@ public class AccountActivity extends Activity {
         exec.execute(()->{
             try{
                 new EntitlementClient(this).claim(e,o);
-                runOnUiThread(()->{busy(false);serverText.setText(T("status_updated"));refreshUi();ProModuleInstaller.syncEntitlement(this);});
+                accountResult("status_updated",true);
             }catch(Exception ex){
-                runOnUiThread(()->{busy(false);serverText.setText(T("activation_failed"));});
+                accountResult("activation_failed",false);
             }
         });
     }
 
     void refreshServer(){
+        if(requestRunning)return;
         busy(true);
         exec.execute(()->{
             try{
                 new EntitlementClient(this).refresh();
-                runOnUiThread(()->{busy(false);serverText.setText(T("status_updated"));refreshUi();ProModuleInstaller.syncEntitlement(this);});
+                accountResult("status_updated",true);
             }catch(Exception ex){
-                runOnUiThread(()->{busy(false);serverText.setText(T("server_unavailable"));});
+                accountResult("server_unavailable",false);
             }
         });
     }
@@ -188,22 +211,42 @@ public class AccountActivity extends Activity {
         Uri u=i==null?null:i.getData();
         if(u==null||!"nenotv".equalsIgnoreCase(u.getScheme())||!"activate".equalsIgnoreCase(u.getHost()))return;
         String token=u.getQueryParameter("token");
+        i.setData(null);
         if(token==null||token.trim().isEmpty())return;
+        redeem(token);
+    }
+
+    void redeemCode(){
+        String token=activationCode.getText().toString().trim().toUpperCase(java.util.Locale.ROOT);
+        if(!token.matches("NENO-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}")){
+            activationCode.setError(T("activation_code_invalid"));
+            return;
+        }
+        redeem(token);
+    }
+
+    void redeem(String token){
+        if(requestRunning)return;
+        activationCode.setText("");
         busy(true);
         exec.execute(()->{
             try{
                 new EntitlementClient(this).redeemToken(token);
-                runOnUiThread(()->{busy(false);serverText.setText(T("activation_success"));refreshUi();ProModuleInstaller.syncEntitlement(this);});
+                accountResult("activation_success",true);
             }catch(Exception ex){
-                runOnUiThread(()->{busy(false);serverText.setText(T("activation_failed")+": "+safe(ex));});
+                accountResult("activation_failed",false);
             }
         });
     }
 
-    String safe(Exception e){
-        String m=e==null?null:e.getMessage();
-        return m==null||m.trim().isEmpty()?T("unknown_error"):m;
+    void accountResult(String message,boolean updated){
+        runOnUiThread(()->{
+            if(isFinishing()||isDestroyed())return;
+            busy(false);serverText.setText(T(message));
+            if(updated){email.setText(ent.accountEmail());refreshUi();ProModuleInstaller.syncEntitlement(this);}
+        });
     }
+
     String myNenoLabel(){
         String l=SettingsStore.language(this);
         return "nl".equals(l)?"Open Mijn NenoTV":"de".equals(l)?"Mein NenoTV öffnen":"Open My NenoTV";

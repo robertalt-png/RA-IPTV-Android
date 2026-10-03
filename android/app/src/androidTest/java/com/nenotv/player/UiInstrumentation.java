@@ -134,7 +134,35 @@ public final class UiInstrumentation extends ImportInstrumentation {
             check(visible.get(),"Built-in NenoTV films blocked as M3U live-only");
             snapshot("nenotv-offer-films");
         }finally{runOnMainSync(films::finish);SettingsStore.prefs(c).edit().putString("start_screen",previousStart).commit();}
+        accountChecks();
         result.putString("NENOTV_ONBOARDING","passed");
+    }
+    void accountChecks()throws Exception{
+        Context c=getTargetContext();
+        com.nenotv.player.entitlement.EntitlementClientChecks.run(c);
+        for(String language:new String[]{"nl","en","de"}){
+            SettingsStore.setPrimaryLanguage(c,language);
+            AccountActivity a=(AccountActivity)startActivitySync(new Intent(c,AccountActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            try{
+                waitForIdleSync();
+                runOnMainSync(()->{
+                    check(!a.activationCode.isSaveEnabled(),"Activation code saved in activity state");
+                    check(a.activationCode.getImportantForAutofill()==View.IMPORTANT_FOR_AUTOFILL_NO,"Activation code offered to autofill");
+                    a.activationCode.setText("invalid");a.link.performClick();
+                    check(a.activationCode.getError()!=null&&!a.requestRunning,"Invalid code contacted account server");
+                    a.activationCode.setText("");a.activationCode.setError(null);a.activationCode.clearFocus();
+                    a.busy(true);
+                    check(!a.link.isEnabled()&&!a.claim.isEnabled()&&!a.trial.isEnabled()&&!a.refresh.isEnabled(),"Account permits concurrent requests");
+                    a.busy(false);
+                    assertUnclippedText(a.link);
+                    if(Build.VERSION.SDK_INT>=30){
+                        int[] position=new int[2];a.box.getLocationOnScreen(position);
+                        check(position[1]>=a.box.getRootWindowInsets().getInsets(WindowInsets.Type.systemBars()).top,"Account overlaps system bars");
+                    }
+                });
+                snapshot("account-"+language);
+            }finally{runOnMainSync(a::finish);waitForIdleSync();}
+        }
     }
     void core(Bundle result)throws Exception{
         XtreamImportChecks.run(getTargetContext());

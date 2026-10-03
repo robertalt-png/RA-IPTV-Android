@@ -15,7 +15,9 @@ import java.nio.charset.StandardCharsets;
 
 public final class EntitlementClient {
     private final EntitlementStore store;
-    public EntitlementClient(Context c){store=new EntitlementStore(c);}
+    private final String base;
+    public EntitlementClient(Context c){this(c,"https://nenotv.com");}
+    EntitlementClient(Context c,String base){store=new EntitlementStore(c);this.base=base;}
 
     public JSONObject refresh() throws Exception {return post("entitlement/refresh",new JSONObject());}
     public JSONObject startTrial(String email) throws Exception {
@@ -42,34 +44,28 @@ public final class EntitlementClient {
         body.put("platform","android");
         body.put("app_version",BuildConfig.VERSION_NAME);
 
-        String base="https://nenotv.com";
-        while(base.endsWith("/"))base=base.substring(0,base.length()-1);
-
-        Exception firstError=null;
-        JSONObject out=null;
+        JSONObject out;
         try{
             out=postUrl(base+"/wp-json/nenotv/v1/"+path,body);
-        }catch(Exception e){
-            firstError=e;
-        }
-
-        if(out==null){
-            try{
-                out=postUrl(base+"/index.php?rest_route=/nenotv/v1/"+path,body);
-            }catch(Exception e){
-                String m=e.getMessage();
-                if(m==null||m.trim().isEmpty())m=firstError==null?null:firstError.getMessage();
-                throw new IOException(m==null||m.trim().isEmpty()?"NenoTV account service unavailable":m);
-            }
+        }catch(MissingRoute e){
+            // Retry only an absent REST route, never a possibly consumed activation.
+            out=postUrl(base+"/index.php?rest_route=/nenotv/v1/"+path,body);
         }
 
         JSONObject entitlement=out.optJSONObject("entitlement");
-        store.applyServer(entitlement==null?out:entitlement);
+        if(entitlement==null)entitlement=out;
+        String level=entitlement.optString("level","");
+        if(!java.util.Arrays.asList("free","pro","pro_trial","trial").contains(level))
+            throw new IOException("Unexpected entitlement response");
+        store.applyServer(entitlement);
         return out;
     }
 
+    private static final class MissingRoute extends IOException {}
+
     private JSONObject postUrl(String url,JSONObject body) throws Exception {
         HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();
+        try{
         c.setInstanceFollowRedirects(false);
         c.setConnectTimeout(9000);
         c.setReadTimeout(12000);
@@ -100,9 +96,11 @@ public final class EntitlementClient {
             throw new IOException("Unexpected server response");
         }
 
-        if(code<200||code>=300||!out.optBoolean("ok",true))
-            throw new IOException(out.optString("message",out.optString("error","HTTP "+code)));
+        if(code==404&&"rest_no_route".equals(out.optString("code")))throw new MissingRoute();
+        if(code<200||code>=300||!out.optBoolean("ok",false))
+            throw new IOException("NenoTV account request failed (HTTP "+code+")");
         return out;
+        }finally{c.disconnect();}
     }
 
     private String read(InputStream in)throws IOException{
@@ -110,7 +108,10 @@ public final class EntitlementClient {
         try(BufferedReader r=new BufferedReader(new InputStreamReader(in,StandardCharsets.UTF_8))){
             StringBuilder b=new StringBuilder();
             String s;
-            while((s=r.readLine())!=null)b.append(s);
+            while((s=r.readLine())!=null){
+                b.append(s);
+                if(b.length()>65536)throw new IOException("Account response too large");
+            }
             return b.toString();
         }
     }
