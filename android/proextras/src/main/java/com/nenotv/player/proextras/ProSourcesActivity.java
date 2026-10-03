@@ -41,16 +41,25 @@ public class ProSourcesActivity extends Activity {
     Button button(String s){Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextColor(0xFFF7F8FA);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));return b;}
 
     void render(){
+        try{renderSources();}
+        catch(IllegalStateException error){
+            box.removeAllViews();
+            box.addView(text(L("Saved sources cannot be read. No sources have been deleted.","Opgeslagen bronnen kunnen niet worden gelezen. Er zijn geen bronnen verwijderd.","Gespeicherte Quellen sind nicht lesbar. Es wurden keine Quellen gelöscht."),16),new LinearLayout.LayoutParams(-1,-2));
+            Button close=button(L("Close","Sluiten","Schließen"));close.setOnClickListener(v->finish());box.addView(close,new LinearLayout.LayoutParams(-1,-2));
+        }
+    }
+
+    void renderSources(){
         box.removeAllViews();
         LinearLayout h=new LinearLayout(this);h.setGravity(Gravity.CENTER_VERTICAL);
         TextView title=text(L("My sources","Mijn bronnen","Meine Quellen"),24);title.setTypeface(null,Typeface.BOLD);h.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button close=button(L("Close","Sluiten","Schließen"));close.setOnClickListener(v->finish());h.addView(close);box.addView(h);
 
-        TextView help=text(L(
-            "NenoTV Pro can keep multiple IPTV sources. The selected source still uses the normal Light import pipeline.",
-            "NenoTV Pro kan meerdere IPTV-bronnen bewaren. De gekozen bron gebruikt nog steeds de normale Light-laadlaag.",
-            "NenoTV Pro kann mehrere IPTV-Quellen speichern. Die gewählte Quelle nutzt weiterhin die normale Light-Ladeschicht."),13);
-        help.setTextColor(0xFFA7AFBC);help.setPadding(0,dp(6),0,dp(12));box.addView(help);
+        Switch download=new Switch(this);
+        download.setText(L("Download account sources automatically","Accountbronnen automatisch ophalen","Kontoquellen automatisch abrufen"));
+        download.setTextColor(0xFFF7F8FA);download.setChecked(sources.automaticDownloadEnabled());
+        download.setOnCheckedChangeListener((v,on)->{sources.setAutomaticDownloadEnabled(on);if(on)com.nenotv.player.entitlement.AutomaticSourceDownload.check(this,()->runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())render();}));});
+        box.addView(download,new LinearLayout.LayoutParams(-1,-2));
 
         Switch smartMerge=new Switch(this);smartMerge.setText(L("Smart Merge · add secondary sources after the active source loads","Smart Merge · voeg secundaire bronnen toe nadat de actieve bron geladen is","Smart Merge · weitere Quellen nach der aktiven Quelle hinzufügen"));smartMerge.setTextColor(0xFFF7F8FA);smartMerge.setChecked(SettingsStore.prefs(this).getBoolean("pro_smart_merge",false));smartMerge.setOnCheckedChangeListener((v,on)->SettingsStore.prefs(this).edit().putBoolean("pro_smart_merge",on).apply());box.addView(smartMerge,new LinearLayout.LayoutParams(-1,dp(56)));
         Switch smartEpg=new Switch(this);smartEpg.setText(L("Smart EPG · use extra EPG sources as fallback","Smart EPG · gebruik extra EPG-bronnen als fallback","Smart EPG · zusätzliche EPG-Quellen als Fallback"));smartEpg.setTextColor(0xFFF7F8FA);smartEpg.setChecked(SettingsStore.prefs(this).getBoolean("pro_smart_epg",false));smartEpg.setOnCheckedChangeListener((v,on)->SettingsStore.prefs(this).edit().putBoolean("pro_smart_epg",on).apply());box.addView(smartEpg,new LinearLayout.LayoutParams(-1,dp(56)));
@@ -98,13 +107,39 @@ public class ProSourcesActivity extends Activity {
             try{
                 new SourceSyncClient(this).sync();
                 runOnUiThread(()->{
+                    if(isFinishing()||isDestroyed())return;
                     Toast.makeText(this,L("Sources synchronized with My NenoTV.","Bronnen gesynchroniseerd met Mijn NenoTV.","Quellen mit Mein NenoTV synchronisiert."),Toast.LENGTH_LONG).show();
                     render();
                 });
             }catch(Exception ex){
-                String m=ex.getMessage()==null?L("Sync unavailable","Sync niet beschikbaar","Synchronisierung nicht verfügbar"):ex.getMessage();
-                runOnUiThread(()->{Toast.makeText(this,m,Toast.LENGTH_LONG).show();render();});
+                boolean accountChanged="SOURCE_ACCOUNT_CHANGED_CONFIRM".equals(ex.getMessage())||(ex instanceof com.nenotv.player.entitlement.EntitlementClient.ServiceException&&"source_account_changed".equals(((com.nenotv.player.entitlement.EntitlementClient.ServiceException)ex).code));
+                if(accountChanged||(ex instanceof com.nenotv.player.entitlement.EntitlementClient.ServiceException&&"source_revision_conflict".equals(((com.nenotv.player.entitlement.EntitlementClient.ServiceException)ex).code))){
+                    runOnUiThread(()->{
+                        if(isFinishing()||isDestroyed())return;
+                        render();
+                        new android.app.AlertDialog.Builder(this)
+                            .setTitle(accountChanged?L("Account changed","Account gewijzigd","Konto geändert"):L("Sources changed elsewhere","Bronnen elders gewijzigd","Quellen auf anderem Gerät geändert"))
+                            .setMessage(L("Your local changes have not been synchronized.","Uw lokale wijzigingen zijn niet gesynchroniseerd.","Deine lokalen Änderungen wurden nicht synchronisiert."))
+                            .setNegativeButton(L("Keep local","Lokaal behouden","Lokal behalten"),(d,w)->{})
+                            .setPositiveButton(L("Use cloud version","Cloudversie gebruiken","Cloud-Version verwenden"),(d,w)->useCloudSources())
+                            .show();
+                    });
+                }else showSyncFailure(ex);
             }
+        });
+    }
+
+    void showSyncFailure(Exception error){
+        String message=L("Sync unavailable","Sync niet beschikbaar","Synchronisierung nicht verfügbar");
+        if("LOCAL_SOURCES_CHANGED_RETRY_SYNC".equals(error.getMessage()))message=L("Sources changed during sync. Sync again.","Bronnen gewijzigd tijdens synchronisatie. Synchroniseer opnieuw.","Quellen während der Synchronisierung geändert. Erneut synchronisieren.");
+        final String safeMessage=message;
+        runOnUiThread(()->{if(isFinishing()||isDestroyed())return;Toast.makeText(this,safeMessage,Toast.LENGTH_LONG).show();render();});
+    }
+
+    void useCloudSources(){
+        exec.execute(()->{
+            try{new SourceSyncClient(this).pull();runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())render();});}
+            catch(Exception error){showSyncFailure(error);}
         });
     }
 

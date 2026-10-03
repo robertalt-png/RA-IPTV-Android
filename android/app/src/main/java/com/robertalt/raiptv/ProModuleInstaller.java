@@ -40,6 +40,7 @@ public final class ProModuleInstaller {
             if(entitled&&!installed){
                 request(a);
             }else if(!entitled&&installed){
+                if(new com.nenotv.player.storage.UpdateRequirementStore(a).isBasicOnly())return;
                 m.deferredUninstall(Collections.singletonList(MODULE));
             }
         }catch(Throwable ignored){}

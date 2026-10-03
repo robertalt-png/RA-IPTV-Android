@@ -33,6 +33,7 @@ public final class SourceStore {
     private static final String KEY_DATA="sources";
     private static final String KEY_ACTIVE="active_id";
     private static final String KEY_DIRTY="sync_dirty";
+    private static final Object SYNC_LOCK=new Object();
     private final Context app;
     private final SharedPreferences prefs;
     private final CryptoBox crypto;
@@ -81,7 +82,8 @@ public final class SourceStore {
         return all.isEmpty()?null:all.get(0);
     }
 
-    public synchronized String upsert(String id,Profile profile,boolean makeActive){
+    public String upsert(String id,Profile profile,boolean makeActive){synchronized(SYNC_LOCK){return upsertLocked(id,profile,makeActive);}}
+    private synchronized String upsertLocked(String id,Profile profile,boolean makeActive){
         if(profile==null)throw new IllegalArgumentException("profile");
         JSONArray a=readArray();
         String use=id==null||id.trim().isEmpty()?UUID.randomUUID().toString():id.trim();
@@ -97,7 +99,7 @@ public final class SourceStore {
         String active=makeActive?use:prefs.getString(KEY_ACTIVE,"");
         if(active.isEmpty())active=use;
         write(a,active); markDirty();
-        if(makeActive)new SecureProfileStore(app).save(profile);
+        if(use.equals(active))new SecureProfileStore(app).save(profile);
         return use;
     }
 
@@ -113,7 +115,8 @@ public final class SourceStore {
         return false;
     }
 
-    public synchronized boolean remove(String id){
+    public boolean remove(String id){synchronized(SYNC_LOCK){return removeLocked(id);}}
+    private synchronized boolean removeLocked(String id){
         if(id==null||id.isEmpty())return false;
         JSONArray old=readArray(),next=new JSONArray();
         boolean removed=false;
@@ -132,12 +135,14 @@ public final class SourceStore {
             }
         }
         write(next,active); markDirty();
+        new SmartEpgStore(app).setUrls(id,Collections.emptyList());
         if(!active.isEmpty()){if(!setActive(active))clearActiveProfile();}
         else clearActiveProfile();
         return true;
     }
 
-    public synchronized void setEnabled(String id,boolean enabled){
+    public void setEnabled(String id,boolean enabled){synchronized(SYNC_LOCK){setEnabledLocked(id,enabled);}}
+    private synchronized void setEnabledLocked(String id,boolean enabled){
         JSONArray a=readArray();
         for(int i=0;i<a.length();i++){
             JSONObject o=a.optJSONObject(i);
@@ -153,7 +158,8 @@ public final class SourceStore {
         }else if(enabled&&(active==null||active.isEmpty()))setActive(id);
     }
 
-    public synchronized void move(String id,int delta){
+    public void move(String id,int delta){synchronized(SYNC_LOCK){moveLocked(id,delta);}}
+    private synchronized void moveLocked(String id,int delta){
         List<Entry> all=list();
         int at=-1;
         for(int i=0;i<all.size();i++)if(all.get(i).id.equals(id)){at=i;break;}
@@ -171,7 +177,8 @@ public final class SourceStore {
         return out;
     }
 
-    public synchronized void applyCloudSnapshot(JSONArray remote,int revision){
+    public void applyCloudSnapshot(JSONArray remote,int revision){synchronized(SYNC_LOCK){applyCloudSnapshotLocked(remote,revision);}}
+    private synchronized void applyCloudSnapshotLocked(JSONArray remote,int revision){
         if(remote==null)return;
         JSONArray clean=new JSONArray();
         for(int i=0;i<remote.length();i++){
@@ -185,18 +192,64 @@ public final class SourceStore {
             JSONObject o=clean.optJSONObject(i);
             if(o!=null&&active.equals(o.optString("id"))&&o.optBoolean("enabled",true)){activeFound=true;break;}
         }
-        if(!activeFound)active=clean.length()>0?clean.optJSONObject(0).optString("id",""):"";
+        if(!activeFound){
+            active="";
+            for(int i=0;i<clean.length();i++){
+                JSONObject row=clean.optJSONObject(i);
+                if(row.optBoolean("enabled",true)){active=row.optString("id","");break;}
+            }
+        }
+        for(Entry old:list()){
+            boolean retained=false;
+            for(int i=0;i<clean.length();i++)if(old.id.equals(clean.optJSONObject(i).optString("id"))){retained=true;break;}
+            if(!retained)new SmartEpgStore(app).setUrls(old.id,Collections.emptyList());
+        }
         write(clean,active);
-        prefs.edit().putInt("cloud_revision",Math.max(0,revision)).putBoolean(KEY_DIRTY,false).apply();
-        if(!active.isEmpty())setActive(active); else if(new SecureProfileStore(app).exists())new SecureProfileStore(app).clear();
+        prefs.edit().putInt("cloud_revision",Math.max(0,revision)).putBoolean(KEY_DIRTY,false).putBoolean("account_change_pending",false).putLong("local_revision",prefs.getLong("local_revision",0L)+1L).apply();
+        if(!active.isEmpty()){if(!setActive(active))clearActiveProfile();}else clearActiveProfile();
     }
 
     public synchronized boolean syncDirty(){return prefs.getBoolean(KEY_DIRTY,false);}
-    public synchronized void touchSync(){markDirty();}
-    public synchronized void markSynced(int revision){prefs.edit().putInt("cloud_revision",Math.max(0,revision)).putBoolean(KEY_DIRTY,false).apply();}
-    private void markDirty(){prefs.edit().putBoolean(KEY_DIRTY,true).apply();}
+    public void bindCloudAccount(String scope){synchronized(SYNC_LOCK){
+        if(scope==null||!scope.matches("[a-f0-9]{64}"))throw new IllegalArgumentException("ACCOUNT_SCOPE_REQUIRED");
+        String previous=prefs.getString("cloud_account_scope","");if(previous.equals(scope))return;
+        boolean confirm=!previous.isEmpty()||cloudRevision()>0;
+        if(!prefs.edit().putString("cloud_account_scope",scope).putInt("cloud_revision",0)
+                .putBoolean("account_change_pending",confirm).putBoolean(KEY_DIRTY,syncDirty()||confirm)
+                .putLong("local_revision",prefs.getLong("local_revision",0L)+1L).commit())throw new IllegalStateException("SOURCE_STORE_WRITE_FAILED");
+    }}
+    public boolean accountChangePending(){return prefs.getBoolean("account_change_pending",false);}
+    public boolean automaticDownloadEnabled(){return prefs.getBoolean("automatic_download",true);}
+    public void setAutomaticDownloadEnabled(boolean enabled){synchronized(SYNC_LOCK){prefs.edit().putBoolean("automatic_download",enabled).commit();}}
+    public boolean applyAutomaticCloudSnapshotIfUnchanged(JSONArray remote,int revision,long expected){synchronized(SYNC_LOCK){
+        if(!automaticDownloadEnabled()||syncDirty()||prefs.getLong("local_revision",0L)!=expected)return false;
+        applyCloudSnapshotLocked(remote,revision);return true;
+    }}
+    public void touchSync(){synchronized(SYNC_LOCK){markDirty();}}
+    public void markSynced(int revision){synchronized(SYNC_LOCK){prefs.edit().putInt("cloud_revision",Math.max(0,revision)).putBoolean(KEY_DIRTY,false).apply();}}
+    private void markDirty(){prefs.edit().putBoolean(KEY_DIRTY,true).putLong("local_revision",prefs.getLong("local_revision",0L)+1L).apply();}
+
+    public static final class SyncSnapshot {
+        public final JSONArray sources;
+        public final long localRevision;
+        public final int cloudRevision;
+        SyncSnapshot(JSONArray sources,long revision,int cloud){this.sources=sources;localRevision=revision;cloudRevision=cloud;}
+    }
+    public SyncSnapshot snapshotForSync(){synchronized(SYNC_LOCK){return new SyncSnapshot(exportForSync(),prefs.getLong("local_revision",0L),prefs.getInt("cloud_revision",0));}}
+    public boolean applyCloudSnapshotIfUnchanged(JSONArray remote,int revision,long expected){synchronized(SYNC_LOCK){
+        if(prefs.getLong("local_revision",0L)!=expected)return false;
+        applyCloudSnapshotLocked(remote,revision);return true;
+    }}
+    public boolean markSyncedIfUnchanged(int revision,long expected){synchronized(SYNC_LOCK){
+        boolean unchanged=prefs.getLong("local_revision",0L)==expected;
+        prefs.edit().putInt("cloud_revision",Math.max(0,revision)).putBoolean(KEY_DIRTY,!unchanged).apply();return unchanged;
+    }}
 
     public synchronized int cloudRevision(){return prefs.getInt("cloud_revision",0);}
+    public boolean markCloudRevisionIfUnchanged(int revision,long expected){synchronized(SYNC_LOCK){
+        if(prefs.getLong("local_revision",0L)!=expected)return false;
+        prefs.edit().putInt("cloud_revision",Math.max(0,revision)).apply();return true;
+    }}
 
     private void clearActiveProfile(){
         prefs.edit().putString(KEY_ACTIVE,"").commit();
@@ -207,7 +260,7 @@ public final class SourceStore {
     private JSONArray readArray(){
         String enc=prefs.getString(KEY_DATA,"");
         if(enc.isEmpty())return new JSONArray();
-        try{return new JSONArray(crypto.decrypt(enc));}catch(Exception e){return new JSONArray();}
+        try{return new JSONArray(crypto.decrypt(enc));}catch(Exception e){throw new IllegalStateException("SOURCE_STORE_UNREADABLE");}
     }
 
     private void write(JSONArray a,String active){

@@ -31,7 +31,233 @@ public final class UiInstrumentation extends ImportInstrumentation {
         Thread.sleep(350);Bitmap bitmap=getUiAutomation().takeScreenshot();check(bitmap!=null,"Screenshot missing: "+name);
         File folder=new File(getTargetContext().getExternalFilesDir(null),"qa");folder.mkdirs();try(FileOutputStream f=new FileOutputStream(new File(folder,name+".png"))){bitmap.compress(Bitmap.CompressFormat.PNG,100,f);}bitmap.recycle();
     }
+    void xtreamSharedDownloads()throws Exception{
+        Context c=getTargetContext();
+        SourceRegistryChecks.run(c);
+        String previousStart=SettingsStore.startScreen(c);
+        try{
+            for(String category:new String[]{"NL | Films","General"})try(XtreamFixture fixture=new XtreamFixture(category)){
+                Profile p=new Profile();p.type=Profile.Type.XTREAM;p.server=fixture.url();p.username="qa-"+System.nanoTime();p.password="qa";p.name="Xtream QA";
+                new SecureProfileStore(c).save(p);
+                SettingsStore.setPrimaryLanguage(c,"nl");
+                SettingsStore.prefs(c).edit().putString("start_screen","vod").commit();
+                c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE).edit().putString("level","FREE").commit();
+                MainActivity a=(MainActivity)startActivitySync(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                try{
+                    waitForIdleSync();
+                    long end=SystemClock.elapsedRealtime()+30000;
+                    while(SystemClock.elapsedRealtime()<end){
+                        if(a.profile!=null&&a.searchIndex.isComplete(a.profileKey(),"vod")&&a.searchIndex.isComplete(a.profileKey(),"live")&&a.searchIndex.isComplete(a.profileKey(),"series")&&!a.indexRefreshRunning)break;
+                        Thread.sleep(100);
+                    }
+                    check(a.profile!=null&&a.searchIndex.isComplete(a.profileKey(),"vod")&&a.searchIndex.isComplete(a.profileKey(),"series"),"Shared Xtream import did not complete");
+                    Thread.sleep(1700);
+                    for(String action:new String[]{"get_live_streams","get_vod_streams","get_series"})check(fixture.count(action)==1,"Duplicate Xtream download: "+action+"="+fixture.count(action));
+                    for(String action:new String[]{"get_live_categories","get_vod_categories","get_series_categories"})check(fixture.count(action)==1,"Duplicate category download: "+action+"="+fixture.count(action));
+                    java.util.concurrent.atomic.AtomicBoolean populated=new java.util.concurrent.atomic.AtomicBoolean();
+                    long visibleDeadline=SystemClock.elapsedRealtime()+5000;
+                    while(!populated.get()&&SystemClock.elapsedRealtime()<visibleDeadline){runOnMainSync(()->populated.set(a.gridAdapter.getCount()==161));Thread.sleep(100);}
+                    if(!populated.get())snapshot("xtream-failed");
+                    runOnMainSync(()->check(populated.get(),"Shared import screen: category="+category+", section="+a.section+", group="+a.currentCategoryId+", cards="+a.gridAdapter.getCount()+", cached="+a.searchIndex.countSection(a.profileKey(),"vod")+", language="+a.searchIndex.countLanguage(a.profileKey(),"vod","nl")+", status="+a.status.getText()));
+                    snapshot("xtream-shared-"+(category.startsWith("NL")?"language":"all"));
+                }finally{runOnMainSync(a::finish);waitForIdleSync();}
+            }
+        }finally{SettingsStore.prefs(c).edit().putString("start_screen",previousStart).commit();new SecureProfileStore(c).clear();}
+    }
+    static final class XtreamFixture implements AutoCloseable{
+        final ServerSocket socket;final Thread worker;final String category;
+        final java.util.concurrent.ConcurrentHashMap<String,java.util.concurrent.atomic.AtomicInteger> counts=new java.util.concurrent.ConcurrentHashMap<>();
+        XtreamFixture(String category)throws Exception{
+            this.category=category;socket=new ServerSocket(0,8,InetAddress.getByName("127.0.0.1"));
+            worker=new Thread(()->{while(!socket.isClosed())try(Socket connection=socket.accept()){
+                BufferedReader reader=new BufferedReader(new InputStreamReader(connection.getInputStream()));String request=reader.readLine(),line;
+                while((line=reader.readLine())!=null&&!line.isEmpty()){}
+                String action="";
+                if(request!=null){String query=request.split(" ")[1];int start=query.indexOf("action=");if(start>=0){action=query.substring(start+7);int amp=action.indexOf('&');if(amp>=0)action=action.substring(0,amp);}}
+                counts.computeIfAbsent(action,k->new java.util.concurrent.atomic.AtomicInteger()).incrementAndGet();
+                String json="{}";
+                if(action.isEmpty())json="{\"user_info\":{\"auth\":1}}";
+                else if(action.endsWith("_categories"))json="[{\"category_id\":\"1\",\"category_name\":\""+category+"\"}]";
+                else if(action.equals("get_live_streams")||action.equals("get_vod_streams")||action.equals("get_series")){
+                    StringBuilder rows=new StringBuilder("[");for(int i=0;i<161;i++){if(i>0)rows.append(',');rows.append("{\"stream_id\":").append(i+1).append(",\"series_id\":").append(i+1).append(",\"name\":\"QA ").append(i).append("\",\"category_id\":\"1\"}");}json=rows.append(']').toString();
+                }
+                byte[] body=json.getBytes(java.nio.charset.StandardCharsets.UTF_8);OutputStream response=connection.getOutputStream();
+                response.write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "+body.length+"\r\nConnection: close\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.US_ASCII));response.write(body);response.flush();
+            }catch(Exception ignored){}},"xtream-fixture");worker.setDaemon(true);worker.start();
+        }
+        String url(){return "http://127.0.0.1:"+socket.getLocalPort();}
+        int count(String action){java.util.concurrent.atomic.AtomicInteger n=counts.get(action);return n==null?0:n.get();}
+        public void close()throws Exception{socket.close();worker.join(1000);}
+    }
+    void onboarding(Bundle result)throws Exception{
+        Context c=getTargetContext();
+        SecureProfileStore profiles=new SecureProfileStore(c);
+        profiles.clear();
+        SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();
+        for(String language:new String[]{"nl","en","de"}){
+            SettingsStore.setPrimaryLanguage(c,language);
+            ProfileActivity a=(ProfileActivity)startActivitySync(new Intent(c,ProfileActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            waitForIdleSync();
+            runOnMainSync(()->{
+                check(a.demoRadio.isEnabled()&&a.demoRadio.isChecked(),"NenoTV offer not selected on fresh install");
+                if(Build.VERSION.SDK_INT>=30){
+                    View heading=a.findViewById(R.id.profileTitle);int[] position=new int[2];heading.getLocationOnScreen(position);
+                    WindowInsets insets=heading.getRootWindowInsets();
+                    check(insets!=null&&position[1]>=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout()).top,"Onboarding title overlaps system bars");
+                }
+                check(a.xtreamFields.getVisibility()==View.GONE&&a.m3uFields.getVisibility()==View.GONE,"Technical fields shown before source selection");
+                check(a.findViewById(R.id.nenoOffer).getVisibility()==View.VISIBLE,"NenoTV catalogue missing");
+                check(a.findViewById(R.id.advancedButton).getVisibility()==View.GONE,"Advanced settings shown for built-in offer");
+                assertUnclippedText(a.demoRadio);assertUnclippedText(a.xtream);assertUnclippedText(a.m3uRadio);
+            });
+            snapshot("onboarding-"+language);
+            runOnMainSync(()->{
+                a.xtream.performClick();
+                check(a.xtreamFields.getVisibility()==View.VISIBLE&&a.m3uFields.getVisibility()==View.GONE,"Xtream fields missing");
+                a.m3uRadio.performClick();
+                check(a.m3uFields.getVisibility()==View.VISIBLE&&a.xtreamFields.getVisibility()==View.GONE,"M3U fields missing");
+                a.finish();
+            });
+        }
+        Profile demo=new Profile();demo.type=Profile.Type.M3U;demo.m3uUrl=BuildConfig.NENOTV_DEMO_M3U_URL;demo.name="Saved NenoTV";profiles.save(demo);
+        ProfileActivity saved=(ProfileActivity)startActivitySync(new Intent(c,ProfileActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));waitForIdleSync();
+        runOnMainSync(()->{check(saved.demoRadio.isChecked(),"Saved NenoTV offer reopened as own M3U");saved.finish();});
+        ProfileActivity added=(ProfileActivity)startActivitySync(new Intent(c,ProfileActivity.class).putExtra("new_source",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));waitForIdleSync();
+        runOnMainSync(()->{check(added.xtream.isChecked(),"Adding own source changed default");added.finish();});
+        String previousStart=SettingsStore.startScreen(c);
+        SettingsStore.prefs(c).edit().putString("start_screen","vod").commit();
+        MainActivity films=(MainActivity)startActivitySync(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        try{
+            java.util.concurrent.atomic.AtomicBoolean visible=new java.util.concurrent.atomic.AtomicBoolean();
+            long deadline=SystemClock.elapsedRealtime()+10000;
+            while(!visible.get()&&SystemClock.elapsedRealtime()<deadline){runOnMainSync(()->visible.set(films.gridAdapter.getCount()>0));Thread.sleep(100);}
+            check(visible.get(),"Built-in NenoTV films blocked as M3U live-only");
+            snapshot("nenotv-offer-films");
+        }finally{runOnMainSync(films::finish);SettingsStore.prefs(c).edit().putString("start_screen",previousStart).commit();}
+        accountChecks();
+        result.putString("NENOTV_ONBOARDING","passed");
+    }
+    void accountChecks()throws Exception{
+        Context c=getTargetContext();
+        check((c.getApplicationInfo().flags&android.content.pm.ApplicationInfo.FLAG_ALLOW_BACKUP)==0,"Sensitive app data allowed Android backup");
+        java.util.Map<String,java.util.Set<String>> exclusions=new java.util.HashMap<>();String backupSection="";
+        try(android.content.res.XmlResourceParser rules=c.getResources().getXml(R.xml.data_extraction_rules)){
+            for(int event=rules.getEventType();event!=org.xmlpull.v1.XmlPullParser.END_DOCUMENT;event=rules.next()){
+                if(event!=org.xmlpull.v1.XmlPullParser.START_TAG)continue;
+                if("cloud-backup".equals(rules.getName())||"device-transfer".equals(rules.getName())){backupSection=rules.getName();exclusions.put(backupSection,new java.util.HashSet<>());}
+                if("exclude".equals(rules.getName())){check(".".equals(rules.getAttributeValue(null,"path")),"Incomplete sensitive-data backup exclusion");exclusions.get(backupSection).add(rules.getAttributeValue(null,"domain"));}
+            }
+        }
+        java.util.Set<String> domains=new java.util.HashSet<>(java.util.Arrays.asList("root","file","database","sharedpref","external","device_root","device_file","device_database","device_sharedpref"));
+        check(domains.equals(exclusions.get("cloud-backup"))&&domains.equals(exclusions.get("device-transfer")),"Device identity/source vault can be cloned by backup or transfer");
+        com.nenotv.player.entitlement.EntitlementClientChecks.run(c);
+        com.nenotv.player.entitlement.PairingClientChecks.run(c);
+        com.nenotv.player.entitlement.SourceSyncChecks.run(c);
+        HouseholdProfileChecks.run(c);
+        householdScreens();
+        pairingScreens();
+        for(String language:new String[]{"nl","en","de"}){
+            for(String key:new String[]{"account_and_pro","email_address","request_trial","refresh_status","this_device","device_code","trial_remaining","days","pro_active","devices","free_description","checking_status","status_updated","activation_success","activation_failed","server_unavailable","email_required","view_pro","link_my_nenotv","activation_code","link_device","activation_code_invalid"})
+                check(("en".equals(language)&&"days".equals(key))||!key.equals(UiText.t(language,key)),"Missing account translation: "+language+":"+key);
+            SettingsStore.setPrimaryLanguage(c,language);
+            AccountActivity a=(AccountActivity)startActivitySync(new Intent(c,AccountActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            try{
+                waitForIdleSync();
+                runOnMainSync(()->{
+                    check(!a.activationCode.isSaveEnabled(),"Activation code saved in activity state");
+                    check(a.activationCode.getImportantForAutofill()==View.IMPORTANT_FOR_AUTOFILL_NO,"Activation code offered to autofill");
+                    a.activationCode.setText("invalid");a.link.performClick();
+                    check(a.activationCode.getError()!=null&&!a.requestRunning,"Invalid code contacted account server");
+                    a.activationCode.setText("");a.activationCode.setError(null);a.activationCode.clearFocus();
+                    a.busy(true);
+                    check(!a.link.isEnabled()&&!a.email.isEnabled()&&!a.trial.isEnabled()&&!a.refresh.isEnabled(),"Account permits concurrent requests");
+                    a.busy(false);
+                    a.serverText.setText("");
+                    assertUnclippedText(a.link);
+                    if(Build.VERSION.SDK_INT>=30){
+                        int[] position=new int[2];a.box.getLocationOnScreen(position);
+                        check(position[1]>=a.box.getRootWindowInsets().getInsets(WindowInsets.Type.systemBars()).top,"Account overlaps system bars");
+                    }
+                });
+                snapshot("account-"+language);
+            }finally{runOnMainSync(a::finish);waitForIdleSync();}
+        }
+    }
+    void householdScreens()throws Exception{
+        Context context=getTargetContext();
+        android.content.SharedPreferences viewers=context.getSharedPreferences("nenotv_viewers",Context.MODE_PRIVATE),entitlements=context.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE),settings=SettingsStore.prefs(context);
+        Map<String,?> oldViewers=new HashMap<>(viewers.getAll()),oldEntitlements=new HashMap<>(entitlements.getAll()),oldSettings=new HashMap<>(settings.getAll());
+        String id="";
+        try{
+            viewers.edit().clear().commit();entitlements.edit().putString("level","PRO").putLong("expires_at",0).commit();
+            HouseholdProfileStore store=new HouseholdProfileStore(context);id=store.add("Gezin QA");final String selected=id;
+            for(String language:new String[]{"nl","en","de"}){
+                SettingsStore.setPrimaryLanguage(context,language);
+                HouseholdProfilesActivity activity=(HouseholdProfilesActivity)startActivitySync(new Intent(context,HouseholdProfilesActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                try{
+                    runOnMainSync(()->{
+                        Button profile=activity.box.findViewWithTag("viewer:"+selected);
+                        check(profile!=null,"Household profile missing from screen");assertUnclippedText(profile);profile.performClick();
+                        check(store.activeId().equals(selected),"Profile button did not select viewer");
+                        SettingsStore.setPrimaryLanguage(context,language);activity.render();
+                        Button active=activity.box.findViewWithTag("viewer:"+selected);check(active.isSelected(),"Active viewer not marked");
+                    });
+                    waitForIdleSync();snapshot("household-"+language);
+                }finally{runOnMainSync(activity::finish);waitForIdleSync();}
+                store.select("default");
+            }
+        }finally{
+            if(!id.isEmpty())context.deleteSharedPreferences(HouseholdProfileStore.libraryName(id));
+            HouseholdProfileChecks.restore(viewers,oldViewers);HouseholdProfileChecks.restore(entitlements,oldEntitlements);HouseholdProfileChecks.restore(settings,oldSettings);
+        }
+    }
+
+    void pairingScreens()throws Exception{
+        PairingActivity.Factory original=PairingActivity.factory;
+        java.util.concurrent.atomic.AtomicReference<String> state=new java.util.concurrent.atomic.AtomicReference<>("pending");
+        PairingActivity.factory=context->new PairingActivity.Access(){
+            public com.nenotv.player.entitlement.PairingClient.Session start()throws Exception{return com.nenotv.player.entitlement.PairingClientChecks.fixtureSession();}
+            public String status(com.nenotv.player.entitlement.PairingClient.Session session){return state.get();}
+            public void cancel(com.nenotv.player.entitlement.PairingClient.Session session){}
+        };
+        try{
+            for(String language:new String[]{"nl","en","de"}){
+                SettingsStore.setPrimaryLanguage(getTargetContext(),language);state.set("pending");
+                PairingActivity a=(PairingActivity)startActivitySync(new Intent(getTargetContext(),PairingActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                try{
+                    java.util.concurrent.atomic.AtomicBoolean ready=new java.util.concurrent.atomic.AtomicBoolean();
+                    long end=SystemClock.elapsedRealtime()+5000;
+                    while(!ready.get()&&SystemClock.elapsedRealtime()<end){runOnMainSync(()->ready.set(a.session!=null&&!a.busy));Thread.sleep(50);}
+                    check(ready.get(),"Pairing screen did not render code");waitForIdleSync();
+                    runOnMainSync(()->{
+                        check(a.qr.getVisibility()==View.VISIBLE&&a.open.isEnabled(),"QR pairing controls missing");
+                        check(!a.code.isSaveEnabled(),"Pairing code saved in screen state");
+                        assertUnclippedText(a.code);assertUnclippedText(a.status);assertUnclippedText(a.retry);
+                        check(a.bitmap!=null&&a.bitmap.getWidth()==512,"QR bitmap missing");
+                    });
+                    int[] pixels=new int[512*512];runOnMainSync(()->a.bitmap.getPixels(pixels,0,512,0,0,512,512));
+                    com.google.zxing.BinaryBitmap qr=new com.google.zxing.BinaryBitmap(new com.google.zxing.common.HybridBinarizer(new com.google.zxing.RGBLuminanceSource(512,512,pixels)));
+                    check("https://nenotv.com/nenotv-pair/?code=ABCDEF0123".equals(new com.google.zxing.MultiFormatReader().decode(qr).getText()),"QR does not encode pairing URL");
+                    snapshot("pairing-"+language);
+                    if("nl".equals(language)){
+                        runOnMainSync(()->{a.expire();check(a.session==null&&!a.open.isEnabled()&&a.qr.getVisibility()==View.GONE,"Expired QR remained active");a.startPairing();});
+                        ready.set(false);end=SystemClock.elapsedRealtime()+5000;
+                        while(!ready.get()&&SystemClock.elapsedRealtime()<end){runOnMainSync(()->ready.set(a.session!=null&&!a.busy));Thread.sleep(50);}
+                        check(ready.get(),"New pairing code not rendered");
+                        state.set("complete");runOnMainSync(a::pollStatus);
+                        ready.set(false);end=SystemClock.elapsedRealtime()+5000;
+                        while(!ready.get()&&SystemClock.elapsedRealtime()<end){runOnMainSync(()->ready.set(a.complete));Thread.sleep(50);}
+                        runOnMainSync(()->check(a.complete&&a.qr.getVisibility()==View.GONE&&!a.open.isEnabled(),"Completed pairing still exposed code"));
+                    }
+                }finally{runOnMainSync(a::finish);waitForIdleSync();}
+            }
+        }finally{PairingActivity.factory=original;}
+    }
     void core(Bundle result)throws Exception{
+        XtreamImportChecks.run(getTargetContext());
+        xtreamSharedDownloads();
+        result.putString("NENOTV_XTREAM_IMPORT","passed");
+        onboarding(result);
         Context c=getTargetContext();
         for(String unknown:new String[]{"0","0.0","null","NaN","Infinity","-1","11",""})check(MediaEntry.formatRating(unknown).isEmpty(),"Unknown rating shown: "+unknown);
         check(!MediaEntry.formatRating("8,2").isEmpty(),"Comma score disappeared");
@@ -105,6 +331,12 @@ public final class UiInstrumentation extends ImportInstrumentation {
         MediaEntry langNl=new MediaEntry();langNl.type="live";langNl.id="lang-nl";langNl.name="NL - QA";langNl.group="NL | Algemeen";
         List<MediaEntry> ranked=ProLibraryBridge.optimize(a,Arrays.asList(langEn,langNl),"live","nl");
         check(ranked.size()==2&&ranked.get(0)==langNl,"Pro preferred-language optimizer did not rank Dutch first");
+        MediaEntry sd=new MediaEntry();sd.type="live";sd.id="sd";sd.name="A Channel SD";sd.group="NL | General";
+        MediaEntry hd=new MediaEntry();hd.type="live";hd.id="hd";hd.name="Z Channel HD";hd.group="NL | General";
+        MediaEntry radio=new MediaEntry();radio.type="live";radio.id="radio";radio.name="A FM";radio.group="NL | General";
+        MediaEntry npo=new MediaEntry();npo.type="live";npo.id="npo";npo.name="NPO 1 HD";npo.group="NL | General";
+        List<MediaEntry> quality=ProLibraryBridge.optimize(a,Arrays.asList(sd,radio,hd,npo),"live","nl");
+        check(quality.get(0)==npo&&quality.get(1)==hd&&quality.get(3)==radio,"Pro quality/main-channel/radio ranking failed");
         result.putString("NENOTV_PRO_LANGUAGE","passed");
         SourceStore sourceStore=new SourceStore(c);
         com.nenotv.player.model.Profile qaA=new com.nenotv.player.model.Profile();qaA.type=com.nenotv.player.model.Profile.Type.M3U;qaA.name="QA Source A";qaA.m3uUrl=DemoSource.URL;
@@ -139,6 +371,9 @@ public final class UiInstrumentation extends ImportInstrumentation {
         sourceStore.remove(qaAId);check(sourceStore.syncDirty(),"Local source deletion did not mark sync dirty");
         result.putString("NENOTV_PRO_SOURCES","passed");
         sourceStore.remove(qaBId);
+        // Source-manager checks remove the active profile; restore the demo for playback policy checks.
+        new SecureProfileStore(c).save(profile());
+        check(DemoPolicy.isDemo(new SecureProfileStore(c).load()),"Playback fixture lost its demo profile");
         // Build the provider before selecting the packaged entry.
         com.nenotv.player.provider.M3uProvider provider=new com.nenotv.player.provider.M3uProvider(profile());provider.authenticate();MediaEntry item=provider.items("vod","all").get(0);
         Intent i=ProModuleInstaller.playerIntent(a);i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);i.putExtra("media",item);
@@ -153,7 +388,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
         c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE).edit().putString("level","FREE").commit();new SecureProfileStore(c).clear();runOnMainSync(a::finish);result.putString("NENOTV_PRO_RUNTIME","passed");finish(Activity.RESULT_OK,result);
     }
     static com.nenotv.player.model.Profile profile(){com.nenotv.player.model.Profile p=new com.nenotv.player.model.Profile();p.type=com.nenotv.player.model.Profile.Type.M3U;p.m3uUrl=DemoSource.URL;p.name="Demo QA";return p;}
-    @Override public void onStart(){Bundle result=new Bundle();String phase=args.getString("phase","ui");if(!Arrays.asList("ui","resume","pro").contains(phase)){super.onStart();return;}try{if("resume".equals(phase))resume(result);else if("pro".equals(phase)){Context c=getTargetContext();SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();DemoPolicy.startOrKeep(c,System.currentTimeMillis());new SecureProfileStore(c).save(profile());pro(result);}else core(result);}catch(Throwable failure){result.putString("NENOTV_UI_TESTS","failed: "+failure.getClass().getSimpleName()+": "+failure.getMessage());finish(Activity.RESULT_CANCELED,result);}}
+    @Override public void onStart(){Bundle result=new Bundle();String phase=args.getString("phase","ui");if(!Arrays.asList("ui","resume","pro","update","xtream","onboarding").contains(phase)){super.onStart();return;}try{if("onboarding".equals(phase)){onboarding(result);finish(Activity.RESULT_OK,result);}else if("xtream".equals(phase)){XtreamImportChecks.run(getTargetContext());xtreamSharedDownloads();result.putString("NENOTV_XTREAM_IMPORT","passed");finish(Activity.RESULT_OK,result);}else if("update".equals(phase)){UpdateAccessChecks.run(getTargetContext());result.putString("NENOTV_UPDATE_ACCESS","passed");finish(Activity.RESULT_OK,result);}else if("resume".equals(phase))resume(result);else if("pro".equals(phase)){Context c=getTargetContext();SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();DemoPolicy.startOrKeep(c,System.currentTimeMillis());new SecureProfileStore(c).save(profile());pro(result);}else core(result);}catch(Throwable failure){result.putString("NENOTV_UI_TESTS","failed: "+failure.getClass().getSimpleName()+": "+failure.getMessage());finish(Activity.RESULT_CANCELED,result);}}
     static final class EpgFixture implements AutoCloseable{
         final ServerSocket socket;final Thread worker;final byte[] body;
         EpgFixture()throws Exception{

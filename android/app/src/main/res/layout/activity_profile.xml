@@ -4,10 +4,11 @@
     <TextView android:id="@+id/profileTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/text" android:textSize="28sp" android:textStyle="bold" />
     <TextView android:id="@+id/profileIntro" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/muted" android:paddingTop="4dp" android:paddingBottom="14dp" />
     <RadioGroup android:id="@+id/typeGroup" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
-      <RadioButton android:id="@+id/xtreamRadio" android:layout_width="match_parent" android:layout_height="48dp" android:checked="true" android:textColor="@color/text" />
-      <RadioButton android:id="@+id/m3uRadio" android:layout_width="match_parent" android:layout_height="48dp" android:textColor="@color/text" />
-      <RadioButton android:id="@+id/demoRadio" android:layout_width="match_parent" android:layout_height="48dp" android:textColor="@color/text" />
+      <RadioButton android:id="@+id/demoRadio" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="56dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:textColor="@color/text" />
+      <RadioButton android:id="@+id/xtreamRadio" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="56dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:textColor="@color/text" />
+      <RadioButton android:id="@+id/m3uRadio" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="56dp" android:paddingTop="8dp" android:paddingBottom="8dp" android:textColor="@color/text" />
     </RadioGroup>
+    <TextView android:id="@+id/nenoOffer" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/muted" android:textSize="16sp" android:paddingTop="8dp" android:paddingBottom="12dp" android:visibility="gone" />
     <LinearLayout android:id="@+id/xtreamFields" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
       <EditText android:id="@+id/serverField" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:inputType="textUri" android:textColor="@color/text" android:textColorHint="@color/muted" android:background="@drawable/bg_search" android:paddingLeft="14dp" android:paddingRight="14dp" />
       <EditText android:id="@+id/userField" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:textColor="@color/text" android:textColorHint="@color/muted" android:background="@drawable/bg_search" android:paddingLeft="14dp" android:paddingRight="14dp" />
