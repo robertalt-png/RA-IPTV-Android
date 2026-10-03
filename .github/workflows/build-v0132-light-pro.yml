@@ -15,6 +15,7 @@ on:
       - 'tools/test_repair_streaming_import.py'
       - 'tools/runtime/**'
       - 'tools/finalize_v0133.py'
+      - 'tools/verify_v0133.py'
       - '.github/patches/v0133-common.patch.gz'
   workflow_dispatch:
 
