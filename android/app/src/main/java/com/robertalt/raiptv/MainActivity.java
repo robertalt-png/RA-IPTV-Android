@@ -136,6 +136,7 @@ public class MainActivity extends Activity {
     addNenoMenuItem(d,box,T("account_and_pro"),()->startActivity(new Intent(this,AccountActivity.class)));
     addNenoMenuItem(d,box,T("manage_source"),()->startActivityForResult(ProModuleInstaller.sourcesIntent(this),10));
     addNenoMenuItem(d,box,T("casting"),()->{if(ProGate.require(this,T("casting")))showTvShareMenu();});
+    addNenoMenuItem(d,box,SettingsStore.language(this).equals("nl")?"Netwerk & Privacy":SettingsStore.language(this).equals("de")?"Netzwerk & Datenschutz":"Network & Privacy",()->{if(ProGate.require(this,"Network & Privacy"))startActivity(ProModuleInstaller.networkIntent(this));});
     addNenoMenuItem(d,box,T("settings"),()->startActivity(new Intent(this,SettingsActivity.class)));
     addNenoMenuItem(d,box,T("close"),()->{});
     d.setContentView(box);
