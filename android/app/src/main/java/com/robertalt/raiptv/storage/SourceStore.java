@@ -125,10 +125,15 @@ public final class SourceStore {
         if(!removed)return false;
         String active=prefs.getString(KEY_ACTIVE,"");
         if(id.equals(active))active="";
-        if(active.isEmpty()&&next.length()>0)active=next.optJSONObject(0).optString("id","");
+        if(active.isEmpty()){
+            for(int i=0;i<next.length();i++){
+                JSONObject candidate=next.optJSONObject(i);
+                if(candidate!=null&&candidate.optBoolean("enabled",true)){active=candidate.optString("id","");if(!active.isEmpty())break;}
+            }
+        }
         write(next,active); markDirty();
-        if(!active.isEmpty())setActive(active);
-        else new SecureProfileStore(app).clear();
+        if(!active.isEmpty()){if(!setActive(active))clearActiveProfile();}
+        else clearActiveProfile();
         return true;
     }
 
@@ -138,7 +143,14 @@ public final class SourceStore {
             JSONObject o=a.optJSONObject(i);
             if(o!=null&&id.equals(o.optString("id"))){try{o.put("enabled",enabled);a.put(i,o);}catch(Exception ex){throw new IllegalStateException("SOURCE_STORE_UPDATE_FAILED",ex);}break;}
         }
-        write(a,prefs.getString(KEY_ACTIVE,"")); markDirty();
+        String active=prefs.getString(KEY_ACTIVE,"");
+        write(a,active); markDirty();
+        if(!enabled&&id.equals(active)){
+            String replacement="";
+            for(Entry e:list())if(e.enabled&&!e.id.equals(id)){replacement=e.id;break;}
+            if(!replacement.isEmpty()){if(!setActive(replacement))clearActiveProfile();}
+            else clearActiveProfile();
+        }else if(enabled&&(active==null||active.isEmpty()))setActive(id);
     }
 
     public synchronized void move(String id,int delta){
@@ -185,6 +197,12 @@ public final class SourceStore {
     private void markDirty(){prefs.edit().putBoolean(KEY_DIRTY,true).apply();}
 
     public synchronized int cloudRevision(){return prefs.getInt("cloud_revision",0);}
+
+    private void clearActiveProfile(){
+        prefs.edit().putString(KEY_ACTIVE,"").commit();
+        SecureProfileStore legacy=new SecureProfileStore(app);
+        if(legacy.exists())legacy.clear();
+    }
 
     private JSONArray readArray(){
         String enc=prefs.getString(KEY_DATA,"");
