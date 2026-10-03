@@ -1,0 +1,5 @@
+NenoTV Pro Media Pack
+delivery=on-demand
+heavy_dependencies=libvlc-all,mlkit-translate,mlkit-language-id
+base_application_id=com.nenotv.player
+dev_version=0.13.1-play2

@@ -1,0 +1,6 @@
+NenoTV v0.13.8 Pro architecture
+input=already-loaded Light MediaEntry list
+provider_fetch=false
+category_fetch=false
+authentication=false
+functions=dedupe,rank,sort,metadata/player extras

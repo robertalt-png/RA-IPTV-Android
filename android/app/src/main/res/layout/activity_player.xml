@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/playerRoot" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000">
+    <FrameLayout android:id="@+id/vlcLayout" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone" />
+    <androidx.media3.ui.PlayerView android:id="@+id/media3View" android:layout_width="match_parent" android:layout_height="match_parent" android:visibility="visible" app:use_controller="false" />
+    <FrameLayout android:id="@+id/playerControls" android:layout_width="match_parent" android:layout_height="match_parent" android:clickable="true">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_gravity="top" android:orientation="vertical" android:padding="18dp" android:background="#99000000">
+            <TextView android:id="@+id/playerTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFFFFF" android:textSize="20sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" />
+            <TextView android:id="@+id/playerStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#C7CDD6" android:textSize="12sp" android:paddingTop="3dp" />
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_gravity="bottom" android:orientation="vertical" android:paddingLeft="16dp" android:paddingRight="16dp" android:paddingTop="22dp" android:paddingBottom="12dp" android:background="@drawable/bg_player_controls">
+            <SeekBar android:id="@+id/seekBar" android:layout_width="match_parent" android:layout_height="wrap_content" android:progressTint="@color/accent" android:thumbTint="@color/accent" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="58dp" android:gravity="center_vertical" android:orientation="horizontal">
+                <Button android:id="@+id/channelPrevButton" android:layout_width="58dp" android:layout_height="46dp" android:text="CH−" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55000000" android:visibility="gone" />
+                <Button android:id="@+id/rewindButton" android:layout_width="60dp" android:layout_height="46dp" android:layout_marginLeft="4dp" android:text="↶ 10" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55000000" />
+                <Button android:id="@+id/playPauseButton" android:layout_width="62dp" android:layout_height="50dp" android:layout_marginLeft="5dp" android:text="❚❚" android:textSize="18sp" android:textColor="#FFFFFF" android:backgroundTint="@color/accent" />
+                <Button android:id="@+id/forwardButton" android:layout_width="60dp" android:layout_height="46dp" android:layout_marginLeft="5dp" android:text="10 ↷" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55000000" />
+                <Button android:id="@+id/channelNextButton" android:layout_width="58dp" android:layout_height="46dp" android:layout_marginLeft="4dp" android:text="CH+" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55000000" android:visibility="gone" />
+                <TextView android:id="@+id/timeText" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="00:00" android:textColor="#FFFFFF" android:textSize="13sp" android:paddingLeft="12dp" />
+            </LinearLayout>
+            <HorizontalScrollView android:layout_width="match_parent" android:layout_height="48dp" android:scrollbars="none">
+                <LinearLayout android:layout_width="wrap_content" android:layout_height="match_parent" android:gravity="center_vertical" android:orientation="horizontal">
+                    <Button android:id="@+id/castRouteButton" android:layout_width="52dp" android:layout_height="42dp" android:text="TV" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55000000" android:contentDescription="Afspelen op tv" />
+                    <Button android:id="@+id/favoriteButton" android:layout_width="48dp" android:layout_height="42dp" android:text="♡" android:textSize="20sp" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55000000" />
+                    <Button android:id="@+id/audioButton" android:layout_width="wrap_content" android:layout_height="42dp" android:text="Audio" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55000000" />
+                    <Button android:id="@+id/subtitleButton" android:layout_width="wrap_content" android:layout_height="42dp" android:layout_marginLeft="5dp" android:text="CC" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55000000" />
+                    <Button android:id="@+id/speedButton" android:layout_width="wrap_content" android:layout_height="42dp" android:layout_marginLeft="5dp" android:text="1.0×" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55000000" />
+                    <Button android:id="@+id/aspectButton" android:layout_width="wrap_content" android:layout_height="42dp" android:layout_marginLeft="5dp" android:text="Fit" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55000000" />
+                    <Button android:id="@+id/sleepButton" android:layout_width="wrap_content" android:layout_height="42dp" android:layout_marginLeft="5dp" android:text="Sleep" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55000000" />
+                    <Button android:id="@+id/recordButton" android:layout_width="wrap_content" android:layout_height="42dp" android:layout_marginLeft="5dp" android:text="● REC" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55000000" android:visibility="gone" />
+                    <Button android:id="@+id/pipButton" android:layout_width="wrap_content" android:layout_height="42dp" android:layout_marginLeft="5dp" android:text="PiP" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="#55000000" />
+                </LinearLayout>
+            </HorizontalScrollView>
+        </LinearLayout>
+    </FrameLayout>
+</FrameLayout>

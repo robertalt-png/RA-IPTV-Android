@@ -1,0 +1,1 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"><instrumentation android:name="com.nenotv.player.UiInstrumentation" android:targetPackage="com.nenotv.player" android:functionalTest="true"/></manifest>

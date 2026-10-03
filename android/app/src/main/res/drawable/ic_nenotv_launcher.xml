@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Launcher icon matching the selected NenoTV brand -->
+    <path android:fillColor="#FFD400"
+        android:pathData="M16,6 H92 Q102,6 102,16 V92 Q102,102 92,102 H16 Q6,102 6,92 V16 Q6,6 16,6 Z"/>
+    <path android:fillColor="#0A0A0A"
+        android:pathData="M29,23 H38 Q44,23 44,29 V79 Q44,85 38,85 H29 Q23,85 23,79 V29 Q23,23 29,23 Z"/>
+    <path android:fillColor="#0A0A0A"
+        android:pathData="M70,23 H79 Q85,23 85,29 V79 Q85,85 79,85 H70 Q64,85 64,79 V29 Q64,23 70,23 Z"/>
+    <path android:fillColor="#0A0A0A"
+        android:pathData="M34,24 L83,68 L72,85 L26,43 Z"/>
+    <path android:fillColor="#FFD400"
+        android:pathData="M43,42 L62,54 L43,66 Z"/>
+</vector>
