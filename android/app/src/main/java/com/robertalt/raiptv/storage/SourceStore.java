@@ -217,9 +217,10 @@ public final class SourceStore {
     public static final class SyncSnapshot {
         public final JSONArray sources;
         public final long localRevision;
-        SyncSnapshot(JSONArray sources,long revision){this.sources=sources;localRevision=revision;}
+        public final int cloudRevision;
+        SyncSnapshot(JSONArray sources,long revision,int cloud){this.sources=sources;localRevision=revision;cloudRevision=cloud;}
     }
-    public SyncSnapshot snapshotForSync(){synchronized(SYNC_LOCK){return new SyncSnapshot(exportForSync(),prefs.getLong("local_revision",0L));}}
+    public SyncSnapshot snapshotForSync(){synchronized(SYNC_LOCK){return new SyncSnapshot(exportForSync(),prefs.getLong("local_revision",0L),prefs.getInt("cloud_revision",0));}}
     public boolean applyCloudSnapshotIfUnchanged(JSONArray remote,int revision,long expected){synchronized(SYNC_LOCK){
         if(prefs.getLong("local_revision",0L)!=expected)return false;
         applyCloudSnapshotLocked(remote,revision);return true;
@@ -230,6 +231,10 @@ public final class SourceStore {
     }}
 
     public synchronized int cloudRevision(){return prefs.getInt("cloud_revision",0);}
+    public boolean markCloudRevisionIfUnchanged(int revision,long expected){synchronized(SYNC_LOCK){
+        if(prefs.getLong("local_revision",0L)!=expected)return false;
+        prefs.edit().putInt("cloud_revision",Math.max(0,revision)).apply();return true;
+    }}
 
     private void clearActiveProfile(){
         prefs.edit().putString(KEY_ACTIVE,"").commit();

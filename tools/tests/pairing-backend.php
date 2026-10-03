@@ -9,6 +9,9 @@ function register_rest_route(...$args){} function wp_schedule_single_event(...$a
 function wp_salt($kind){return 'fixture-salt-not-a-production-secret';}
 function sanitize_text_field($value){return strip_tags((string)$value);}
 function sanitize_email($value){return (string)$value;}
+function esc_url_raw($value){return (string)$value;}
+function wp_json_encode($value,...$flags){return json_encode($value,...$flags);}
+function is_wp_error($value){return $value instanceof WP_Error;}
 function sanitize_key($value){return preg_replace('/[^a-z0-9_\-]/','',strtolower($value));}
 function get_option($key,$default=false){global $options;return $options[$key]??$default;}
 function add_option($key,$value,...$unused){global $options;if(isset($options[$key]))return false;$options[$key]=$value;return true;}
@@ -17,12 +20,19 @@ function delete_option($key){global $options;unset($options[$key]);return true;}
 function get_transient($key){global $transients;return $transients[$key]??false;}
 function set_transient($key,$value,$expiry){global $transients;$transients[$key]=$value;return true;}
 function home_url($path){return 'https://nenotv.com'.$path;}
+function wp_generate_uuid4(){return 'fixture-event-uuid';}
 function is_user_logged_in(){global $logged;return $logged;}
 function get_current_user_id(){return 1;}
 function wp_get_current_user(){global $userEmail;return (object)['user_email'=>$userEmail];}
 function wp_verify_nonce(...$args){global $validNonce;return $validNonce;}
 function wp_die($message){throw new RuntimeException($message);}
 class Redirect extends RuntimeException {}
+class WP_Error {
+    public function __construct(public string $code,public string $message,public array $data){}
+    public function get_error_code(){return $this->code;}
+    public function get_error_message(){return $this->message;}
+    public function get_error_data(){return $this->data;}
+}
 function auth_redirect(){throw new Redirect('login');}
 function wp_safe_redirect($url){throw new Redirect($url);}
 class WP_REST_Request {
@@ -36,7 +46,7 @@ class WP_REST_Response {
     public function header($key,$value){$this->headers[$key]=$value;}
 }
 class TestDb {
-    public string $prefix='fixture_';public array $devices=[],$entitlements=[];
+    public string $prefix='fixture_';public array $devices=[],$entitlements=[],$vaults=[],$events=[];
     public bool $writeFailure=false,$lockAvailable=true;
     public function prepare($sql,...$args){return [$sql,$args];}
     public function get_var($query){
@@ -48,6 +58,7 @@ class TestDb {
     }
     public function get_row($query,$format){
         [$sql,$args]=$query;
+        if(str_contains($sql,'nenotv_source_vault'))return $this->vaults[$args[0]]??null;
         if(str_contains($sql,'nenotv_devices')){foreach($this->devices as $d)if($d['device_id']===$args[0])return $d;return null;}
         if(str_contains($sql,'WHERE email_hash')){foreach($this->entitlements as $e)if($e['email_hash']===$args[0])return $e;return null;}
         if(str_contains($sql,'WHERE id='))return $this->entitlements[$args[0]]??null;
@@ -55,6 +66,18 @@ class TestDb {
     }
     public function insert($table,$values){if($this->writeFailure)return false;$id=count($this->devices)+1;$values['id']=$id;$this->devices[$id]=$values;return 1;}
     public function update($table,$values,$where){if($this->writeFailure)return false;$id=$where['id'];$this->devices[$id]=array_merge($this->devices[$id],$values);return 1;}
+    public function query($query){
+        [$sql,$args]=$query;if($this->writeFailure)return false;
+        if(str_contains($sql,'nenotv_entitlement_events')){$this->events[]=$args;return 1;}
+        if(str_starts_with($sql,'INSERT IGNORE')){
+            [$id,$revision,$payload,$iv,$tag,$updated]=$args;
+            if(isset($this->vaults[$id]))return 0;
+        }elseif(str_starts_with($sql,'UPDATE')){
+            [$revision,$payload,$iv,$tag,$updated,$id,$base]=$args;
+            if(!isset($this->vaults[$id])||$this->vaults[$id]['revision']!==$base)return 0;
+        }else throw new RuntimeException('Unexpected vault write');
+        $this->vaults[$id]=['revision'=>$revision,'payload'=>$payload,'iv'=>$iv,'tag'=>$tag,'updated_at'=>$updated];return 1;
+    }
 }
 $wpdb=new TestDb();
 require __DIR__.'/../../server/nenotv-entitlement-core.php';
@@ -89,6 +112,7 @@ check($options[$key]['state']==='approved'&&count($wpdb->devices)===0,'Approval 
 $done=request('status',$poll);check($done->data['state']==='complete'&&count($wpdb->devices)===1,'Approved device not bound');
 check($done->data['entitlement']['used_devices']===1&&$done->data['entitlement']['free_devices']===0,'Incorrect device places');
 check(request('status',$poll)->data['state']==='complete'&&count($wpdb->devices)===1,'Poll not idempotent');
+check(count($wpdb->events)===1&&!str_contains(json_encode($wpdb->events),$token),'Pairing audit duplicated or stored proof');
 $wpdb->devices[1]['status']='revoked';
 check(request('status',$poll)->status===403&&$wpdb->devices[1]['status']==='revoked','Completed session restored revoked device');
 $wpdb->devices[1]['status']='active';
@@ -104,4 +128,25 @@ $wpdb->lockAvailable=true;
 check(request('cancel',$poll2)->data['state']==='cancelled'&&!isset($options['nenotv_pair_'.$code2]),'Cancelled session retained proof');
 $options[$key]['expires']=time()-1;
 check(request('status',$poll)->data['state']==='expired'&&!isset($options[$key]),'Expired session retained proof');
+$wpdb->devices[1]['status']='active';
+$source=['id'=>'source-fixture','type'=>'XTREAM','name'=>'Private fixture','server'=>'https://example.invalid','username'=>'fixture-user','password'=>'fixture-private-password'];
+function sources(string $action,array $p): WP_REST_Response{return NenoTV_Entitlement_Core::app_sources(new WP_REST_Request($p),$action);}
+check(sources('pull',array_merge($p,['device_key'=>str_repeat('z',43)]))->status===403,'Source vault exposed without device proof');
+$first=sources('push',array_merge($p,['sources'=>[$source],'base_revision'=>0]));
+check($first->status===200&&$first->data['revision']===1,'Source vault not created with revision');
+check(!str_contains($wpdb->vaults[1]['payload'],$source['password']),'Source credentials stored unencrypted');
+check(sources('pull',$p)->data['sources'][0]['password']===$source['password'],'Encrypted source did not round trip');
+$second=sources('push',array_merge($p,['sources'=>[],'base_revision'=>1]));
+check($second->data['revision']===2&&count(sources('pull',$p)->data['sources'])===0,'Cloud removal not authoritative');
+$stale=sources('push',array_merge($p,['sources'=>[$source],'base_revision'=>1]));
+check($stale->status===409&&$stale->data['error']==='source_revision_conflict','Stale source update accepted');
+check(count(sources('pull',$p)->data['sources'])===0,'Stale device restored deleted source');
+check(sources('push',array_merge($p,['base_revision'=>2]))->status===400,'Missing sources cleared vault');
+check(sources('push',array_merge($p,['sources'=>[$source]]))->status===409,'Unversioned source update accepted');
+check(sources('push',array_merge($p,['sources'=>[$source,$source],'base_revision'=>2]))->status===400,'Duplicate source IDs accepted');
+$original=$wpdb->vaults[1];$wpdb->vaults[1]['tag']=base64_encode(str_repeat('x',16));
+check(sources('pull',$p)->status===503,'Unreadable vault reported empty source list');
+$wpdb->vaults[1]=$original;$wpdb->writeFailure=true;
+check(sources('push',array_merge($p,['sources'=>[$source],'base_revision'=>2]))->status===503,'Vault write error reported success');
+$wpdb->writeFailure=false;
 echo $checks." pairing/account authorization checks passed\n";

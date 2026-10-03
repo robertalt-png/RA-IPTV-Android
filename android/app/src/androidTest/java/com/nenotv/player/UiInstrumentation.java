@@ -141,6 +141,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
         Context c=getTargetContext();
         com.nenotv.player.entitlement.EntitlementClientChecks.run(c);
         com.nenotv.player.entitlement.PairingClientChecks.run(c);
+        com.nenotv.player.entitlement.SourceSyncChecks.run(c);
         pairingScreens();
         for(String language:new String[]{"nl","en","de"}){
             for(String key:new String[]{"account_and_pro","email_address","request_trial","refresh_status","this_device","device_code","trial_remaining","days","pro_active","devices","free_description","checking_status","status_updated","activation_success","activation_failed","server_unavailable","email_required","view_pro","link_my_nenotv","activation_code","link_device","activation_code_invalid"})

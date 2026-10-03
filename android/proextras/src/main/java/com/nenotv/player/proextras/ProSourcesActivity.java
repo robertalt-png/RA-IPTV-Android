@@ -102,11 +102,33 @@ public class ProSourcesActivity extends Activity {
                     render();
                 });
             }catch(Exception ex){
-                String m=ex.getMessage()==null?L("Sync unavailable","Sync niet beschikbaar","Synchronisierung nicht verfügbar"):ex.getMessage();
-                if("LOCAL_SOURCES_CHANGED_RETRY_SYNC".equals(m))m=L("Sources changed during sync. Sync again.","Bronnen gewijzigd tijdens synchronisatie. Synchroniseer opnieuw.","Quellen während der Synchronisierung geändert. Erneut synchronisieren.");
-                final String message=m;
-                runOnUiThread(()->{Toast.makeText(this,message,Toast.LENGTH_LONG).show();render();});
+                if(ex instanceof com.nenotv.player.entitlement.EntitlementClient.ServiceException&&"source_revision_conflict".equals(((com.nenotv.player.entitlement.EntitlementClient.ServiceException)ex).code)){
+                    runOnUiThread(()->{
+                        if(isFinishing()||isDestroyed())return;
+                        render();
+                        new android.app.AlertDialog.Builder(this)
+                            .setTitle(L("Sources changed elsewhere","Bronnen elders gewijzigd","Quellen auf anderem Gerät geändert"))
+                            .setMessage(L("Your local changes have not been synchronized.","Uw lokale wijzigingen zijn niet gesynchroniseerd.","Deine lokalen Änderungen wurden nicht synchronisiert."))
+                            .setNegativeButton(L("Keep local","Lokaal behouden","Lokal behalten"),(d,w)->{})
+                            .setPositiveButton(L("Use cloud version","Cloudversie gebruiken","Cloud-Version verwenden"),(d,w)->useCloudSources())
+                            .show();
+                    });
+                }else showSyncFailure(ex);
             }
+        });
+    }
+
+    void showSyncFailure(Exception error){
+        String message=L("Sync unavailable","Sync niet beschikbaar","Synchronisierung nicht verfügbar");
+        if("LOCAL_SOURCES_CHANGED_RETRY_SYNC".equals(error.getMessage()))message=L("Sources changed during sync. Sync again.","Bronnen gewijzigd tijdens synchronisatie. Synchroniseer opnieuw.","Quellen während der Synchronisierung geändert. Erneut synchronisieren.");
+        final String safeMessage=message;
+        runOnUiThread(()->{if(isFinishing()||isDestroyed())return;Toast.makeText(this,safeMessage,Toast.LENGTH_LONG).show();render();});
+    }
+
+    void useCloudSources(){
+        exec.execute(()->{
+            try{new SourceSyncClient(this).pull();runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())render();});}
+            catch(Exception error){showSyncFailure(error);}
         });
     }
 

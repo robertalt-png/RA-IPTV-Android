@@ -53,6 +53,10 @@ public final class EntitlementClient {
     }
 
     JSONObject request(String path,JSONObject body)throws Exception{
+        return request(path,body,65536);
+    }
+
+    JSONObject request(String path,JSONObject body,int responseLimit)throws Exception{
         body.put("device_id",store.deviceId());
         body.put("public_device_id",store.publicDeviceId());
         body.put("device_key",store.deviceKey());
@@ -61,10 +65,10 @@ public final class EntitlementClient {
 
         JSONObject out;
         try{
-            out=postUrl(base+"/wp-json/nenotv/v1/"+path,body);
+            out=postUrl(base+"/wp-json/nenotv/v1/"+path,body,responseLimit);
         }catch(MissingRoute e){
             // Retry only an absent REST route, never a possibly consumed activation.
-            out=postUrl(base+"/index.php?rest_route=/nenotv/v1/"+path,body);
+            out=postUrl(base+"/index.php?rest_route=/nenotv/v1/"+path,body,responseLimit);
         }
 
         return out;
@@ -80,7 +84,7 @@ public final class EntitlementClient {
         }
     }
 
-    private JSONObject postUrl(String url,JSONObject body) throws Exception {
+    private JSONObject postUrl(String url,JSONObject body,int responseLimit) throws Exception {
         HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();
         try{
         c.setInstanceFollowRedirects(false);
@@ -97,7 +101,7 @@ public final class EntitlementClient {
 
         int code=c.getResponseCode();
         InputStream in=code>=200&&code<300?c.getInputStream():c.getErrorStream();
-        String text=read(in);
+        String text=read(in,responseLimit);
         String trimmed=text==null?"":text.trim();
         String contentType=c.getHeaderField("Content-Type");
 
@@ -120,14 +124,14 @@ public final class EntitlementClient {
         }finally{c.disconnect();}
     }
 
-    private String read(InputStream in)throws IOException{
+    private String read(InputStream in,int responseLimit)throws IOException{
         if(in==null)return "";
         try(BufferedReader r=new BufferedReader(new InputStreamReader(in,StandardCharsets.UTF_8))){
             StringBuilder b=new StringBuilder();
             String s;
             while((s=r.readLine())!=null){
                 b.append(s);
-                if(b.length()>65536)throw new IOException("Account response too large");
+                if(b.length()>responseLimit)throw new IOException("Account response too large");
             }
             return b.toString();
         }

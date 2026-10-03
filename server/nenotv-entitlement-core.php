@@ -2,7 +2,7 @@
 /**
  * Plugin Name: NenoTV Entitlement Core
  * Description: Central NenoTV entitlement control plane for payment grants, refunds, device claims and the app bridge. Defaults to safe shadow mode until commercial launch.
- * Version: 0.1.16
+ * Version: 0.1.17
  * Author: NenoTV
  * Requires at least: 6.6
  * Requires PHP: 8.0
@@ -14,7 +14,7 @@ require_once __DIR__ . '/nenotv-pairing.php';
 
 final class NenoTV_Entitlement_Core {
     use NenoTV_Pairing;
-    const VERSION = '0.1.16';
+    const VERSION = '0.1.17';
     const DB_VERSION = '4';
     const NS = 'nenotv-backend/v1';
     const APP_NS = 'nenotv/v1';
@@ -1040,15 +1040,16 @@ final class NenoTV_Entitlement_Core {
     }
 
     private static function vault_decrypt(array $row): array {
-        if (empty($row['payload']) || empty($row['iv']) || empty($row['tag'])) return [];
+        if (empty($row['payload']) || empty($row['iv']) || empty($row['tag'])) throw new RuntimeException('Source vault unreadable');
         $cipher=base64_decode((string)$row['payload'],true);
         $iv=base64_decode((string)$row['iv'],true);
         $tag=base64_decode((string)$row['tag'],true);
-        if ($cipher===false || $iv===false || $tag===false) return [];
+        if ($cipher===false || $iv===false || $tag===false) throw new RuntimeException('Source vault unreadable');
         $plain=openssl_decrypt($cipher,'aes-256-gcm',self::source_vault_key(),OPENSSL_RAW_DATA,$iv,$tag,'nenotv-source-v1');
-        if (!is_string($plain) || $plain==='') return [];
+        if (!is_string($plain) || $plain==='') throw new RuntimeException('Source vault unreadable');
         $data=json_decode($plain,true);
-        return self::sanitize_source_list(is_array($data)?$data:[]);
+        if(!is_array($data))throw new RuntimeException('Source vault unreadable');
+        return self::sanitize_source_list($data);
     }
 
     private static function load_source_vault(int $entitlement_id): array {
@@ -1058,18 +1059,26 @@ final class NenoTV_Entitlement_Core {
         return ['revision'=>(int)$row['revision'],'sources'=>self::vault_decrypt($row)];
     }
 
-    private static function save_source_vault(int $entitlement_id, array $sources): array {
+    private static function save_source_vault(int $entitlement_id, array $sources, int $base_revision): array {
         global $wpdb;
-        $current=self::load_source_vault($entitlement_id);
-        $revision=max(1,(int)$current['revision']+1);
+        if($base_revision<0)throw new InvalidArgumentException('Invalid source revision');
+        $revision=$base_revision+1;
         $enc=self::vault_encrypt(self::sanitize_source_list($sources));
         $now=self::now_mysql();
-        $sql=$wpdb->prepare(
-            'INSERT INTO '.self::source_table().' (entitlement_id,revision,payload,iv,tag,updated_at) VALUES (%d,%d,%s,%s,%s,%s)
-             ON DUPLICATE KEY UPDATE revision=VALUES(revision),payload=VALUES(payload),iv=VALUES(iv),tag=VALUES(tag),updated_at=VALUES(updated_at)',
-            $entitlement_id,$revision,$enc['payload'],$enc['iv'],$enc['tag'],$now
-        );
-        if ($wpdb->query($sql)===false) throw new RuntimeException('Source vault write failed');
+        if($base_revision===0){
+            $sql=$wpdb->prepare(
+                'INSERT IGNORE INTO '.self::source_table().' (entitlement_id,revision,payload,iv,tag,updated_at) VALUES (%d,%d,%s,%s,%s,%s)',
+                $entitlement_id,$revision,$enc['payload'],$enc['iv'],$enc['tag'],$now
+            );
+        }else{
+            $sql=$wpdb->prepare(
+                'UPDATE '.self::source_table().' SET revision=%d,payload=%s,iv=%s,tag=%s,updated_at=%s WHERE entitlement_id=%d AND revision=%d',
+                $revision,$enc['payload'],$enc['iv'],$enc['tag'],$now,$entitlement_id,$base_revision
+            );
+        }
+        $written=$wpdb->query($sql);
+        if($written===false)throw new RuntimeException('Source vault write failed');
+        if($written!==1)throw new UnexpectedValueException('SOURCE_REVISION_CONFLICT');
         return ['revision'=>$revision,'sources'=>self::sanitize_source_list($sources)];
     }
 
@@ -1087,6 +1096,7 @@ final class NenoTV_Entitlement_Core {
 
     public static function app_sources(WP_REST_Request $request, string $action): WP_REST_Response {
         if (self::mode()!=='live') return self::json(['ok'=>false,'error'=>'pro_not_live','message'=>'NenoTV Pro source sync is not live yet.'],403);
+        if(strlen((string)$request->get_body())>1048576)return self::json(['ok'=>false,'error'=>'request_too_large'],413);
         $raw=$request->get_json_params(); if(!is_array($raw))$raw=[];
         $auth=self::source_device_auth($raw); if(is_wp_error($auth))return self::wp_error_json($auth);
         $ent=(array)$auth['entitlement'];
@@ -1097,10 +1107,16 @@ final class NenoTV_Entitlement_Core {
                 return self::json(['ok'=>true,'revision'=>(int)$vault['revision'],'sources'=>$vault['sources']],200);
             }
             if ($action==='push') {
-                $sources=self::sanitize_source_list($raw['sources']??[]);
-                $vault=self::save_source_vault($entitlement_id,$sources);
+                if(!isset($raw['sources'])||!is_array($raw['sources']))return self::json(['ok'=>false,'error'=>'invalid_sources'],400);
+                if(count($raw['sources'])>20)return self::json(['ok'=>false,'error'=>'source_limit'],400);
+                if(!isset($raw['base_revision'])||!is_int($raw['base_revision'])||$raw['base_revision']<0)return self::json(['ok'=>false,'error'=>'source_version_required'],409);
+                $sources=self::sanitize_source_list($raw['sources']);
+                if(count($sources)!==count($raw['sources'])||count(array_unique(array_column($sources,'id')))!==count($sources))return self::json(['ok'=>false,'error'=>'invalid_sources'],400);
+                $vault=self::save_source_vault($entitlement_id,$sources,$raw['base_revision']);
                 return self::json(['ok'=>true,'revision'=>(int)$vault['revision'],'sources'=>$vault['sources']],200);
             }
+        } catch (UnexpectedValueException $e) {
+            return self::json(['ok'=>false,'error'=>'source_revision_conflict','revision'=>self::load_source_vault($entitlement_id)['revision']],409);
         } catch (Throwable $e) {
             return self::json(['ok'=>false,'error'=>'source_sync_failed','message'=>'NenoTV source sync could not be completed.'],503);
         }
@@ -1709,6 +1725,7 @@ final class NenoTV_Entitlement_Core {
         if (!in_array($type,['M3U','XTREAM'],true)) $type='M3U';
         $vault=self::load_source_vault((int)$ent['id']);
         $sources=(array)$vault['sources'];
+        if(count($sources)>=20)wp_die('The maximum of 20 sources has been reached.');
         $sources[]=[
             'id'=>wp_generate_uuid4(),
             'type'=>$type,
@@ -1722,7 +1739,8 @@ final class NenoTV_Entitlement_Core {
             'priority'=>count($sources),
             'updated_at'=>time()*1000,
         ];
-        self::save_source_vault((int)$ent['id'],$sources);
+        try{self::save_source_vault((int)$ent['id'],$sources,(int)$vault['revision']);}
+        catch(UnexpectedValueException $e){wp_die('Sources changed on another device. Reload My NenoTV and retry.');}
         $url=wp_get_referer() ?: home_url('/my-account/');
         wp_safe_redirect(add_query_arg('source_saved','1',$url)); exit;
     }
@@ -1735,7 +1753,8 @@ final class NenoTV_Entitlement_Core {
         check_admin_referer('nenotv_source_delete_'.(int)$ent['id'].'_'.$sid);
         $vault=self::load_source_vault((int)$ent['id']);
         $sources=array_values(array_filter((array)$vault['sources'],static fn($s)=>(string)($s['id']??'')!==$sid));
-        self::save_source_vault((int)$ent['id'],$sources);
+        try{self::save_source_vault((int)$ent['id'],$sources,(int)$vault['revision']);}
+        catch(UnexpectedValueException $e){wp_die('Sources changed on another device. Reload My NenoTV and retry.');}
         $url=wp_get_referer() ?: home_url('/my-account/');
         wp_safe_redirect(add_query_arg('source_deleted','1',$url)); exit;
     }

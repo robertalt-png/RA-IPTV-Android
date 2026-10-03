@@ -49,16 +49,25 @@ public final class EntitlementClientChecks {
     }
     static final class Fixture implements AutoCloseable{
         final ServerSocket socket;final Thread worker;final AtomicInteger calls=new AtomicInteger();
+        final java.util.List<org.json.JSONObject> requests=new java.util.concurrent.CopyOnWriteArrayList<>();
         Fixture(int status,String json,boolean missingRoute)throws Exception{
+            this(status,new String[]{json},missingRoute);
+        }
+        Fixture(int status,String[] responses,boolean missingRoute)throws Exception{
             socket=new ServerSocket(0,8,InetAddress.getByName("127.0.0.1"));
             worker=new Thread(()->{
                 while(!socket.isClosed())try(Socket connection=socket.accept()){
-                    BufferedReader reader=new BufferedReader(new InputStreamReader(connection.getInputStream(),StandardCharsets.UTF_8));
-                    String line;int length=0;reader.readLine();
-                    while((line=reader.readLine())!=null&&!line.isEmpty())if(line.toLowerCase(Locale.ROOT).startsWith("content-length:"))length=Integer.parseInt(line.substring(15).trim());
-                    for(int i=0;i<length;i++)if(reader.read()<0)break;
+                    connection.setSoTimeout(5000);InputStream input=connection.getInputStream();
+                    ByteArrayOutputStream header=new ByteArrayOutputStream();int suffix=0;
+                    while(header.size()<16384){int value=input.read();if(value<0)throw new EOFException();header.write(value);suffix=(suffix<<8)|value;if(suffix==0x0d0a0d0a)break;}
+                    int length=0;for(String line:header.toString("US-ASCII").split("\r\n"))if(line.toLowerCase(Locale.ROOT).startsWith("content-length:"))length=Integer.parseInt(line.substring(15).trim());
+                    byte[] requestBody=new byte[length];int offset=0;
+                    while(offset<length){int count=input.read(requestBody,offset,length-offset);if(count<0)throw new EOFException();offset+=count;}
+                    requests.add(new org.json.JSONObject(new String(requestBody,StandardCharsets.UTF_8)));
                     int call=calls.incrementAndGet();boolean absent=missingRoute&&call==1;
-                    byte[] body=(absent?"{\"code\":\"rest_no_route\"}":json).getBytes(StandardCharsets.UTF_8);
+                    int index=Math.max(0,call-1-(missingRoute?1:0));
+                    String response=responses[Math.min(responses.length-1,index)];
+                    byte[] body=(absent?"{\"code\":\"rest_no_route\"}":response).getBytes(StandardCharsets.UTF_8);
                     OutputStream out=connection.getOutputStream();
                     out.write(("HTTP/1.1 "+(absent?404:status)+" Test\r\nContent-Type: application/json\r\nContent-Length: "+body.length+"\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));out.write(body);out.flush();
                 }catch(Exception ignored){}

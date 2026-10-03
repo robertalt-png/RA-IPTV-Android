@@ -4,7 +4,7 @@ if (!defined('ABSPATH')) exit;
 /** Device proof remains private to the app; the web code only requests account approval. */
 trait NenoTV_Pairing {
     public static function pairing_hooks(): void {
-        add_action('template_redirect', [__CLASS__, 'pairing_page']);
+        add_action('template_redirect', [__CLASS__, 'pairing_page'],0);
         add_action('admin_post_nenotv_pair_approve', [__CLASS__, 'pairing_approve']);
         add_action('admin_post_nopriv_nenotv_pair_approve', [__CLASS__, 'pairing_approve']);
         add_action('nenotv_pair_cleanup', [__CLASS__, 'pairing_cleanup']);
@@ -106,7 +106,12 @@ trait NenoTV_Pairing {
                 $p['platform']=substr($session['platform'].' / '.$session['name'],0,100);
                 $bound=self::bind_device($ent,$p);
                 if(empty($bound['ok']))return self::json($bound,409);
-                $session['state']='complete';update_option('nenotv_pair_'.$code,$session,false);
+                $session['state']='complete';
+                if(!update_option('nenotv_pair_'.$code,$session,false)){
+                    self::pairing_cleanup($code);
+                    return self::json(['ok'=>false,'error'=>'pairing_state_failed'],503);
+                }
+                self::log_event('device_pair',(string)$ent['reference'],(string)$p['device_id'],'success','Device paired after authenticated account approval.');
             }else{
                 $device=self::find_device($p['device_id']);
                 if(!$device||$device['status']!=='active'||(int)$device['entitlement_id']!==(int)$ent['id'])return self::json(['ok'=>false,'error'=>'device_not_linked'],403);
@@ -141,7 +146,10 @@ trait NenoTV_Pairing {
     public static function pairing_page(): void {
         if(trim((string)parse_url($_SERVER['REQUEST_URI']??'',PHP_URL_PATH),'/')!=='nenotv-pair')return;
         nocache_headers();header('X-Robots-Tag: noindex, nofollow');
+        header('X-Frame-Options: DENY');header("Content-Security-Policy: frame-ancestors 'none'");
         if(!is_user_logged_in())auth_redirect();
+        status_header(200);
+        if(isset($GLOBALS['wp_query']))$GLOBALS['wp_query']->is_404=false;
         $lang=self::account_language();
         $s=$lang==='nl'?[
             'title'=>'Apparaat koppelen','code'=>'Koppelcode','find'=>'Doorgaan','approve'=>'Dit apparaat koppelen',
@@ -174,7 +182,7 @@ trait NenoTV_Pairing {
                 if(!$session)echo '<p>'.esc_html($s['expired']).'</p>';
                 elseif($session['state']!=='pending')echo '<p>'.esc_html($s['pending']).'</p>';
                 else{
-                    echo '<h2>'.esc_html($session['name']).'</h2><p>'.esc_html($session['public_device_id']).'</p>';
+                    echo '<h2>'.esc_html($session['name']).'</h2><p><code>'.esc_html(substr($code,0,5).'-'.substr($code,5)).'</code></p><p>'.esc_html($session['public_device_id']).'</p>';
                     echo '<form method="post" action="'.esc_url(admin_url('admin-post.php')).'">';
                     echo '<input type="hidden" name="action" value="nenotv_pair_approve"><input type="hidden" name="code" value="'.esc_attr($code).'">';
                     echo wp_nonce_field('nenotv_pair_approve_'.$code,'_wpnonce',true,false);

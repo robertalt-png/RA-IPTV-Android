@@ -44,7 +44,7 @@ public final class PairingActivity extends Activity {
     int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     String text(String key){return UiText.t(this,key);}
     TextView label(String value,int size){TextView view=new TextView(this);view.setText(value);view.setTextSize(size);view.setTextColor(0xFFF7F8FA);view.setGravity(Gravity.CENTER);return view;}
-    Button button(String key){Button view=new Button(this);view.setText(text(key));view.setAllCaps(false);view.setMinHeight(dp(52));return view;}
+    Button button(String key){Button view=new Button(this);view.setText(text(key));view.setAllCaps(false);view.setTextColor(0xFFF7F8FA);view.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));view.setMinHeight(dp(52));return view;}
 
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);client=factory.create(this);
