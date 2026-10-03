@@ -39,7 +39,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
         check(EpisodeOrder.next(episodes,store).uniqueKey().equals(nextSeason.uniqueKey()),"Season boundary skipped");
         SettingsStore.prefs(c).edit().putString("qa_ui_resume_id",one.id).commit();
         result.putString("NENOTV_UI_CORE","passed");
-        for(String language:new String[]{"nl","en","de","es","fr","it","pt","tr","pl","ar"})for(String key:new String[]{"season","all_seasons","remaining","watched","show_cast"})check(!key.equals(UiText.t(language,key)),"Missing translation "+language+":"+key);
+        for(String language:new String[]{"nl","en","de","es","fr","it","pt","tr","pl","ar"})for(String key:new String[]{"season","all_seasons","remaining","watched","show_cast"})check(("en".equals(language)&&"remaining".equals(key))||!key.equals(UiText.t(language,key)),"Missing translation "+language+":"+key);
         final long now=System.currentTimeMillis()/1000L;
         final java.util.concurrent.atomic.AtomicInteger requests=new java.util.concurrent.atomic.AtomicInteger();
         final List<EpgEntry> input=Arrays.asList(programme("Next fixture",now+300,now+900),programme("Now fixture",now-300,now+300),programme("Invalid",now+900,now+800),programme("Now fixture",now-300,now+300));
