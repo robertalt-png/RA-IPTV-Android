@@ -31,6 +31,58 @@ public final class UiInstrumentation extends ImportInstrumentation {
         Thread.sleep(350);Bitmap bitmap=getUiAutomation().takeScreenshot();check(bitmap!=null,"Screenshot missing: "+name);
         File folder=new File(getTargetContext().getExternalFilesDir(null),"qa");folder.mkdirs();try(FileOutputStream f=new FileOutputStream(new File(folder,name+".png"))){bitmap.compress(Bitmap.CompressFormat.PNG,100,f);}bitmap.recycle();
     }
+    void xtreamSharedDownloads()throws Exception{
+        Context c=getTargetContext();
+        String previousStart=SettingsStore.startScreen(c);
+        try{
+            for(String category:new String[]{"NL | Films","General"})try(XtreamFixture fixture=new XtreamFixture(category)){
+                Profile p=new Profile();p.type=Profile.Type.XTREAM;p.server=fixture.url();p.username="qa";p.password="qa";p.name="Xtream QA";
+                new SecureProfileStore(c).save(p);
+                SettingsStore.setPrimaryLanguage(c,"nl");
+                SettingsStore.prefs(c).edit().putString("start_screen","vod").commit();
+                c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE).edit().putString("level","FREE").commit();
+                MainActivity a=(MainActivity)startActivitySync(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                try{
+                    waitForIdleSync();
+                    long end=SystemClock.elapsedRealtime()+30000;
+                    while(SystemClock.elapsedRealtime()<end){
+                        if(a.profile!=null&&a.searchIndex.isComplete(a.profileKey(),"vod")&&a.searchIndex.isComplete(a.profileKey(),"live")&&a.searchIndex.isComplete(a.profileKey(),"series")&&!a.indexRefreshRunning)break;
+                        Thread.sleep(100);
+                    }
+                    check(a.profile!=null&&a.searchIndex.isComplete(a.profileKey(),"vod")&&a.searchIndex.isComplete(a.profileKey(),"series"),"Shared Xtream import did not complete");
+                    for(String action:new String[]{"get_live_streams","get_vod_streams","get_series"})check(fixture.count(action)==1,"Duplicate Xtream download: "+action+"="+fixture.count(action));
+                    waitForIdleSync();
+                    runOnMainSync(()->check(a.gridAdapter.getCount()>0,"Shared import did not populate screen"));
+                    snapshot("xtream-shared-"+(category.startsWith("NL")?"language":"all"));
+                }finally{runOnMainSync(a::finish);waitForIdleSync();}
+            }
+        }finally{SettingsStore.prefs(c).edit().putString("start_screen",previousStart).commit();new SecureProfileStore(c).clear();}
+    }
+    static final class XtreamFixture implements AutoCloseable{
+        final ServerSocket socket;final Thread worker;final String category;
+        final java.util.concurrent.ConcurrentHashMap<String,java.util.concurrent.atomic.AtomicInteger> counts=new java.util.concurrent.ConcurrentHashMap<>();
+        XtreamFixture(String category)throws Exception{
+            this.category=category;socket=new ServerSocket(0,8,InetAddress.getByName("127.0.0.1"));
+            worker=new Thread(()->{while(!socket.isClosed())try(Socket connection=socket.accept()){
+                BufferedReader reader=new BufferedReader(new InputStreamReader(connection.getInputStream()));String request=reader.readLine(),line;
+                while((line=reader.readLine())!=null&&!line.isEmpty()){}
+                String action="";
+                if(request!=null){String query=request.split(" ")[1];int start=query.indexOf("action=");if(start>=0){action=query.substring(start+7);int amp=action.indexOf('&');if(amp>=0)action=action.substring(0,amp);}}
+                counts.computeIfAbsent(action,k->new java.util.concurrent.atomic.AtomicInteger()).incrementAndGet();
+                String json="{}";
+                if(action.isEmpty())json="{\"user_info\":{\"auth\":1}}";
+                else if(action.endsWith("_categories"))json="[{\"category_id\":\"1\",\"category_name\":\""+category+"\"}]";
+                else if(action.equals("get_live_streams")||action.equals("get_vod_streams")||action.equals("get_series")){
+                    StringBuilder rows=new StringBuilder("[");for(int i=0;i<161;i++){if(i>0)rows.append(',');rows.append("{\"stream_id\":").append(i+1).append(",\"series_id\":").append(i+1).append(",\"name\":\"QA ").append(i).append("\",\"category_id\":\"1\"}");}json=rows.append(']').toString();
+                }
+                byte[] body=json.getBytes(java.nio.charset.StandardCharsets.UTF_8);OutputStream response=connection.getOutputStream();
+                response.write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "+body.length+"\r\nConnection: close\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.US_ASCII));response.write(body);response.flush();
+            }catch(Exception ignored){}},"xtream-fixture");worker.setDaemon(true);worker.start();
+        }
+        String url(){return "http://127.0.0.1:"+socket.getLocalPort();}
+        int count(String action){java.util.concurrent.atomic.AtomicInteger n=counts.get(action);return n==null?0:n.get();}
+        public void close()throws Exception{socket.close();worker.join(1000);}
+    }
     void onboarding(Bundle result)throws Exception{
         Context c=getTargetContext();
         SecureProfileStore profiles=new SecureProfileStore(c);
@@ -65,6 +117,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
     }
     void core(Bundle result)throws Exception{
         XtreamImportChecks.run(getTargetContext());
+        xtreamSharedDownloads();
         result.putString("NENOTV_XTREAM_IMPORT","passed");
         onboarding(result);
         Context c=getTargetContext();
