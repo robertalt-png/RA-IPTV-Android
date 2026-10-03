@@ -15,6 +15,8 @@ import java.net.*;
 /** Exercise user-visible behaviour on the actual universal APK generated from the Play AAB. */
 public final class UiInstrumentation extends ImportInstrumentation {
     Bundle args;
+    @Override public void runOnMainSync(Runnable action){java.util.concurrent.atomic.AtomicReference<Throwable> failure=new java.util.concurrent.atomic.AtomicReference<>();super.runOnMainSync(()->{try{action.run();}catch(Throwable e){failure.set(e);}});Throwable e=failure.get();if(e instanceof Error)throw (Error)e;if(e!=null)throw new RuntimeException(e);}
+
     @Override public void onCreate(Bundle b){args=b==null?new Bundle():b;super.onCreate(b);}
     static void check(boolean condition,String message){if(!condition)throw new AssertionError(message);}
     static MediaEntry episode(int season,int episode){MediaEntry e=new MediaEntry();e.id="ui-s"+season+"-e"+episode;e.name="QA series · S"+season+"E"+episode;e.type="episode";e.season=season;e.episode=episode;e.seriesId="ui-series";return e;}

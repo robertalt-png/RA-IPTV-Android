@@ -135,7 +135,7 @@ jobs:
         if: always()
         run: |
           mkdir -p qa-results
-          timeout 15s adb logcat -d > qa-results/logcat.txt || true
+          if [ ! -s qa-results/logcat.txt ]; then timeout 15s adb logcat -d > qa-results/logcat.txt || true; fi
           timeout 20s adb pull /sdcard/Android/data/com.nenotv.player/files/qa qa-results/screenshots || true
       - uses: actions/upload-artifact@v4
         if: always()
