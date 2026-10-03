@@ -106,7 +106,7 @@ public class MainActivity extends Activity {
         if(languageBadge!=null)languageBadge.setOnClickListener(v->showLanguageQuickMenu());
         if(planBadge!=null)planBadge.setOnClickListener(v->startActivity(new Intent(this,AccountActivity.class)));
         findViewById(R.id.menuButton).setOnClickListener(v->showNenoMenu());
-        findViewById(R.id.profileButton).setOnClickListener(v->startActivityForResult(new Intent(this,ProfileActivity.class),10));
+        findViewById(R.id.profileButton).setOnClickListener(v->startActivityForResult(ProModuleInstaller.sourcesIntent(this),10));
         settingsButton.setOnClickListener(v->startActivity(new Intent(this,SettingsActivity.class)));
         tvShareButton.setOnClickListener(v->showTvShareMenu());
         searchToggle.setOnClickListener(v->toggleSearch());
@@ -134,7 +134,7 @@ public class MainActivity extends Activity {
     EntitlementStore ent=new EntitlementStore(this);TextView plan=new TextView(this);plan.setText(ent.statusLabel(this));plan.setTextColor(0xFFA7AFBC);plan.setTextSize(13);plan.setPadding(0,0,0,dp(10));box.addView(plan);
     addNenoMenuItem(d,box,T("search_everywhere"),()->{toggleSearch();});
     addNenoMenuItem(d,box,T("account_and_pro"),()->startActivity(new Intent(this,AccountActivity.class)));
-    addNenoMenuItem(d,box,T("manage_source"),()->startActivityForResult(new Intent(this,ProfileActivity.class),10));
+    addNenoMenuItem(d,box,T("manage_source"),()->startActivityForResult(ProModuleInstaller.sourcesIntent(this),10));
     addNenoMenuItem(d,box,T("casting"),()->{if(ProGate.require(this,T("casting")))showTvShareMenu();});
     addNenoMenuItem(d,box,T("settings"),()->startActivity(new Intent(this,SettingsActivity.class)));
     addNenoMenuItem(d,box,T("close"),()->{});
