@@ -14,7 +14,8 @@ vc=77 if mode=="light" else 78; vn="0.13.4-light-test" if mode=="light" else "0.
 need(f"versionCode {vc}" in g,"version_code"); need(f"versionName '{vn}'" in g,"version_name")
 need("categoriesFresh(" in store,"category_freshness_api")
 need("cachedCategories(key,type)" in main and "categoriesFresh(key,type,30L*60L*1000L)" in main,"background_index_reuses_disk_categories")
-need("restart_category_network_fetch=avoided_when_cache_fresh" in arch,"architecture_speed_marker")\nneed('final String[] baseTypes={"live","vod","series"};' in main,"live_first_background_index")
+need("restart_category_network_fetch=avoided_when_cache_fresh" in arch,"architecture_speed_marker")
+need('final String[] baseTypes={"live","vod","series"};' in main,"live_first_background_index")
 need("Category cache not fresh" in instr,"category_cache_instrumentation")
 need("NENOTV_RESUME_VERIFY" in instr,"resume_test_preserved")
 if mode=="light":
