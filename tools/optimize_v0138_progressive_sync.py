@@ -2,7 +2,8 @@ from pathlib import Path
 
 root=Path(".")
 main=root/"app/src/main/java/com/robertalt/raiptv/MainActivity.java"
-if not main.exists(): raise SystemExit("missing MainActivity.java")
+instr=root/"app/src/androidTest/java/com/nenotv/player/ImportInstrumentation.java"
+for p in (main,instr):\n    if not p.exists(): raise SystemExit(f"missing {p}")
 m=main.read_text(encoding="utf-8")
 
 old='''                    final String[] baseTypes={"live","vod","series"};
@@ -103,4 +104,28 @@ if old not in m: raise SystemExit("showIndexBanner marker missing")
 m=m.replace(old,new,1)
 
 main.write_text(m,encoding="utf-8")
+
+i=instr.read_text(encoding="utf-8")
+old_prepare='''            store.importBatch(session,PROFILE,"live",range("resume",0,80,"live"));
+            store.importBatch(session,PROFILE,"live",range("resume",80,160,"live"));
+            store.checkpointImport(PROFILE,"live",session,"cat-2",160);'''
+new_prepare='''            ArrayList<MediaEntry> resumeBatch1=range("resume",0,80,"live");
+            ArrayList<MediaEntry> resumeBatch2=range("resume",80,160,"live");
+            store.importBatch(session,PROFILE,"live",resumeBatch1);store.upsert(PROFILE,resumeBatch1);
+            store.importBatch(session,PROFILE,"live",resumeBatch2);store.upsert(PROFILE,resumeBatch2);
+            SettingsStore.prefs(getTargetContext()).edit().putInt("first_sync_done_count_"+PROFILE,2).putInt("first_sync_total_count_"+PROFILE,5).putInt("first_sync_titles_"+PROFILE,160).commit();
+            store.checkpointImport(PROFILE,"live",session,"cat-2",160);'''
+if old_prepare not in i: raise SystemExit("resume visible progress prepare marker missing")
+i=i.replace(old_prepare,new_prepare,1)
+old_verify='''            require(store.importCount(p.session,PROFILE,"live")==160,"Staged rows did not survive process boundary");'''
+new_verify='''            require(store.importCount(p.session,PROFILE,"live")==160,"Staged rows did not survive process boundary");
+            require(store.count(PROFILE)>=160,"Visible partial library returned to zero after restart");
+            android.content.SharedPreferences progressPrefs=SettingsStore.prefs(getTargetContext());
+            require(progressPrefs.getInt("first_sync_titles_"+PROFILE,0)>=160,"Visible title counter returned to zero after restart");
+            require(progressPrefs.getInt("first_sync_done_count_"+PROFILE,0)==2,"Visible category progress was lost after restart");
+            require(progressPrefs.getInt("first_sync_total_count_"+PROFILE,0)==5,"Visible category total was lost after restart");'''
+if old_verify not in i: raise SystemExit("resume visible progress verify marker missing")
+i=i.replace(old_verify,new_verify,1)
+instr.write_text(i,encoding="utf-8")
+
 print("Applied v0.13.8 progressive first-sync category discovery")
