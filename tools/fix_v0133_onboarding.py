@@ -22,7 +22,7 @@ public class ProfileActivity extends Activity {
         m3uFields=findViewById(R.id.m3uFields); advancedFields=findViewById(R.id.advancedFields);
         applyLanguage(); load(); updateMode();
         findViewById(R.id.typeGroup).setOnClickListener(v->updateMode());
-        xtream.setOnClickListener(v->updateMode()); m3uRadio.setOnClickListener(v->updateMode()); demoRadio.setOnClickListener(v->updateMode());
+        xtream.setOnClickListener(v->updateMode()); m3uRadio.setOnClickListener(v->updateMode()); demoRadio.setOnClickListener(v->{updateMode();if(demoRadio.isEnabled())connectAndSave();});
         findViewById(R.id.advancedButton).setOnClickListener(v->advancedFields.setVisibility(advancedFields.getVisibility()==View.VISIBLE?View.GONE:View.VISIBLE));
         findViewById(R.id.saveButton).setOnClickListener(v->connectAndSave());
     }
