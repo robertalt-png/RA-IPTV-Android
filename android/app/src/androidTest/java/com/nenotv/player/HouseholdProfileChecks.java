@@ -23,7 +23,8 @@ final class HouseholdProfileChecks {
     static void run(Context context)throws Exception{
         SharedPreferences profiles=context.getSharedPreferences("nenotv_viewers",Context.MODE_PRIVATE);
         SharedPreferences legacy=context.getSharedPreferences("library",Context.MODE_PRIVATE);
-        Map<String,?> oldProfiles=new HashMap<>(profiles.getAll()),oldLibrary=new HashMap<>(legacy.getAll());
+        SharedPreferences settings=SettingsStore.prefs(context);
+        Map<String,?> oldProfiles=new HashMap<>(profiles.getAll()),oldLibrary=new HashMap<>(legacy.getAll()),oldSettings=new HashMap<>(settings.getAll());
         List<String> created=new ArrayList<>();
         try{
             profiles.edit().clear().commit();
@@ -33,13 +34,18 @@ final class HouseholdProfileChecks {
             MediaEntry movie=new MediaEntry();movie.id="qa-household-movie";movie.type="movie";movie.name="QA";
             if(!original.isFavorite(movie))original.toggleFavorite(movie);
             original.saveProgress(movie,40000,100000,true);original.recent(movie);
+            SettingsStore.setPrimaryLanguage(context,"nl");settings.edit().putString("sort","favorites").putString("qa_import_cursor","keep-device-state").commit();
             String second=viewers.add("Second viewer");created.add(second);viewers.select(second);
             LibraryStore separate=new LibraryStore(context);
             check(!separate.isFavorite(movie)&&separate.progress(movie)==0&&separate.recent().isEmpty(),"Viewer inherited another viewer's library");
             separate.saveProgress(movie,60000,100000,true);separate.toggleFavorite(movie);
+            SettingsStore.setPrimaryLanguage(context,"de");settings.edit().putString("sort","recent").commit();
             check(original.progress(movie)==40000&&original.isFavorite(movie),"Active player changed its library ownership");
             check(viewers.rename(second,"Renamed viewer")&&new LibraryStore(context).progress(movie)==60000,"Rename lost progress or changed identity");
             viewers.select("default");check(new LibraryStore(context).progress(movie)==40000,"Default profile migration lost existing library");
+            check(SettingsStore.language(context).equals("nl")&&SettingsStore.sort(context).equals("favorites"),"Viewer settings not restored");
+            check(settings.getString("qa_import_cursor","").equals("keep-device-state"),"Profile switch changed import/device state");
+            viewers.select(second);check(SettingsStore.language(context).equals("de")&&SettingsStore.sort(context).equals("recent"),"Second viewer settings not isolated");viewers.select("default");
             check(!viewers.remove("default")&&!viewers.select("invalid-id"),"Default profile deleted or arbitrary ID selected");
             for(String name:new String[]{""," ","12345678901234567890123456789012345678901","bad\nname","Renamed viewer"}){
                 boolean rejected=false;try{created.add(viewers.add(name));}catch(IllegalArgumentException expected){rejected=true;}
@@ -55,7 +61,7 @@ final class HouseholdProfileChecks {
             check(failed&&"not-json".equals(profiles.getString("profiles","")),"Corrupt profile registry overwritten");
         }finally{
             for(String id:created)context.deleteSharedPreferences(HouseholdProfileStore.libraryName(id));
-            restore(profiles,oldProfiles);restore(legacy,oldLibrary);
+            restore(profiles,oldProfiles);restore(legacy,oldLibrary);restore(settings,oldSettings);
         }
     }
 }

@@ -143,6 +143,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
         com.nenotv.player.entitlement.PairingClientChecks.run(c);
         com.nenotv.player.entitlement.SourceSyncChecks.run(c);
         HouseholdProfileChecks.run(c);
+        householdScreens();
         pairingScreens();
         for(String language:new String[]{"nl","en","de"}){
             for(String key:new String[]{"account_and_pro","email_address","request_trial","refresh_status","this_device","device_code","trial_remaining","days","pro_active","devices","free_description","checking_status","status_updated","activation_success","activation_failed","server_unavailable","email_required","view_pro","link_my_nenotv","activation_code","link_device","activation_code_invalid"})
@@ -171,6 +172,35 @@ public final class UiInstrumentation extends ImportInstrumentation {
             }finally{runOnMainSync(a::finish);waitForIdleSync();}
         }
     }
+    void householdScreens()throws Exception{
+        Context context=getTargetContext();
+        android.content.SharedPreferences viewers=context.getSharedPreferences("nenotv_viewers",Context.MODE_PRIVATE),entitlements=context.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE),settings=SettingsStore.prefs(context);
+        Map<String,?> oldViewers=new HashMap<>(viewers.getAll()),oldEntitlements=new HashMap<>(entitlements.getAll()),oldSettings=new HashMap<>(settings.getAll());
+        String id="";
+        try{
+            viewers.edit().clear().commit();entitlements.edit().putString("level","PRO").putLong("expires_at",0).commit();
+            HouseholdProfileStore store=new HouseholdProfileStore(context);id=store.add("Gezin QA");final String selected=id;
+            for(String language:new String[]{"nl","en","de"}){
+                SettingsStore.setPrimaryLanguage(context,language);
+                HouseholdProfilesActivity activity=(HouseholdProfilesActivity)startActivitySync(new Intent(context,HouseholdProfilesActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                try{
+                    runOnMainSync(()->{
+                        Button profile=activity.box.findViewWithTag("viewer:"+selected);
+                        check(profile!=null,"Household profile missing from screen");assertUnclippedText(profile);profile.performClick();
+                        check(store.activeId().equals(selected),"Profile button did not select viewer");
+                        SettingsStore.setPrimaryLanguage(context,language);activity.render();
+                        Button active=activity.box.findViewWithTag("viewer:"+selected);check(active.isSelected(),"Active viewer not marked");
+                    });
+                    waitForIdleSync();snapshot("household-"+language);
+                }finally{runOnMainSync(activity::finish);waitForIdleSync();}
+                store.select("default");
+            }
+        }finally{
+            if(!id.isEmpty())context.deleteSharedPreferences(HouseholdProfileStore.libraryName(id));
+            HouseholdProfileChecks.restore(viewers,oldViewers);HouseholdProfileChecks.restore(entitlements,oldEntitlements);HouseholdProfileChecks.restore(settings,oldSettings);
+        }
+    }
+
     void pairingScreens()throws Exception{
         PairingActivity.Factory original=PairingActivity.factory;
         java.util.concurrent.atomic.AtomicReference<String> state=new java.util.concurrent.atomic.AtomicReference<>("pending");

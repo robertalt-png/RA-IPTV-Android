@@ -31,7 +31,8 @@ public final class HouseholdProfilesActivity extends Activity {
             for(HouseholdProfileStore.Viewer viewer:profiles.list()){
                 LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
                 Button select=button(name(viewer));select.setTextColor(viewer.id.equals(active)?0xFFFFD400:0xFFF7F8FA);select.setSelected(viewer.id.equals(active));
-                select.setOnClickListener(v->{profiles.select(viewer.id);render();});row.addView(select,new LinearLayout.LayoutParams(0,-2,1));
+                select.setTag("viewer:"+viewer.id);
+                select.setOnClickListener(v->{try{profiles.select(viewer.id);render();}catch(Exception error){Toast.makeText(this,T("viewer_storage_error"),Toast.LENGTH_LONG).show();}});row.addView(select,new LinearLayout.LayoutParams(0,-2,1));
                 Button more=button("...");more.setContentDescription(T("viewer_options"));more.setOnClickListener(v->options(viewer));row.addView(more,new LinearLayout.LayoutParams(dp(64),-2));box.addView(row);
             }
             Button add=button(T("add_viewer"));add.setEnabled(profiles.list().size()<HouseholdProfileStore.LIMIT);add.setOnClickListener(v->edit(null));box.addView(add,new LinearLayout.LayoutParams(-1,-2));

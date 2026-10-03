@@ -13,6 +13,7 @@ public final class HouseholdProfileStore {
     public static final String DEFAULT_ID="default";
     public static final int LIMIT=8;
     private static final Object LOCK=new Object();
+    private static final String[] VIEWER_SETTINGS={"language_profile_configured","language_profile_version","primary_language","language","content_language","audio","subtitles","compact","hero_size","start_screen","sort","last_section","autoplay_next"};
     private final Context app;
     private final SharedPreferences prefs;
     public static final class Viewer {
@@ -44,14 +45,44 @@ public final class HouseholdProfileStore {
         return DEFAULT_ID;
     }}
     public boolean select(String id){synchronized(LOCK){
-        for(Viewer v:read())if(v.id.equals(id)){if(!prefs.edit().putString("active",id).commit())throw new IllegalStateException("PROFILE_SAVE_FAILED");return true;}
+        for(Viewer v:read())if(v.id.equals(id)){
+            String old=activeId();if(id.equals(old))return true;
+            SharedPreferences settings=SettingsStore.prefs(app);
+            JSONObject snapshot=new JSONObject(),next;
+            try{
+                for(String key:VIEWER_SETTINGS)if(settings.contains(key))snapshot.put(key,settings.getAll().get(key));
+                next=new JSONObject(prefs.getString("viewer_settings:"+id,"{}"));
+            }catch(Exception error){throw new IllegalStateException("PROFILE_STORE_UNREADABLE");}
+            if(!prefs.edit().putString("viewer_settings:"+old,snapshot.toString()).commit())throw new IllegalStateException("PROFILE_SAVE_FAILED");
+            applySettings(settings,next);
+            if(!prefs.edit().putString("active",id).commit()){
+                applySettings(settings,snapshot);throw new IllegalStateException("PROFILE_SAVE_FAILED");
+            }
+            SettingsStore.lockAdults();return true;
+        }
         return false;
     }}
+    private static void applySettings(SharedPreferences settings,JSONObject values){
+        SharedPreferences.Editor editor=settings.edit();
+        for(String key:VIEWER_SETTINGS){
+            editor.remove(key);Object value=values.opt(key);
+            if(value instanceof Boolean)editor.putBoolean(key,(Boolean)value);
+            else if(value instanceof String)editor.putString(key,(String)value);
+            else if(value instanceof Number)editor.putInt(key,((Number)value).intValue());
+        }
+        if(!editor.commit())throw new IllegalStateException("PROFILE_SAVE_FAILED");
+    }
     public String add(String name){synchronized(LOCK){
         String label=cleanName(name);List<Viewer> viewers=read();
         if(viewers.size()>=LIMIT)throw new IllegalStateException("PROFILE_LIMIT");
         for(Viewer v:viewers)if(v.name.equalsIgnoreCase(label))throw new IllegalArgumentException("PROFILE_NAME_EXISTS");
-        String id=UUID.randomUUID().toString();viewers.add(new Viewer(id,label));write(viewers);return id;
+        String id=UUID.randomUUID().toString();
+        try{
+            JSONObject initial=new JSONObject().put("language_profile_configured",true).put("language_profile_version",1)
+                    .put("primary_language",SettingsStore.primaryLanguage(app)).put("language",SettingsStore.primaryLanguage(app));
+            if(!prefs.edit().putString("viewer_settings:"+id,initial.toString()).commit())throw new IllegalStateException("PROFILE_SAVE_FAILED");
+        }catch(Exception error){throw new IllegalStateException("PROFILE_SAVE_FAILED");}
+        viewers.add(new Viewer(id,label));write(viewers);return id;
     }}
     public boolean rename(String id,String name){synchronized(LOCK){
         String label=cleanName(name);List<Viewer> viewers=read();int index=-1;
@@ -65,8 +96,9 @@ public final class HouseholdProfileStore {
         if(DEFAULT_ID.equals(id)||!validId(id))return false;
         List<Viewer> viewers=read();boolean removed=viewers.removeIf(v->v.id.equals(id));
         if(!removed)return false;
-        if(id.equals(activeId())&&!prefs.edit().putString("active",DEFAULT_ID).commit())throw new IllegalStateException("PROFILE_SAVE_FAILED");
+        if(id.equals(activeId()))select(DEFAULT_ID);
         write(viewers);
+        prefs.edit().remove("viewer_settings:"+id).commit();
         app.getSharedPreferences(libraryName(id),Context.MODE_PRIVATE).edit().clear().commit();
         return true;
     }}
