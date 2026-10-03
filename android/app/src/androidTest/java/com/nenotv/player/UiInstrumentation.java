@@ -101,6 +101,11 @@ public final class UiInstrumentation extends ImportInstrumentation {
         check(ProLibraryBridge.isActive(a),"Pro entitlement did not enable module");
         check(ProModuleInstaller.sourcesIntent(a).getComponent().getClassName().contains("ProSourcesActivity"),"Pro source manager route missing");
         check(ProModuleInstaller.networkIntent(a).getComponent().getClassName().contains("ProNetworkActivity"),"Pro network route missing");
+        MediaEntry langEn=new MediaEntry();langEn.type="live";langEn.name="EN - QA";langEn.group="EN | General";
+        MediaEntry langNl=new MediaEntry();langNl.type="live";langNl.name="NL - QA";langNl.group="NL | Algemeen";
+        List<MediaEntry> ranked=ProLibraryBridge.optimize(a,Arrays.asList(langEn,langNl),"live","nl");
+        check(ranked.size()==2&&ranked.get(0)==langNl,"Pro preferred-language optimizer did not rank Dutch first");
+        result.putString("NENOTV_PRO_LANGUAGE","passed");
         SourceStore sourceStore=new SourceStore(c);
         com.nenotv.player.model.Profile qaA=new com.nenotv.player.model.Profile();qaA.type=com.nenotv.player.model.Profile.Type.M3U;qaA.name="QA Source A";qaA.m3uUrl=DemoSource.URL;
         com.nenotv.player.model.Profile qaB=new com.nenotv.player.model.Profile();qaB.type=com.nenotv.player.model.Profile.Type.XTREAM;qaB.name="QA Source B";qaB.server="https://example.invalid";qaB.username="qa";qaB.password="secret";
