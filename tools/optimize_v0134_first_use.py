@@ -31,6 +31,7 @@ if "categoriesFresh(" not in s:
 store.write_text(s,encoding="utf-8")
 
 m=main.read_text(encoding="utf-8")
+m=m.replace('final String[] baseTypes={"vod","series","live"};','final String[] baseTypes={"live","vod","series"};')
 old='''                    for(String type:baseTypes){
                         List<Category> cats=new ArrayList<>(indexProvider.categories(type));
                         searchIndex.replaceCategories(key,type,cats);
