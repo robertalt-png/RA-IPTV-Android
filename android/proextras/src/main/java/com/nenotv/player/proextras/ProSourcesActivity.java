@@ -26,6 +26,7 @@ public class ProSourcesActivity extends Activity {
         super.onCreate(b);
         if(!new EntitlementStore(this).isPro()){finish();return;}
         sources=new SourceStore(this);
+        setResult(RESULT_OK);
         build();
     }
     @Override protected void onResume(){super.onResume();if(box!=null)render();}
