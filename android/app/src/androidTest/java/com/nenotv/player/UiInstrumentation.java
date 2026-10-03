@@ -110,6 +110,25 @@ public final class UiInstrumentation extends ImportInstrumentation {
         org.json.JSONArray syncCopy=sourceStore.exportForSync();check(syncCopy.length()>=2,"Source sync export lost entries");
         sourceStore.markSynced(1);
         sourceStore.applyCloudSnapshot(syncCopy,2);check(sourceStore.list().size()>=2,"Source sync snapshot lost entries");
+
+        MediaEntry primary=new MediaEntry();primary.type="live";primary.id="primary";primary.name="QA Channel HD";primary.tvgId="qa-channel";primary.candidates.add("https://primary.invalid/live");
+        MediaEntry secondary=new MediaEntry();secondary.type="live";secondary.id="secondary";secondary.name="QA Channel";secondary.tvgId="qa-channel";secondary.sourceId=qaBId;secondary.candidates.add("https://fallback.invalid/live");
+        List<MediaEntry> smartMerged=SmartSourceMerger.merge(Collections.singletonList(primary),Collections.singletonList(secondary));
+        check(smartMerged.size()==1&&smartMerged.get(0).candidates.size()==2,"Smart Sources did not dedupe and preserve fallback streams");
+        result.putString("NENOTV_PRO_SMART_SOURCES","passed");
+
+        try(EpgFixture epgFixture=new EpgFixture()){
+            MediaEntry smartChannel=new MediaEntry();smartChannel.type="live";smartChannel.id="smart-epg";smartChannel.name="QA Smart";smartChannel.tvgId="qa-smart";smartChannel.tvgName="QA Smart";smartChannel.sourceId=qaAId;
+            new SmartEpgStore(c).setUrls(qaAId,Collections.singletonList(epgFixture.url()));
+            SettingsStore.prefs(c).edit().putBoolean("pro_smart_epg",true).commit();sourceStore.touchSync();
+            Provider noGuide=new Provider(){public void authenticate(){}public List<Category> categories(String type){return Collections.emptyList();}public List<MediaEntry> items(String type,String category){return Collections.emptyList();}public List<EpgEntry> epgEntries(MediaEntry item,int limit){return Collections.emptyList();}};
+            EpgStore smartStore=new EpgStore(c);List<EpgEntry> smartRows=smartStore.getOrFetch(noGuide,"qa-smart-"+System.nanoTime(),smartChannel);smartStore.close();
+            check(!smartRows.isEmpty()&&"Smart EPG fixture".equals(smartRows.get(0).title),"Smart EPG did not fall back to the extra XMLTV source");
+            org.json.JSONArray exported=sourceStore.exportForSync();boolean epgSynced=false;for(int q=0;q<exported.length();q++){org.json.JSONObject o=exported.optJSONObject(q);if(o!=null&&qaAId.equals(o.optString("id"))&&o.optJSONArray("epg_extra")!=null&&o.optJSONArray("epg_extra").length()==1)epgSynced=true;}
+            check(epgSynced,"Smart EPG URLs were not included in My NenoTV source sync");
+            result.putString("NENOTV_PRO_SMART_EPG","passed");
+        }
+
         sourceStore.remove(qaAId);check(sourceStore.syncDirty(),"Local source deletion did not mark sync dirty");
         result.putString("NENOTV_PRO_SOURCES","passed");
         sourceStore.remove(qaBId);
@@ -128,6 +147,18 @@ public final class UiInstrumentation extends ImportInstrumentation {
     }
     static com.nenotv.player.model.Profile profile(){com.nenotv.player.model.Profile p=new com.nenotv.player.model.Profile();p.type=com.nenotv.player.model.Profile.Type.M3U;p.m3uUrl=DemoSource.URL;p.name="Demo QA";return p;}
     @Override public void onStart(){Bundle result=new Bundle();String phase=args.getString("phase","ui");if(!Arrays.asList("ui","resume","pro").contains(phase)){super.onStart();return;}try{if("resume".equals(phase))resume(result);else if("pro".equals(phase)){Context c=getTargetContext();SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();DemoPolicy.startOrKeep(c,System.currentTimeMillis());new SecureProfileStore(c).save(profile());pro(result);}else core(result);}catch(Throwable failure){result.putString("NENOTV_UI_TESTS","failed: "+failure.getClass().getSimpleName()+": "+failure.getMessage());finish(Activity.RESULT_CANCELED,result);}}
+    static final class EpgFixture implements AutoCloseable{
+        final ServerSocket socket;final Thread worker;final byte[] body;
+        EpgFixture()throws Exception{
+            socket=new ServerSocket(0,8,InetAddress.getByName("127.0.0.1"));
+            String xml="<?xml version=\"1.0\" encoding=\"UTF-8\"?><tv><channel id=\"qa-smart\"><display-name>QA Smart</display-name></channel><programme start=\"20990101000000 +0000\" stop=\"20990101010000 +0000\" channel=\"qa-smart\"><title lang=\"nl\">Smart EPG fixture</title><desc lang=\"nl\">Fallback guide</desc></programme></tv>";
+            body=xml.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            worker=new Thread(()->{while(!socket.isClosed())try(Socket s=socket.accept()){BufferedReader reader=new BufferedReader(new InputStreamReader(s.getInputStream()));String line;while((line=reader.readLine())!=null&&!line.isEmpty()){}OutputStream out=s.getOutputStream();out.write(("HTTP/1.1 200 OK\r\nContent-Type: application/xml\r\nContent-Length: "+body.length+"\r\nConnection: close\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.US_ASCII));out.write(body);out.flush();}catch(Exception ignored){}},"epg-fixture");worker.setDaemon(true);worker.start();
+        }
+        String url(){return "http://127.0.0.1:"+socket.getLocalPort()+"/guide.xml";}
+        public void close()throws Exception{socket.close();worker.join(1000);}
+    }
+
     static final class ImageFixture implements AutoCloseable{
         final ServerSocket socket;final byte[] png;final Thread worker;
         ImageFixture()throws Exception{socket=new ServerSocket(0,8,InetAddress.getByName("127.0.0.1"));Bitmap b=Bitmap.createBitmap(32,48,Bitmap.Config.RGB_565);b.eraseColor(0xFF005A9C);ByteArrayOutputStream out=new ByteArrayOutputStream();b.compress(Bitmap.CompressFormat.PNG,100,out);png=out.toByteArray();b.recycle();worker=new Thread(()->{while(!socket.isClosed())try(Socket s=socket.accept()){BufferedReader reader=new BufferedReader(new InputStreamReader(s.getInputStream()));String request=reader.readLine(),line;while((line=reader.readLine())!=null&&!line.isEmpty()){}boolean ok=request!=null&&request.contains("/ok ");byte[] body=ok?png:new byte[0];OutputStream response=s.getOutputStream();response.write(((ok?"HTTP/1.1 200 OK":"HTTP/1.1 404 Not Found")+"\r\nContent-Type: image/png\r\nContent-Length: "+body.length+"\r\nConnection: close\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.US_ASCII));response.write(body);response.flush();
