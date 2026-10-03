@@ -540,7 +540,10 @@ void scheduleBackgroundIndex(){
 
     String safe(String s){return s==null?"":s;} String profileKey(){if(profile==null)return "none";String base=profile.type.name()+"|"+safe(profile.server)+"|"+safe(profile.username)+"|"+safe(profile.m3uUrl);return Integer.toHexString(base.hashCode())+":"+profile.type.name();} String cacheCursorKey(String type){return cacheCursorKey(profileKey(),type);} String cacheCursorKey(String key,String type){return "cache_cursor_"+key+"_"+type;}
     void publishIndexedTop(String type){
-        long now=android.os.SystemClock.elapsedRealtime();if(now-lastIndexUiPublish<1200)return;lastIndexUiPublish=now;
+        publishIndexedTop(type,false);
+    }
+    void publishIndexedTop(String type,boolean finished){
+        long now=android.os.SystemClock.elapsedRealtime();if(!finished&&now-lastIndexUiPublish<1200)return;lastIndexUiPublish=now;
         final String key=profileKey(),sort=SettingsStore.sort(this),pref=SettingsStore.contentLanguage(this),expected=currentCategoryId;
         int total=searchIndex.countSection(key,type);if(total<=0)return;
         List<MediaEntry>ready;
@@ -552,7 +555,7 @@ void scheduleBackgroundIndex(){
         }else if("all".equals(expected))ready=visibleItems(searchIndex.sectionPage(key,type,0,CACHE_PAGE_SIZE,sort,pref));
         else return;
         if(ready.isEmpty())return;final ArrayList<MediaEntry>shown=new ArrayList<>(ready);final int shownTotal=total;
-        runOnUiThread(()->{if(!isUiAlive()||!key.equals(profileKey())||!type.equals(section)||(latestSearchQuery!=null&&!latestSearchQuery.isEmpty())||currentCategories.isEmpty())return;if(!expected.equals(currentCategoryId))return;if(grid.getVisibility()!=View.VISIBLE||grid.getFirstVisiblePosition()>2)return;stopCachePaging();all=new ArrayList<>(shown);cachePagingSection=type;cachePagingTag=expected.startsWith("lang:")?expected.substring(5):"all".equals(expected)?"":expected;cachePagingOffset=Math.min(CACHE_PAGE_SIZE,shownTotal);cachePagingTotal=shownTotal;cachePagingActive=cachePagingOffset<shownTotal;showMediaGrid("live".equals(type));gridAdapter.set(shown,"live".equals(type));MediaEntry first=shown.get(0);if(selectedHero==null||selectedHero.uniqueKey().equals(indexAutoHeroKey)){previewAuto(first);indexAutoHeroKey=first.uniqueKey();}busy(false,shownTotal+" "+T("results"));});
+        runOnUiThread(()->{if(!isUiAlive()||!key.equals(profileKey())||!type.equals(section)||(latestSearchQuery!=null&&!latestSearchQuery.isEmpty())||currentCategories.isEmpty())return;if(!expected.equals(currentCategoryId))return;if(grid.getVisibility()!=View.VISIBLE)return;if(grid.getFirstVisiblePosition()>2){if(type.equals(cachePagingSection)){cachePagingTotal=shownTotal;cachePagingActive=cachePagingOffset<shownTotal;}return;}stopCachePaging();all=new ArrayList<>(shown);cachePagingSection=type;cachePagingTag=expected.startsWith("lang:")?expected.substring(5):"all".equals(expected)?"":expected;cachePagingOffset=Math.min(CACHE_PAGE_SIZE,shownTotal);cachePagingTotal=shownTotal;cachePagingActive=cachePagingOffset<shownTotal;showMediaGrid("live".equals(type));gridAdapter.set(shown,"live".equals(type));MediaEntry first=shown.get(0);if(selectedHero==null||selectedHero.uniqueKey().equals(indexAutoHeroKey)){previewAuto(first);indexAutoHeroKey=first.uniqueKey();}busy(false,shownTotal+" "+T("results"));});
     }
 
     void reloadIndexedSectionWhenReady(String type){
@@ -689,7 +692,7 @@ void scheduleBackgroundIndex(){
                                 estimatedTitles=searchIndex.count(key);
                                 final int gd=globalDone,gt=grandTotal,ti=estimatedTitles;
                                 runOnUiThread(()->{if(isUiAlive()&&key.equals(profileKey()))showIndexBanner("",gd,gt,ti);});
-                                if(key.equals(profileKey())){publishIndexedTop(type);reloadIndexedSectionWhenReady(type);}bulkDone=true;
+                                if(key.equals(profileKey())){publishIndexedTop(type,true);reloadIndexedSectionWhenReady(type);}bulkDone=true;
                             }catch(Exception bulkError){
                                 android.util.Log.w("NenoTVImport","Bulk import failed for "+type+": "+bulkError.getClass().getSimpleName());
                                 if(session!=null){try{searchIndex.abortSectionImport(session);}catch(Exception cleanupError){bulkError.addSuppressed(cleanupError);}}
@@ -781,7 +784,7 @@ void scheduleBackgroundIndex(){
                             searchIndex.finishSectionImport(importSession,key,type);fallbackSession=null;
                             searchIndex.clearImportProgress(key,type);
                             SettingsStore.prefs(this).edit().remove(cacheCursorKey(key,type)).apply();
-                            if(key.equals(profileKey())){publishIndexedTop(type);reloadIndexedSectionWhenReady(type);}
+                            if(key.equals(profileKey())){publishIndexedTop(type,true);reloadIndexedSectionWhenReady(type);}
                         }finally{
                             // Deliberately keep an unfinished staging session and checkpoint after process death/cancellation.
                         }

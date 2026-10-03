@@ -54,7 +54,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
                     for(String action:new String[]{"get_live_streams","get_vod_streams","get_series"})check(fixture.count(action)==1,"Duplicate Xtream download: "+action+"="+fixture.count(action));
                     java.util.concurrent.atomic.AtomicBoolean populated=new java.util.concurrent.atomic.AtomicBoolean();
                     long visibleDeadline=SystemClock.elapsedRealtime()+5000;
-                    while(!populated.get()&&SystemClock.elapsedRealtime()<visibleDeadline){runOnMainSync(()->populated.set(a.gridAdapter.getCount()>0));Thread.sleep(100);}
+                    while(!populated.get()&&SystemClock.elapsedRealtime()<visibleDeadline){runOnMainSync(()->populated.set(a.gridAdapter.getCount()==161));Thread.sleep(100);}
                     check(populated.get(),"Shared import did not populate screen");
                     snapshot("xtream-shared-"+(category.startsWith("NL")?"language":"all"));
                 }finally{runOnMainSync(a::finish);waitForIdleSync();}
