@@ -17,6 +17,7 @@ on:
       - 'tools/finalize_v0133.py'
       - 'tools/verify_v0133.py'
       - 'tools/fix_v0133_onboarding.py'
+      - 'tools/fix_v0133_resume.py'
       - '.github/patches/v0133-common.patch.gz'
   workflow_dispatch:
 
@@ -68,6 +69,7 @@ jobs:
           gzip -dc "$GITHUB_WORKSPACE/.github/patches/v0133-common.patch.gz" | git apply --check -
           gzip -dc "$GITHUB_WORKSPACE/.github/patches/v0133-common.patch.gz" | git apply -
           python3 "$GITHUB_WORKSPACE/tools/fix_v0133_onboarding.py"
+          python3 "$GITHUB_WORKSPACE/tools/fix_v0133_resume.py"
           python3 "$GITHUB_WORKSPACE/tools/finalize_v0133.py" light
           python3 "$GITHUB_WORKSPACE/tools/verify_v0133.py" light
           cat NENOTV_ARCHITECTURE.txt
@@ -194,6 +196,7 @@ jobs:
           gzip -dc "$GITHUB_WORKSPACE/.github/patches/v0133-common.patch.gz" | git apply --check -
           gzip -dc "$GITHUB_WORKSPACE/.github/patches/v0133-common.patch.gz" | git apply -
           python3 "$GITHUB_WORKSPACE/tools/fix_v0133_onboarding.py"
+          python3 "$GITHUB_WORKSPACE/tools/fix_v0133_resume.py"
           python3 "$GITHUB_WORKSPACE/tools/finalize_v0133.py" modular
           python3 "$GITHUB_WORKSPACE/tools/verify_v0133.py" modular
           cat NENOTV_ARCHITECTURE.txt
