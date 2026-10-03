@@ -111,6 +111,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
         sourceStore.markSynced(1);
         sourceStore.applyCloudSnapshot(syncCopy,2);check(sourceStore.list().size()>=2,"Source sync snapshot lost entries");
         sourceStore.remove(qaAId);check(sourceStore.syncDirty(),"Local source deletion did not mark sync dirty");
+        result.putString("NENOTV_PRO_SOURCES","passed");
         sourceStore.remove(qaBId);
         // Build the provider before selecting the packaged entry.
         com.nenotv.player.provider.M3uProvider provider=new com.nenotv.player.provider.M3uProvider(profile());provider.authenticate();MediaEntry item=provider.items("vod","all").get(0);
