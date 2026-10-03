@@ -45,6 +45,7 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
     private static final String API_URL = "https://nenotv.com/wp-json/nenotv-dashboard/v1/admin-app";
+    private static final String PAIR_URL = "https://nenotv.com/wp-json/nenotv-dashboard/v1/admin-pair";
     private static final String PREFS = "nenotv_dashboard";
     private static final String PREF_TOKEN = "dashboard_token";
 
@@ -71,6 +72,7 @@ public class MainActivity extends Activity {
     private TextView updatedView;
     private Button refreshButton;
     private int selectedTab = 0;
+    private int rangeDays = 1;
     private boolean loading = false;
 
     private final Runnable autoRefresh = new Runnable() {
