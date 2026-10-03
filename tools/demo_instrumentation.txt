@@ -79,7 +79,9 @@
         require(DemoPolicy.expiresAt(c)==expected,"Trial expiry changed after restart");
         require(DemoPolicy.startOrKeep(c,System.currentTimeMillis())==expected,"Restart extended trial");
         com.nenotv.player.storage.SecureProfileStore store=new com.nenotv.player.storage.SecureProfileStore(c);
-        require(store.exists()&&DemoPolicy.isDemo(store.load()),"Demo profile lost after restart");
+        require(store.exists(),"Demo profile file missing after restart");
+        com.nenotv.player.model.Profile restored=store.load();
+        require(DemoPolicy.isDemo(restored),"Demo identity lost after restart: type="+restored.type+", name="+restored.name+", demoUri="+DemoSource.URL.equals(restored.m3uUrl));
         com.nenotv.player.provider.M3uProvider provider=new com.nenotv.player.provider.M3uProvider(store.load());
         provider.authenticate();require(provider.items("live","all").size()==2,"Demo list lost after restart");
         store.clear();SettingsStore.prefs(c).edit().remove("qa_demo_expected_expiry").commit();

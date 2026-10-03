@@ -42,6 +42,14 @@ replace(profile, 'findViewById(R.id.saveButton).setEnabled(true);status.setText(
 
 # Identify demo by its source, so editing the display name cannot avoid expiry.
 policy = java / 'DemoPolicy.java'
+replace(policy, 'sp.edit().putBoolean("demo_consumed",true).putLong("demo_started_at",now).putLong("demo_expires_at",next).apply();',
+        'if(!sp.edit().putBoolean("demo_consumed",true).putLong("demo_started_at",now).putLong("demo_expires_at",next).commit())throw new IllegalStateException("DEMO_SAVE_FAILED");')
+store = java / 'storage/SecureProfileStore.java'
+replace(store, 'public void clear(){prefs.edit().clear().apply();}',
+        'public void clear(){if(!prefs.edit().clear().commit())throw new IllegalStateException("PROFILE_CLEAR_FAILED");}')
+replace(store, 'public void save(Profile p){prefs.edit()', 'public void save(Profile p){if(!prefs.edit()')
+replace(store, '.putString("bridgeToken",crypto.encrypt(p.bridgeToken)).apply();',
+        '.putString("bridgeToken",crypto.encrypt(p.bridgeToken)).commit())throw new IllegalStateException("PROFILE_SAVE_FAILED");')
 replace(policy, '    public static boolean consumed(Context c)', '''    public static boolean isDemo(com.nenotv.player.model.Profile p){
         return p!=null&&p.type==com.nenotv.player.model.Profile.Type.M3U&&
             (DemoSource.URL.equals(p.m3uUrl)||BuildConfig.NENOTV_DEMO_M3U_URL.equals(p.m3uUrl));
