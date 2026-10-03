@@ -50,7 +50,10 @@ public class ProSourcesActivity extends Activity {
             "NenoTV Pro can keep multiple IPTV sources. The selected source still uses the normal Light import pipeline.",
             "NenoTV Pro kan meerdere IPTV-bronnen bewaren. De gekozen bron gebruikt nog steeds de normale Light-laadlaag.",
             "NenoTV Pro kann mehrere IPTV-Quellen speichern. Die gewählte Quelle nutzt weiterhin die normale Light-Ladeschicht."),13);
-        help.setTextColor(0xFFA7AFBC);help.setPadding(0,dp(6),0,dp(16));box.addView(help);
+        help.setTextColor(0xFFA7AFBC);help.setPadding(0,dp(6),0,dp(12));box.addView(help);
+
+        Switch smartMerge=new Switch(this);smartMerge.setText(L("Smart Merge · add secondary sources after the active source loads","Smart Merge · voeg secundaire bronnen toe nadat de actieve bron geladen is","Smart Merge · weitere Quellen nach der aktiven Quelle hinzufügen"));smartMerge.setTextColor(0xFFF7F8FA);smartMerge.setChecked(SettingsStore.prefs(this).getBoolean("pro_smart_merge",false));smartMerge.setOnCheckedChangeListener((v,on)->SettingsStore.prefs(this).edit().putBoolean("pro_smart_merge",on).apply());box.addView(smartMerge,new LinearLayout.LayoutParams(-1,dp(56)));
+        Switch smartEpg=new Switch(this);smartEpg.setText(L("Smart EPG · use extra EPG sources as fallback","Smart EPG · gebruik extra EPG-bronnen als fallback","Smart EPG · zusätzliche EPG-Quellen als Fallback"));smartEpg.setTextColor(0xFFF7F8FA);smartEpg.setChecked(SettingsStore.prefs(this).getBoolean("pro_smart_epg",false));smartEpg.setOnCheckedChangeListener((v,on)->SettingsStore.prefs(this).edit().putBoolean("pro_smart_epg",on).apply());box.addView(smartEpg,new LinearLayout.LayoutParams(-1,dp(56)));
 
         LinearLayout topActions=new LinearLayout(this);topActions.setOrientation(LinearLayout.HORIZONTAL);box.addView(topActions);
         Button add=button("＋ "+L("Add source","Bron toevoegen","Quelle hinzufügen"));
@@ -107,20 +110,34 @@ public class ProSourcesActivity extends Activity {
 
     void menu(SourceStore.Entry e){
         String[] opts={
+            L("Smart EPG sources","Smart EPG-bronnen","Smart-EPG-Quellen"),
             e.enabled?L("Disable","Uitschakelen","Deaktivieren"):L("Enable","Inschakelen","Aktivieren"),
             L("Move up","Omhoog","Nach oben"),
             L("Move down","Omlaag","Nach unten"),
             L("Delete","Verwijderen","Löschen")
         };
         new AlertDialog.Builder(this).setTitle(e.profile.name).setItems(opts,(d,w)->{
-            if(w==0)sources.setEnabled(e.id,!e.enabled);
-            else if(w==1)sources.move(e.id,-1);
-            else if(w==2)sources.move(e.id,1);
-            else if(w==3)new AlertDialog.Builder(this).setMessage(L("Delete this source?","Deze bron verwijderen?","Diese Quelle löschen?"))
+            if(w==0){editSmartEpg(e);return;}
+            else if(w==1)sources.setEnabled(e.id,!e.enabled);
+            else if(w==2)sources.move(e.id,-1);
+            else if(w==3)sources.move(e.id,1);
+            else if(w==4)new AlertDialog.Builder(this).setMessage(L("Delete this source?","Deze bron verwijderen?","Diese Quelle löschen?"))
                 .setPositiveButton(L("Delete","Verwijderen","Löschen"),(x,y)->{sources.remove(e.id);render();})
                 .setNegativeButton(L("Cancel","Annuleren","Abbrechen"),null).show();
             render();
         }).show();
+    }
+
+    void editSmartEpg(SourceStore.Entry e){
+        com.nenotv.player.storage.SmartEpgStore epg=new com.nenotv.player.storage.SmartEpgStore(this);
+        EditText input=new EditText(this);input.setText(android.text.TextUtils.join("\n",epg.urls(e.id)));input.setHint(L("One XMLTV/EPG URL per line","Eén XMLTV/EPG-URL per regel","Eine XMLTV/EPG-URL pro Zeile"));input.setMinLines(5);input.setGravity(Gravity.TOP);input.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        new AlertDialog.Builder(this).setTitle(L("Smart EPG sources","Smart EPG-bronnen","Smart-EPG-Quellen")).setMessage(L("NenoTV tries these only when the normal provider EPG has no usable programme data.","NenoTV probeert deze alleen als de normale provider-EPG geen bruikbare programmagegevens heeft.","NenoTV verwendet diese nur, wenn die normale Provider-EPG keine brauchbaren Programmdaten liefert.")).setView(input)
+            .setNegativeButton(L("Cancel","Annuleren","Abbrechen"),null)
+            .setPositiveButton(L("Save","Opslaan","Speichern"),(d,w)->{
+                java.util.ArrayList<String> urls=new java.util.ArrayList<>();for(String line:input.getText().toString().split("\\r?\\n")){String u=line.trim();if(u.startsWith("https://")||u.startsWith("http://"))urls.add(u);}
+                epg.setUrls(e.id,urls);sources.touchSync();SettingsStore.prefs(this).edit().putBoolean("pro_smart_epg",!urls.isEmpty()).apply();
+                Toast.makeText(this,L("Smart EPG saved","Smart EPG opgeslagen","Smart EPG gespeichert"),Toast.LENGTH_SHORT).show();render();
+            }).show();
     }
 
     @Override protected void onDestroy(){exec.shutdownNow();super.onDestroy();}
