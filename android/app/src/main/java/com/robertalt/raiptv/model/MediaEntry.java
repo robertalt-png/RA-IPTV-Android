@@ -4,7 +4,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 
 public class MediaEntry implements Serializable {
-    public String id="", streamId="", seriesId="", name="Untitled", logo="", backdrop="", categoryId="", type="live", rating="", year="", plot="", extension="", directSource="", url="", group="", tvgId="", tvgName="", seriesTitle="", tmdbId="", imdbId="";
+    public String id="", streamId="", seriesId="", name="Untitled", logo="", backdrop="", categoryId="", type="live", rating="", year="", plot="", extension="", directSource="", url="", group="", tvgId="", tvgName="", seriesTitle="", tmdbId="", imdbId="", sourceId="", sourceName="";
     public int season=0, episode=0, catchupDays=0;
     public boolean catchup=false;
     public ArrayList<String> candidates = new ArrayList<>();
