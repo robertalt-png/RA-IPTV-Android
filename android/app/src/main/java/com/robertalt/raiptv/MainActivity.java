@@ -592,19 +592,8 @@ void scheduleBackgroundIndex(){
                     LinkedHashMap<String,List<Category>> catMap=new LinkedHashMap<>();
                     int globalTotal=0;
                     final String preferred=SettingsStore.contentLanguage(this);
-                    final String firstType=order.isEmpty()?"live":order.get(0);
                     for(String type:baseTypes){
                         List<Category> cats=searchIndex.cachedCategories(key,type);
-                        boolean categoryCacheFresh=searchIndex.categoriesFresh(key,type,30L*60L*1000L);
-                        if(type.equals(firstType)&&(cats.isEmpty()||migration||requestedForce||!categoryCacheFresh)){
-                            try{
-                                List<Category> remoteCats=new ArrayList<>(indexProvider.categories(type));
-                                searchIndex.replaceCategories(key,type,remoteCats);
-                                cats=remoteCats;
-                            }catch(Exception categoryError){
-                                if(cats.isEmpty())throw categoryError;
-                            }
-                        }
                         catMap.put(type,cats);globalTotal+=cats.size();
                     }
 
@@ -632,7 +621,7 @@ void scheduleBackgroundIndex(){
                         List<Category> cats=catMap.get(type);
                         boolean categoryCacheFresh=searchIndex.categoriesFresh(key,type,30L*60L*1000L);
                         if(cats==null)cats=new ArrayList<>();
-                        if(cats.isEmpty()||migration||requestedForce||!categoryCacheFresh){
+                        if(cats.isEmpty()||requestedForce||!categoryCacheFresh){
                             int previousCategoryCount=cats.size();
                             try{
                                 List<Category> remoteCats=new ArrayList<>(indexProvider.categories(type));

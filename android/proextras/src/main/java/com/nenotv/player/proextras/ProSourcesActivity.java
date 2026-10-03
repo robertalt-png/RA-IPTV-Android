@@ -103,7 +103,9 @@ public class ProSourcesActivity extends Activity {
                 });
             }catch(Exception ex){
                 String m=ex.getMessage()==null?L("Sync unavailable","Sync niet beschikbaar","Synchronisierung nicht verfügbar"):ex.getMessage();
-                runOnUiThread(()->{Toast.makeText(this,m,Toast.LENGTH_LONG).show();render();});
+                if("LOCAL_SOURCES_CHANGED_RETRY_SYNC".equals(m))m=L("Sources changed during sync. Sync again.","Bronnen gewijzigd tijdens synchronisatie. Synchroniseer opnieuw.","Quellen während der Synchronisierung geändert. Erneut synchronisieren.");
+                final String message=m;
+                runOnUiThread(()->{Toast.makeText(this,message,Toast.LENGTH_LONG).show();render();});
             }
         });
     }

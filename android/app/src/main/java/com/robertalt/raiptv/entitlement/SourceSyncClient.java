@@ -28,15 +28,16 @@ public final class SourceSyncClient {
         // First contact is cloud-first so a newly upgraded/reinstalled device cannot
         // overwrite an existing account vault with its locally migrated legacy source.
         if(sources.cloudRevision()<=0){
+            SourceStore.SyncSnapshot snapshot=sources.snapshotForSync();
             JSONObject remote=post("pull",baseBody());
             JSONArray rows=remote.optJSONArray("sources");
             int revision=remote.optInt("revision",0);
             if(rows!=null&&rows.length()>0){
-                sources.applyCloudSnapshot(rows,revision);
+                if(!sources.applyCloudSnapshotIfUnchanged(rows,revision,snapshot.localRevision))throw new IOException("LOCAL_SOURCES_CHANGED_RETRY_SYNC");
                 return remote;
             }
             if(sources.syncDirty())return push();
-            sources.markSynced(revision);
+            if(!sources.markSyncedIfUnchanged(revision,snapshot.localRevision))throw new IOException("LOCAL_SOURCES_CHANGED_RETRY_SYNC");
             return remote;
         }
         if(sources.syncDirty())return push();
@@ -44,17 +45,19 @@ public final class SourceSyncClient {
     }
 
     public JSONObject pull() throws Exception {
+        SourceStore.SyncSnapshot snapshot=sources.snapshotForSync();
         JSONObject out=post("pull",baseBody());
         JSONArray remote=out.optJSONArray("sources");
-        if(remote!=null)sources.applyCloudSnapshot(remote,out.optInt("revision",0));
+        if(remote!=null&&!sources.applyCloudSnapshotIfUnchanged(remote,out.optInt("revision",0),snapshot.localRevision))throw new IOException("LOCAL_SOURCES_CHANGED_RETRY_SYNC");
         return out;
     }
 
     public JSONObject push() throws Exception {
+        SourceStore.SyncSnapshot snapshot=sources.snapshotForSync();
         JSONObject body=baseBody();
-        body.put("sources",sources.exportForSync());
+        body.put("sources",snapshot.sources);
         JSONObject out=post("push",body);
-        sources.markSynced(out.optInt("revision",0));
+        if(!sources.markSyncedIfUnchanged(out.optInt("revision",0),snapshot.localRevision))throw new IOException("LOCAL_SOURCES_CHANGED_RETRY_SYNC");
         return out;
     }
 

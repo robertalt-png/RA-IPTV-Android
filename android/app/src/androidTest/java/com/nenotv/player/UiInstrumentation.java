@@ -33,6 +33,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
     }
     void xtreamSharedDownloads()throws Exception{
         Context c=getTargetContext();
+        SourceRegistryChecks.run(c);
         String previousStart=SettingsStore.startScreen(c);
         try{
             for(String category:new String[]{"NL | Films","General"})try(XtreamFixture fixture=new XtreamFixture(category)){
@@ -52,6 +53,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
                     check(a.profile!=null&&a.searchIndex.isComplete(a.profileKey(),"vod")&&a.searchIndex.isComplete(a.profileKey(),"series"),"Shared Xtream import did not complete");
                     Thread.sleep(1700);
                     for(String action:new String[]{"get_live_streams","get_vod_streams","get_series"})check(fixture.count(action)==1,"Duplicate Xtream download: "+action+"="+fixture.count(action));
+                    for(String action:new String[]{"get_live_categories","get_vod_categories","get_series_categories"})check(fixture.count(action)==1,"Duplicate category download: "+action+"="+fixture.count(action));
                     java.util.concurrent.atomic.AtomicBoolean populated=new java.util.concurrent.atomic.AtomicBoolean();
                     long visibleDeadline=SystemClock.elapsedRealtime()+5000;
                     while(!populated.get()&&SystemClock.elapsedRealtime()<visibleDeadline){runOnMainSync(()->populated.set(a.gridAdapter.getCount()==161));Thread.sleep(100);}
