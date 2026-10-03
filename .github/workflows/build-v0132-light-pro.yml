@@ -1,8 +1,8 @@
-name: Build NenoTV v0.13.7 Light + Pro architecture
+name: Build NenoTV v0.13.8 Light + Pro architecture
 
 on:
   push:
-    branches: [ nenotv-v0.13.7-bounded-category-fetch ]
+    branches: [ nenotv-v0.13.8-progressive-first-sync ]
     paths:
       - '.github/workflows/build-v0132-light-pro.yml'
       - 'tools/prepare_v0132_architecture.py'
@@ -28,6 +28,9 @@ on:
       - 'tools/optimize_v0137_bounded_categories.py'
       - 'tools/finalize_v0137.py'
       - 'tools/verify_v0137.py'
+      - 'tools/optimize_v0138_progressive_sync.py'
+      - 'tools/finalize_v0138.py'
+      - 'tools/verify_v0138.py'
       - 'tools/fix_v0133_onboarding.py'
       - 'tools/fix_v0133_resume.py'
       - '.github/patches/v0133-common.patch.gz'
@@ -96,6 +99,9 @@ jobs:
           python3 "$GITHUB_WORKSPACE/tools/optimize_v0137_bounded_categories.py"
           python3 "$GITHUB_WORKSPACE/tools/finalize_v0137.py" light
           python3 "$GITHUB_WORKSPACE/tools/verify_v0137.py" light
+          python3 "$GITHUB_WORKSPACE/tools/optimize_v0138_progressive_sync.py"
+          python3 "$GITHUB_WORKSPACE/tools/finalize_v0138.py" light
+          python3 "$GITHUB_WORKSPACE/tools/verify_v0138.py" light
           cat NENOTV_ARCHITECTURE.txt
 
       - uses: actions/setup-java@v4
@@ -130,13 +136,13 @@ jobs:
           test -s "$RAW"
           KS="$RUNNER_TEMP/nenotv-light-test.jks"
           keytool -genkeypair -v -keystore "$KS" -storepass android -alias nenotvtest -keypass android -keyalg RSA -keysize 2048 -validity 3650 -dname "CN=NenoTV Light QA,O=NenoTV,C=NL" >/dev/null 2>&1
-          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -f -p 4 "$RAW" NenoTV-Light-v0.13.7-vc83-aligned.apk
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign --ks "$KS" --ks-pass pass:android --key-pass pass:android --ks-key-alias nenotvtest --out NenoTV-Light-v0.13.7-vc83-TEST-SIGNED.apk NenoTV-Light-v0.13.7-vc83-aligned.apk
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs NenoTV-Light-v0.13.7-vc83-TEST-SIGNED.apk | tee light-signature.txt
-          unzip -l NenoTV-Light-v0.13.7-vc83-TEST-SIGNED.apk > light-apk-files.txt
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -f -p 4 "$RAW" NenoTV-Light-v0.13.8-vc85-aligned.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign --ks "$KS" --ks-pass pass:android --key-pass pass:android --ks-key-alias nenotvtest --out NenoTV-Light-v0.13.8-vc85-TEST-SIGNED.apk NenoTV-Light-v0.13.8-vc85-aligned.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs NenoTV-Light-v0.13.8-vc85-TEST-SIGNED.apk | tee light-signature.txt
+          unzip -l NenoTV-Light-v0.13.8-vc85-TEST-SIGNED.apk > light-apk-files.txt
           if grep -Eqi 'libvlc|libtranslate_jni|liblanguage_id_l2c_jni|proextras' light-apk-files.txt; then echo "Pro/heavy payload leaked into Light"; exit 2; fi
-          sha256sum NenoTV-Light-v0.13.7-vc83-TEST-SIGNED.apk | tee NenoTV-Light-v0.13.7-SHA256.txt
-          cp base/RA_IPTV_Android_v0.1/NENOTV_ARCHITECTURE.txt NenoTV-Light-v0.13.7-ARCHITECTURE.txt
+          sha256sum NenoTV-Light-v0.13.8-vc85-TEST-SIGNED.apk | tee NenoTV-Light-v0.13.8-SHA256.txt
+          cp base/RA_IPTV_Android_v0.1/NENOTV_ARCHITECTURE.txt NenoTV-Light-v0.13.8-ARCHITECTURE.txt
 
       - name: Enable KVM
         run: |
@@ -155,7 +161,7 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
             set -eu
-            adb install -r "$GITHUB_WORKSPACE/NenoTV-Light-v0.13.7-vc83-TEST-SIGNED.apk"
+            adb install -r "$GITHUB_WORKSPACE/NenoTV-Light-v0.13.8-vc85-TEST-SIGNED.apk"
             adb logcat -c
             adb shell monkey -p com.nenotv.player -c android.intent.category.LAUNCHER 1 >/dev/null
             sleep 7
@@ -175,16 +181,16 @@ jobs:
 
 
       - name: Archive Light source
-        run: tar --exclude='*/build' --exclude='*/.gradle' -czf NenoTV-Light-v0.13.7-source.tar.gz -C base RA_IPTV_Android_v0.1
+        run: tar --exclude='*/build' --exclude='*/.gradle' -czf NenoTV-Light-v0.13.8-source.tar.gz -C base RA_IPTV_Android_v0.1
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-Light-v0.13.7
+          name: NenoTV-Light-v0.13.8
           path: |
-            NenoTV-Light-v0.13.7-vc83-TEST-SIGNED.apk
-            NenoTV-Light-v0.13.7-SHA256.txt
-            NenoTV-Light-v0.13.7-ARCHITECTURE.txt
-            NenoTV-Light-v0.13.7-source.tar.gz
+            NenoTV-Light-v0.13.8-vc85-TEST-SIGNED.apk
+            NenoTV-Light-v0.13.8-SHA256.txt
+            NenoTV-Light-v0.13.8-ARCHITECTURE.txt
+            NenoTV-Light-v0.13.8-source.tar.gz
             light-signature.txt
             light-startup-logcat.txt
             library-import-tests.txt
@@ -235,6 +241,9 @@ jobs:
           python3 "$GITHUB_WORKSPACE/tools/optimize_v0137_bounded_categories.py"
           python3 "$GITHUB_WORKSPACE/tools/finalize_v0137.py" modular
           python3 "$GITHUB_WORKSPACE/tools/verify_v0137.py" modular
+          python3 "$GITHUB_WORKSPACE/tools/optimize_v0138_progressive_sync.py"
+          python3 "$GITHUB_WORKSPACE/tools/finalize_v0138.py" modular
+          python3 "$GITHUB_WORKSPACE/tools/verify_v0138.py" modular
           cat NENOTV_ARCHITECTURE.txt
           cat proextras/PRO_LIBRARY_ARCHITECTURE.txt
 
@@ -282,17 +291,17 @@ jobs:
           open("modular-size.txt","w").write(f'base_compressed_mib={sums["base"]/1024/1024:.2f}\nproextras_compressed_mib={sums["proextras"]/1024/1024:.2f}\n')
           print(open("modular-size.txt").read())
           PY
-          cp "$AAB" NenoTV-Play-v0.13.7-play1-vc84-UNSIGNED.aab
-          sha256sum NenoTV-Play-v0.13.7-play1-vc84-UNSIGNED.aab | tee NenoTV-Play-v0.13.7-SHA256.txt
-          cp base/RA_IPTV_Android_v0.1/NENOTV_ARCHITECTURE.txt NenoTV-Play-v0.13.7-ARCHITECTURE.txt
-          cp base/RA_IPTV_Android_v0.1/proextras/PRO_LIBRARY_ARCHITECTURE.txt NenoTV-Pro-Module-v0.13.7-ARCHITECTURE.txt
-          (cd base/RA_IPTV_Android_v0.1 && zip -qr "$GITHUB_WORKSPACE/NenoTV-Pro-Module-v0.13.7-source.zip" proextras -x 'proextras/build/*')
+          cp "$AAB" NenoTV-Play-v0.13.8-play1-vc86-UNSIGNED.aab
+          sha256sum NenoTV-Play-v0.13.8-play1-vc86-UNSIGNED.aab | tee NenoTV-Play-v0.13.8-SHA256.txt
+          cp base/RA_IPTV_Android_v0.1/NENOTV_ARCHITECTURE.txt NenoTV-Play-v0.13.8-ARCHITECTURE.txt
+          cp base/RA_IPTV_Android_v0.1/proextras/PRO_LIBRARY_ARCHITECTURE.txt NenoTV-Pro-Module-v0.13.8-ARCHITECTURE.txt
+          (cd base/RA_IPTV_Android_v0.1 && zip -qr "$GITHUB_WORKSPACE/NenoTV-Pro-Module-v0.13.8-source.zip" proextras -x 'proextras/build/*')
 
       - name: Validate bundle
         run: |
           set -euo pipefail
           curl -fL --retry 3 -o bundletool.jar https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar
-          java -jar bundletool.jar validate --bundle=NenoTV-Play-v0.13.7-play1-vc84-UNSIGNED.aab
+          java -jar bundletool.jar validate --bundle=NenoTV-Play-v0.13.8-play1-vc86-UNSIGNED.aab
 
       - name: Enable KVM
         run: |
@@ -311,9 +320,9 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
             set -eu
-            if [ ! -f "$HOME/.android/nenotv-v0137-qa.jks" ]; then keytool -genkeypair -v -keystore "$HOME/.android/nenotv-v0137-qa.jks" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=NenoTV QA,O=NenoTV,C=NL" >/dev/null 2>&1; fi
-            java -jar "$GITHUB_WORKSPACE/bundletool.jar" build-apks --bundle="$GITHUB_WORKSPACE/NenoTV-Play-v0.13.7-play1-vc84-UNSIGNED.aab" --output="$GITHUB_WORKSPACE/v0137.apks" --overwrite --local-testing --ks="$HOME/.android/nenotv-v0137-qa.jks" --ks-key-alias=androiddebugkey --ks-pass=pass:android --key-pass=pass:android
-            java -jar "$GITHUB_WORKSPACE/bundletool.jar" install-apks --apks="$GITHUB_WORKSPACE/v0137.apks"
+            if [ ! -f "$HOME/.android/nenotv-v0138-qa.jks" ]; then keytool -genkeypair -v -keystore "$HOME/.android/nenotv-v0138-qa.jks" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=NenoTV QA,O=NenoTV,C=NL" >/dev/null 2>&1; fi
+            java -jar "$GITHUB_WORKSPACE/bundletool.jar" build-apks --bundle="$GITHUB_WORKSPACE/NenoTV-Play-v0.13.8-play1-vc86-UNSIGNED.aab" --output="$GITHUB_WORKSPACE/v0138.apks" --overwrite --local-testing --ks="$HOME/.android/nenotv-v0138-qa.jks" --ks-key-alias=androiddebugkey --ks-pass=pass:android --key-pass=pass:android
+            java -jar "$GITHUB_WORKSPACE/bundletool.jar" install-apks --apks="$GITHUB_WORKSPACE/v0138.apks"
             adb shell pm path com.nenotv.player | tee "$GITHUB_WORKSPACE/modular-installed-paths.txt"
             if grep -qi proextras "$GITHUB_WORKSPACE/modular-installed-paths.txt"; then echo "proextras unexpectedly installed with Light base"; exit 2; fi
             adb logcat -c
@@ -335,18 +344,18 @@ jobs:
 
 
       - name: Archive modular source
-        run: tar --exclude='*/build' --exclude='*/.gradle' -czf NenoTV-Play-v0.13.7-source.tar.gz -C base RA_IPTV_Android_v0.1
+        run: tar --exclude='*/build' --exclude='*/.gradle' -czf NenoTV-Play-v0.13.8-source.tar.gz -C base RA_IPTV_Android_v0.1
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-Play-v0.13.7-modular
+          name: NenoTV-Play-v0.13.8-modular
           path: |
-            NenoTV-Play-v0.13.7-play1-vc84-UNSIGNED.aab
-            NenoTV-Play-v0.13.7-SHA256.txt
-            NenoTV-Play-v0.13.7-ARCHITECTURE.txt
-            NenoTV-Pro-Module-v0.13.7-ARCHITECTURE.txt
-            NenoTV-Pro-Module-v0.13.7-source.zip
-            NenoTV-Play-v0.13.7-source.tar.gz
+            NenoTV-Play-v0.13.8-play1-vc86-UNSIGNED.aab
+            NenoTV-Play-v0.13.8-SHA256.txt
+            NenoTV-Play-v0.13.8-ARCHITECTURE.txt
+            NenoTV-Pro-Module-v0.13.8-ARCHITECTURE.txt
+            NenoTV-Pro-Module-v0.13.8-source.zip
+            NenoTV-Play-v0.13.8-source.tar.gz
             modular-size.txt
             modular-installed-paths.txt
             modular-base-startup-logcat.txt
