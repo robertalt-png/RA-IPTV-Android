@@ -3,17 +3,22 @@ set -euo pipefail
 device="$1"
 mkdir -p qa-results
 trap 'timeout 15s adb logcat -d > qa-results/logcat.txt || true; timeout 15s adb pull /sdcard/Android/data/com.nenotv.player/files/qa qa-results/final-screenshots || true' EXIT
-apk="$PWD/distribution/NenoTV-v0.13.12-vc92-TEST-SIGNED.apk"
+apk="$PWD/distribution/NenoTV-Pro-v0.14.0-vc93-TEST-SIGNED.apk"
+light_apk="$PWD/distribution/NenoTV-Light-v0.14.0-vc93-TEST-SIGNED.apk"
+adb install "$light_apk"
+adb shell pm path com.nenotv.player > qa-results/light-apk-paths.txt
+if rg -qi proextras qa-results/light-apk-paths.txt; then exit 2; fi
+adb logcat -c
+adb shell monkey -p com.nenotv.player -c android.intent.category.LAUNCHER 1 >/dev/null
+sleep 5
+adb logcat -d > qa-results/light-apk-logcat.txt
+if rg -q 'FATAL EXCEPTION' qa-results/light-apk-logcat.txt; then exit 2; fi
+test -n "$(adb shell pidof com.nenotv.player | tr -d '\r')"
+adb uninstall com.nenotv.player
 if [ "$device" = phone ]; then
   java -jar qa-tools/bundletool.jar install-apks --apks=qa-tools/phone.apks
-  adb shell pm path com.nenotv.player > qa-results/base-only-paths.txt
-  if rg -qi proextras qa-results/base-only-paths.txt; then exit 2; fi
-  adb logcat -c
-  adb shell monkey -p com.nenotv.player -c android.intent.category.LAUNCHER 1 >/dev/null
-  sleep 5
-  adb logcat -d > qa-results/base-only-logcat.txt
-  if rg -q 'FATAL EXCEPTION' qa-results/base-only-logcat.txt; then exit 2; fi
-  test -n "$(adb shell pidof com.nenotv.player | tr -d '\r')"
+  adb shell pm path com.nenotv.player > qa-results/play-light-delivery-paths.txt
+  if rg -qi proextras qa-results/play-light-delivery-paths.txt; then exit 2; fi
   adb uninstall com.nenotv.player
 fi
 adb install "$apk"
@@ -41,6 +46,10 @@ adb shell am force-stop com.nenotv.player
 adb shell am instrument -w -e phase resume com.nenotv.player.test/com.nenotv.player.UiInstrumentation | tee qa-results/ui-resume.txt
 rg -q 'NENOTV_UI_RESUME=passed' qa-results/ui-resume.txt
 adb shell am instrument -w -e phase pro com.nenotv.player.test/com.nenotv.player.UiInstrumentation | tee qa-results/pro-runtime.txt
+rg -q 'NENOTV_PRO_LANGUAGE=passed' qa-results/pro-runtime.txt
+rg -q 'NENOTV_PRO_SOURCES=passed' qa-results/pro-runtime.txt
+rg -q 'NENOTV_PRO_SMART_SOURCES=passed' qa-results/pro-runtime.txt
+rg -q 'NENOTV_PRO_SMART_EPG=passed' qa-results/pro-runtime.txt
 rg -q 'NENOTV_PRO_RUNTIME=passed' qa-results/pro-runtime.txt
 adb pull /sdcard/Android/data/com.nenotv.player/files/qa qa-results/screenshots
 if [ "$device" = phone ]; then

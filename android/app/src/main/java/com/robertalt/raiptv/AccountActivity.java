@@ -9,6 +9,7 @@ import android.view.*;
 import android.widget.*;
 import com.nenotv.player.entitlement.EntitlementClient;
 import com.nenotv.player.storage.EntitlementStore;
+import com.nenotv.player.storage.SettingsStore;
 import java.util.concurrent.*;
 
 public class AccountActivity extends Activity {
@@ -84,6 +85,10 @@ public class AccountActivity extends Activity {
         Button pro=b(T("view_pro"));
         pro.setOnClickListener(v->openWeb("https://nenotv.com/pro?device="+Uri.encode(ent.publicDeviceId())));
         box.addView(pro,new LinearLayout.LayoutParams(-1,dp(52)));
+
+        Button my=b(myNenoLabel());
+        my.setOnClickListener(v->openWeb(myNenoUrl()));
+        box.addView(my,new LinearLayout.LayoutParams(-1,dp(52)));
 
         refresh=b(T("refresh_status"));
         refresh.setOnClickListener(v->refreshServer());
@@ -199,6 +204,15 @@ public class AccountActivity extends Activity {
         String m=e==null?null:e.getMessage();
         return m==null||m.trim().isEmpty()?T("unknown_error"):m;
     }
+    String myNenoLabel(){
+        String l=SettingsStore.language(this);
+        return "nl".equals(l)?"Open Mijn NenoTV":"de".equals(l)?"Mein NenoTV öffnen":"Open My NenoTV";
+    }
+    String myNenoUrl(){
+        String l=SettingsStore.language(this);
+        return "nl".equals(l)?"https://nenotv.com/language/nl/mijn-account/":"de".equals(l)?"https://nenotv.com/language/de/mein-konto/":"https://nenotv.com/my-account/";
+    }
+
     void openWeb(String url){
         try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));}
         catch(Exception e){Toast.makeText(this,T("server_unavailable"),Toast.LENGTH_SHORT).show();}

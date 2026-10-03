@@ -13,7 +13,7 @@ public final class ProLibraryBridge {
         ArrayList<MediaEntry> fallback=new ArrayList<>(input==null?Collections.emptyList():input);
         if(!isActive(a))return fallback;
         try{
-            Class<?> c=Class.forName(OPTIMIZER);
+            Class<?> c=Class.forName(OPTIMIZER,true,a.getClassLoader());
             java.lang.reflect.Method m=c.getMethod("optimize",List.class,String.class,String.class);
             Object out=m.invoke(null,fallback,section,preferredLanguage);
             if(out instanceof List)return new ArrayList<>((List<MediaEntry>)out);

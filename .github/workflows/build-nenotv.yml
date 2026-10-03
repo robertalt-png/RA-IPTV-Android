@@ -1,6 +1,8 @@
-name: NenoTV one app v0.13.12
+name: NenoTV one app v0.14.0
 on:
   push:
+    branches: [nenotv-v0.13.11-work-handoff, nenotv-pro-2.0]
+  pull_request:
     branches: [nenotv-v0.13.11-work-handoff]
     paths: ['android/**', '.github/workflows/build-nenotv.yml', 'tools/qa-one-app.sh']
   workflow_dispatch:
@@ -8,7 +10,7 @@ permissions:
   contents: read
   actions: read
 concurrency:
-  group: nenotv-one-app-${{ github.sha }}
+  group: nenotv-one-app-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   build:
@@ -40,24 +42,28 @@ jobs:
       - name: Generate test APK from the exact Play AAB
         run: |
           mkdir -p distribution qa-tools
-          cp android/app/build/outputs/bundle/release/app-release.aab distribution/NenoTV-v0.13.12-vc92-UNSIGNED.aab
+          cp android/app/build/outputs/bundle/release/app-release.aab distribution/NenoTV-v0.14.0-vc93-UNSIGNED.aab
           curl -L --fail --retry 3 https://github.com/google/bundletool/releases/download/1.18.2/bundletool-all-1.18.2.jar -o qa-tools/bundletool.jar
-          java -jar qa-tools/bundletool.jar validate --bundle=distribution/NenoTV-v0.13.12-vc92-UNSIGNED.aab
-          java -jar qa-tools/bundletool.jar build-apks --bundle=distribution/NenoTV-v0.13.12-vc92-UNSIGNED.aab --output=universal.apks --mode=universal --ks="$HOME/.android/debug.keystore" --ks-key-alias=androiddebugkey --ks-pass=pass:android --key-pass=pass:android
-          unzip -p universal.apks universal.apk > distribution/NenoTV-v0.13.12-vc92-TEST-SIGNED.apk
+          java -jar qa-tools/bundletool.jar validate --bundle=distribution/NenoTV-v0.14.0-vc93-UNSIGNED.aab
+          java -jar qa-tools/bundletool.jar build-apks --bundle=distribution/NenoTV-v0.14.0-vc93-UNSIGNED.aab --output=pro-universal.apks --mode=universal --ks="$HOME/.android/debug.keystore" --ks-key-alias=androiddebugkey --ks-pass=pass:android --key-pass=pass:android
+          unzip -p pro-universal.apks universal.apk > distribution/NenoTV-Pro-v0.14.0-vc93-TEST-SIGNED.apk
+          java -jar qa-tools/bundletool.jar build-apks --bundle=distribution/NenoTV-v0.14.0-vc93-UNSIGNED.aab --output=light-universal.apks --mode=universal --modules=base --ks="$HOME/.android/debug.keystore" --ks-key-alias=androiddebugkey --ks-pass=pass:android --key-pass=pass:android
+          unzip -p light-universal.apks universal.apk > distribution/NenoTV-Light-v0.14.0-vc93-TEST-SIGNED.apk
           echo '{"supportedAbis":["x86_64"],"supportedLocales":["en"],"screenDensity":420,"sdkVersion":35}' > qa-tools/device.json
-          java -jar qa-tools/bundletool.jar build-apks --bundle=distribution/NenoTV-v0.13.12-vc92-UNSIGNED.aab --output=qa-tools/phone.apks --local-testing --device-spec=qa-tools/device.json --ks="$HOME/.android/debug.keystore" --ks-key-alias=androiddebugkey --ks-pass=pass:android --key-pass=pass:android
+          java -jar qa-tools/bundletool.jar build-apks --bundle=distribution/NenoTV-v0.14.0-vc93-UNSIGNED.aab --output=qa-tools/phone.apks --local-testing --device-spec=qa-tools/device.json --ks="$HOME/.android/debug.keystore" --ks-key-alias=androiddebugkey --ks-pass=pass:android --key-pass=pass:android
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign --ks "$HOME/.android/debug.keystore" --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out qa-tools/tests.apk android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs qa-tools/tests.apk > distribution/test-signature.txt
-          diff <(rg 'Signer #1 certificate SHA-256 digest' distribution/test-signature.txt) <("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs distribution/NenoTV-v0.13.12-vc92-TEST-SIGNED.apk | rg 'Signer #1 certificate SHA-256 digest')
+          diff <(rg 'Signer #1 certificate SHA-256 digest' distribution/test-signature.txt) <("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs distribution/NenoTV-Pro-v0.14.0-vc93-TEST-SIGNED.apk | rg 'Signer #1 certificate SHA-256 digest')
+          diff <(rg 'Signer #1 certificate SHA-256 digest' distribution/test-signature.txt) <("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs distribution/NenoTV-Light-v0.14.0-vc93-TEST-SIGNED.apk | rg 'Signer #1 certificate SHA-256 digest')
           cp "$HOME/.android/debug.keystore" qa-tools/disposable-QA-key.jks
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs distribution/NenoTV-v0.13.12-vc92-TEST-SIGNED.apk > distribution/qa-signature.txt
-          sha256sum distribution/NenoTV-v0.13.12-vc92-TEST-SIGNED.apk distribution/NenoTV-v0.13.12-vc92-UNSIGNED.aab > distribution/SHA256.txt
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs distribution/NenoTV-Pro-v0.14.0-vc93-TEST-SIGNED.apk > distribution/qa-signature-pro.txt
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs distribution/NenoTV-Light-v0.14.0-vc93-TEST-SIGNED.apk > distribution/qa-signature-light.txt
+          sha256sum distribution/NenoTV-Pro-v0.14.0-vc93-TEST-SIGNED.apk distribution/NenoTV-Light-v0.14.0-vc93-TEST-SIGNED.apk distribution/NenoTV-v0.14.0-vc93-UNSIGNED.aab > distribution/SHA256.txt
       - name: Verify Light base and Pro separation
         run: |
           python - <<'PY'
           import zipfile,collections
-          with zipfile.ZipFile('distribution/NenoTV-v0.13.12-vc92-UNSIGNED.aab') as z:
+          with zipfile.ZipFile('distribution/NenoTV-v0.14.0-vc93-UNSIGNED.aab') as z:
             names=z.namelist()
             heavy=('libvlc.so','libvlcjni.so','libtranslate_jni.so','liblanguage_id_l2c_jni.so')
             assert not any(n.startswith('base/') and any(h in n for h in heavy) for n in names)
@@ -65,22 +71,30 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-v0.13.12-Play-bundle
+          name: NenoTV-v0.14.0-Play-bundle
           path: |
             distribution/*.aab
             distribution/SHA256.txt
           retention-days: 30
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-v0.13.12-test-app
+          name: NenoTV-Light-v0.14.0-test-app
           path: |
-            distribution/*.apk
+            distribution/NenoTV-Light-v0.14.0-vc93-TEST-SIGNED.apk
             distribution/SHA256.txt
-            distribution/qa-signature.txt
+            distribution/qa-signature-light.txt
           retention-days: 30
       - uses: actions/upload-artifact@v4
         with:
-          name: NenoTV-v0.13.12-QA-tools
+          name: NenoTV-Pro-v0.14.0-test-app
+          path: |
+            distribution/NenoTV-Pro-v0.14.0-vc93-TEST-SIGNED.apk
+            distribution/SHA256.txt
+            distribution/qa-signature-pro.txt
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NenoTV-v0.14.0-QA-tools
           path: qa-tools/
           retention-days: 7
   android-tests:
@@ -109,11 +123,15 @@ jobs:
           java-version: '17'
       - uses: actions/download-artifact@v4
         with:
-          name: NenoTV-v0.13.12-test-app
+          name: NenoTV-Light-v0.14.0-test-app
           path: distribution
       - uses: actions/download-artifact@v4
         with:
-          name: NenoTV-v0.13.12-QA-tools
+          name: NenoTV-Pro-v0.14.0-test-app
+          path: distribution
+      - uses: actions/download-artifact@v4
+        with:
+          name: NenoTV-v0.14.0-QA-tools
           path: qa-tools
       - name: QA tools
         run: sudo apt-get update -qq && sudo apt-get install -y ripgrep
@@ -140,6 +158,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: NenoTV-v0.13.12-${{ matrix.device }}-test-evidence
+          name: NenoTV-v0.14.0-${{ matrix.device }}-test-evidence
           path: qa-results/
           retention-days: 30

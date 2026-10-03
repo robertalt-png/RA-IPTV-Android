@@ -8,9 +8,9 @@ import org.json.*;
 import java.util.*;
 
 public class EpgStore extends SQLiteOpenHelper {
-    private static final String DB="nenotv_epg.db"; private static final int VERSION=1;
+    private static final String DB="nenotv_epg.db"; private static final int VERSION=1; private final Context app;
     public static final long TTL_MS=12*60*1000L;
-    public EpgStore(Context c){super(c,DB,null,VERSION);}
+    public EpgStore(Context c){super(c,DB,null,VERSION);app=c.getApplicationContext();}
     @Override public void onCreate(SQLiteDatabase db){db.execSQL("CREATE TABLE epg(cache_key TEXT PRIMARY KEY, updated INTEGER NOT NULL, payload TEXT NOT NULL)");}
     @Override public void onUpgrade(SQLiteDatabase db,int a,int b){db.execSQL("DROP TABLE IF EXISTS epg");onCreate(db);}
     public synchronized List<EpgEntry> get(String key){
@@ -27,7 +27,20 @@ public class EpgStore extends SQLiteOpenHelper {
         String key="timeline2|"+profile+"|"+channel.uniqueKey();Object lock=fetchLocks.computeIfAbsent(key,k->new Object());
         synchronized(lock){try{
             if(fresh(key))return com.nenotv.player.EpgTimeline.normalize(get(key));
-            List<EpgEntry> rows=com.nenotv.player.EpgTimeline.normalize(provider.epgEntries(channel,50));put(key,rows);return rows;
+            boolean smart=new EntitlementStore(app).isPro()&&SettingsStore.prefs(app).getBoolean("pro_smart_epg",false);
+            List<EpgEntry> rows;
+            try{rows=com.nenotv.player.EpgTimeline.normalize(provider.epgEntries(channel,50));}
+            catch(Exception primaryFailure){if(!smart)throw primaryFailure;rows=Collections.emptyList();}
+            if(rows.isEmpty()&&smart){
+                String sourceId=channel.sourceId==null||channel.sourceId.isEmpty()?new SourceStore(app).activeId():channel.sourceId;
+                for(String url:new SmartEpgStore(app).urls(sourceId)){
+                    try{
+                        List<EpgEntry> extra=com.nenotv.player.EpgTimeline.normalize(com.nenotv.player.core.XmltvGuide.lookupEntries(url,channel.tvgId,channel.tvgName,50,SettingsStore.primaryLanguage(app)));
+                        if(!extra.isEmpty()){rows=extra;break;}
+                    }catch(Exception ignored){}
+                }
+            }
+            put(key,rows);return rows;
         }finally{fetchLocks.remove(key,lock);}}
     }
     private String encode(List<EpgEntry> rows)throws Exception{JSONArray a=new JSONArray();for(EpgEntry e:rows){JSONObject x=new JSONObject();x.put("t",e.title);x.put("d",e.description);x.put("sr",e.startRaw);x.put("er",e.endRaw);x.put("s",e.startEpoch);x.put("e",e.endEpoch);a.put(x);}return a.toString();}

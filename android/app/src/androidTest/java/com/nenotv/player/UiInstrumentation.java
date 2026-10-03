@@ -92,12 +92,53 @@ public final class UiInstrumentation extends ImportInstrumentation {
         check(ProModuleInstaller.isInstalled(a),"Fused Pro module is invisible");
         check(!ProLibraryBridge.isActive(a),"Light gained Pro without entitlement");
         check(ProModuleInstaller.playerIntent(a).getComponent().getClassName().equals(PlayerActivity.class.getName()),"Light bypassed basic player");
+        check(ProModuleInstaller.sourcesIntent(a).getComponent().getClassName().equals(ProfileActivity.class.getName()),"Light reached Pro source manager");
         com.nenotv.player.provider.M3uProvider source=new com.nenotv.player.provider.M3uProvider(profile());source.authenticate();MediaEntry basicItem=source.items("vod","all").get(0);
         PlayerActivity basic=(PlayerActivity)startActivitySync(new Intent(c,PlayerActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("media",basicItem));waitForIdleSync();
         long ready=SystemClock.elapsedRealtime()+90000;final java.util.concurrent.atomic.AtomicBoolean basePlaying=new java.util.concurrent.atomic.AtomicBoolean();while(!basePlaying.get()&&SystemClock.elapsedRealtime()<ready){runOnMainSync(()->basePlaying.set(basic.exo!=null&&basic.exo.getCurrentPosition()>1500&&basic.exo.getVideoFormat()!=null&&basic.exo.getAudioFormat()!=null));Thread.sleep(100);}check(basePlaying.get(),"Light player did not play demo");
         runOnMainSync(()->{WindowInsets in=basic.getWindow().getDecorView().getRootWindowInsets();if(Build.VERSION.SDK_INT>=30)check(in!=null&&!in.isVisible(WindowInsets.Type.systemBars()),"Light player is not fullscreen");basic.showControls();check(basic.forward.getText().toString().contains("10"),"Forward control is unclear");basic.forward.performClick();});Thread.sleep(300);runOnMainSync(()->{check(basic.exo.getCurrentPosition()>=10000,"Forward did not seek 10 seconds");basic.rewind.performClick();});Thread.sleep(300);runOnMainSync(()->check(basic.exo.getCurrentPosition()<5000,"Rewind did not seek back"));snapshot("light-player");runOnMainSync(basic::finish);waitForIdleSync();
         c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE).edit().putString("level","PRO").commit();
         check(ProLibraryBridge.isActive(a),"Pro entitlement did not enable module");
+        check(ProModuleInstaller.sourcesIntent(a).getComponent().getClassName().contains("ProSourcesActivity"),"Pro source manager route missing");
+        check(ProModuleInstaller.networkIntent(a).getComponent().getClassName().contains("ProNetworkActivity"),"Pro network route missing");
+        MediaEntry langEn=new MediaEntry();langEn.type="live";langEn.id="lang-en";langEn.name="EN - QA";langEn.group="EN | General";
+        MediaEntry langNl=new MediaEntry();langNl.type="live";langNl.id="lang-nl";langNl.name="NL - QA";langNl.group="NL | Algemeen";
+        List<MediaEntry> ranked=ProLibraryBridge.optimize(a,Arrays.asList(langEn,langNl),"live","nl");
+        check(ranked.size()==2&&ranked.get(0)==langNl,"Pro preferred-language optimizer did not rank Dutch first");
+        result.putString("NENOTV_PRO_LANGUAGE","passed");
+        SourceStore sourceStore=new SourceStore(c);
+        com.nenotv.player.model.Profile qaA=new com.nenotv.player.model.Profile();qaA.type=com.nenotv.player.model.Profile.Type.M3U;qaA.name="QA Source A";qaA.m3uUrl=DemoSource.URL;
+        com.nenotv.player.model.Profile qaB=new com.nenotv.player.model.Profile();qaB.type=com.nenotv.player.model.Profile.Type.XTREAM;qaB.name="QA Source B";qaB.server="https://example.invalid";qaB.username="qa";qaB.password="secret";
+        String qaAId=sourceStore.upsert("",qaA,true),qaBId=sourceStore.upsert("",qaB,false);
+        check(sourceStore.list().size()>=2,"Pro multi-source registry did not retain multiple sources");
+        check(sourceStore.setActive(qaBId)&&"QA Source B".equals(new SecureProfileStore(c).load().name),"Active Pro source did not mirror into Light provider profile");
+        sourceStore.setEnabled(qaBId,false);String fallbackId=sourceStore.activeId();SourceStore.Entry fallbackEntry=null;for(SourceStore.Entry candidate:sourceStore.list())if(candidate.id.equals(fallbackId)){fallbackEntry=candidate;break;}check(!qaBId.equals(fallbackId)&&fallbackEntry!=null&&fallbackEntry.enabled&&fallbackEntry.profile.name.equals(new SecureProfileStore(c).load().name),"Disabling active source did not fail over the Light profile");
+        sourceStore.setEnabled(qaBId,true);check(sourceStore.setActive(qaBId),"Re-enabled source could not become active again");
+        org.json.JSONArray syncCopy=sourceStore.exportForSync();check(syncCopy.length()>=2,"Source sync export lost entries");
+        sourceStore.markSynced(1);
+        sourceStore.applyCloudSnapshot(syncCopy,2);check(sourceStore.list().size()>=2,"Source sync snapshot lost entries");
+
+        MediaEntry primary=new MediaEntry();primary.type="live";primary.id="primary";primary.name="QA Channel HD";primary.tvgId="qa-channel";primary.candidates.add("https://primary.invalid/live");
+        MediaEntry secondary=new MediaEntry();secondary.type="live";secondary.id="secondary";secondary.name="QA Channel";secondary.tvgId="qa-channel";secondary.sourceId=qaBId;secondary.candidates.add("https://fallback.invalid/live");
+        List<MediaEntry> smartMerged=SmartSourceMerger.merge(Collections.singletonList(primary),Collections.singletonList(secondary));
+        check(smartMerged.size()==1&&smartMerged.get(0).candidates.size()==2,"Smart Sources did not dedupe and preserve fallback streams");
+        result.putString("NENOTV_PRO_SMART_SOURCES","passed");
+
+        try(EpgFixture epgFixture=new EpgFixture()){
+            MediaEntry smartChannel=new MediaEntry();smartChannel.type="live";smartChannel.id="smart-epg";smartChannel.name="QA Smart";smartChannel.tvgId="qa-smart";smartChannel.tvgName="QA Smart";smartChannel.sourceId=qaAId;
+            new SmartEpgStore(c).setUrls(qaAId,Collections.singletonList(epgFixture.url()));
+            SettingsStore.prefs(c).edit().putBoolean("pro_smart_epg",true).commit();sourceStore.touchSync();
+            Provider noGuide=new Provider(){public void authenticate(){}public List<Category> categories(String type){return Collections.emptyList();}public List<MediaEntry> items(String type,String category){return Collections.emptyList();}public List<EpgEntry> epgEntries(MediaEntry item,int limit)throws Exception{throw new IOException("QA provider EPG failure");}};
+            EpgStore smartStore=new EpgStore(c);List<EpgEntry> smartRows=smartStore.getOrFetch(noGuide,"qa-smart-"+System.nanoTime(),smartChannel);smartStore.close();
+            check(!smartRows.isEmpty()&&"Smart EPG fixture".equals(smartRows.get(0).title),"Smart EPG did not fall back to the extra XMLTV source");
+            org.json.JSONArray exported=sourceStore.exportForSync();boolean epgSynced=false;for(int q=0;q<exported.length();q++){org.json.JSONObject o=exported.optJSONObject(q);if(o!=null&&qaAId.equals(o.optString("id"))&&o.optJSONArray("epg_extra")!=null&&o.optJSONArray("epg_extra").length()==1)epgSynced=true;}
+            check(epgSynced,"Smart EPG URLs were not included in My NenoTV source sync");
+            result.putString("NENOTV_PRO_SMART_EPG","passed");
+        }
+
+        sourceStore.remove(qaAId);check(sourceStore.syncDirty(),"Local source deletion did not mark sync dirty");
+        result.putString("NENOTV_PRO_SOURCES","passed");
+        sourceStore.remove(qaBId);
         // Build the provider before selecting the packaged entry.
         com.nenotv.player.provider.M3uProvider provider=new com.nenotv.player.provider.M3uProvider(profile());provider.authenticate();MediaEntry item=provider.items("vod","all").get(0);
         Intent i=ProModuleInstaller.playerIntent(a);i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);i.putExtra("media",item);
@@ -113,6 +154,18 @@ public final class UiInstrumentation extends ImportInstrumentation {
     }
     static com.nenotv.player.model.Profile profile(){com.nenotv.player.model.Profile p=new com.nenotv.player.model.Profile();p.type=com.nenotv.player.model.Profile.Type.M3U;p.m3uUrl=DemoSource.URL;p.name="Demo QA";return p;}
     @Override public void onStart(){Bundle result=new Bundle();String phase=args.getString("phase","ui");if(!Arrays.asList("ui","resume","pro").contains(phase)){super.onStart();return;}try{if("resume".equals(phase))resume(result);else if("pro".equals(phase)){Context c=getTargetContext();SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();DemoPolicy.startOrKeep(c,System.currentTimeMillis());new SecureProfileStore(c).save(profile());pro(result);}else core(result);}catch(Throwable failure){result.putString("NENOTV_UI_TESTS","failed: "+failure.getClass().getSimpleName()+": "+failure.getMessage());finish(Activity.RESULT_CANCELED,result);}}
+    static final class EpgFixture implements AutoCloseable{
+        final ServerSocket socket;final Thread worker;final byte[] body;
+        EpgFixture()throws Exception{
+            socket=new ServerSocket(0,8,InetAddress.getByName("127.0.0.1"));
+            String xml="<?xml version=\"1.0\" encoding=\"UTF-8\"?><tv><channel id=\"qa-smart\"><display-name>QA Smart</display-name></channel><programme start=\"20990101000000 +0000\" stop=\"20990101010000 +0000\" channel=\"qa-smart\"><title lang=\"nl\">Smart EPG fixture</title><desc lang=\"nl\">Fallback guide</desc></programme></tv>";
+            body=xml.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            worker=new Thread(()->{while(!socket.isClosed())try(Socket s=socket.accept()){BufferedReader reader=new BufferedReader(new InputStreamReader(s.getInputStream()));String line;while((line=reader.readLine())!=null&&!line.isEmpty()){}OutputStream out=s.getOutputStream();out.write(("HTTP/1.1 200 OK\r\nContent-Type: application/xml\r\nContent-Length: "+body.length+"\r\nConnection: close\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.US_ASCII));out.write(body);out.flush();}catch(Exception ignored){}},"epg-fixture");worker.setDaemon(true);worker.start();
+        }
+        String url(){return "http://127.0.0.1:"+socket.getLocalPort()+"/guide.xml";}
+        public void close()throws Exception{socket.close();worker.join(1000);}
+    }
+
     static final class ImageFixture implements AutoCloseable{
         final ServerSocket socket;final byte[] png;final Thread worker;
         ImageFixture()throws Exception{socket=new ServerSocket(0,8,InetAddress.getByName("127.0.0.1"));Bitmap b=Bitmap.createBitmap(32,48,Bitmap.Config.RGB_565);b.eraseColor(0xFF005A9C);ByteArrayOutputStream out=new ByteArrayOutputStream();b.compress(Bitmap.CompressFormat.PNG,100,out);png=out.toByteArray();b.recycle();worker=new Thread(()->{while(!socket.isClosed())try(Socket s=socket.accept()){BufferedReader reader=new BufferedReader(new InputStreamReader(s.getInputStream()));String request=reader.readLine(),line;while((line=reader.readLine())!=null&&!line.isEmpty()){}boolean ok=request!=null&&request.contains("/ok ");byte[] body=ok?png:new byte[0];OutputStream response=s.getOutputStream();response.write(((ok?"HTTP/1.1 200 OK":"HTTP/1.1 404 Not Found")+"\r\nContent-Type: image/png\r\nContent-Length: "+body.length+"\r\nConnection: close\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.US_ASCII));response.write(body);response.flush();

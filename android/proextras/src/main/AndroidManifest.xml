@@ -11,6 +11,8 @@
       android:name="com.google.mlkit.common.internal.MlKitInitProvider"
       android:authorities="${applicationId}.mlkitinitprovider"
       tools:node="remove"/>
+    <activity android:name="com.nenotv.player.proextras.ProSourcesActivity" android:exported="false"/>
+    <activity android:name="com.nenotv.player.proextras.ProNetworkActivity" android:exported="false"/>
     <activity
       android:name="com.nenotv.player.proextras.ProPlayerActivity"
       android:exported="false"
