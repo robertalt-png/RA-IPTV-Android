@@ -25,6 +25,20 @@ public final class SourceSyncClient {
 
     public JSONObject sync() throws Exception {
         if(!entitlement.isPro())throw new IOException("PRO_REQUIRED");
+        // First contact is cloud-first so a newly upgraded/reinstalled device cannot
+        // overwrite an existing account vault with its locally migrated legacy source.
+        if(sources.cloudRevision()<=0){
+            JSONObject remote=post("pull",baseBody());
+            JSONArray rows=remote.optJSONArray("sources");
+            int revision=remote.optInt("revision",0);
+            if(rows!=null&&rows.length()>0){
+                sources.applyCloudSnapshot(rows,revision);
+                return remote;
+            }
+            if(sources.syncDirty())return push();
+            sources.markSynced(revision);
+            return remote;
+        }
         if(sources.syncDirty())return push();
         return pull();
     }
