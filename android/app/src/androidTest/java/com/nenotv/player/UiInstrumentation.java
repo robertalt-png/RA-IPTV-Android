@@ -108,8 +108,10 @@ public final class UiInstrumentation extends ImportInstrumentation {
         check(sourceStore.list().size()>=2,"Pro multi-source registry did not retain multiple sources");
         check(sourceStore.setActive(qaBId)&&"QA Source B".equals(new SecureProfileStore(c).load().name),"Active Pro source did not mirror into Light provider profile");
         org.json.JSONArray syncCopy=sourceStore.exportForSync();check(syncCopy.length()>=2,"Source sync export lost entries");
-        sourceStore.mergeFromCloud(syncCopy);check(sourceStore.list().size()>=2,"Source sync merge lost entries");
-        sourceStore.remove(qaAId);sourceStore.remove(qaBId);
+        sourceStore.markSynced(1);
+        sourceStore.applyCloudSnapshot(syncCopy,2);check(sourceStore.list().size()>=2,"Source sync snapshot lost entries");
+        sourceStore.remove(qaAId);check(sourceStore.syncDirty(),"Local source deletion did not mark sync dirty");
+        sourceStore.remove(qaBId);
         // Build the provider before selecting the packaged entry.
         com.nenotv.player.provider.M3uProvider provider=new com.nenotv.player.provider.M3uProvider(profile());provider.authenticate();MediaEntry item=provider.items("vod","all").get(0);
         Intent i=ProModuleInstaller.playerIntent(a);i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);i.putExtra("media",item);
