@@ -7,19 +7,19 @@ import android.os.Bundle;
 import android.view.*;
 import android.widget.*;
 import com.nenotv.player.ProfileActivity;
+import com.nenotv.player.entitlement.SourceSyncClient;
 import com.nenotv.player.storage.EntitlementStore;
 import com.nenotv.player.storage.SettingsStore;
 import com.nenotv.player.storage.SourceStore;
-import com.nenotv.player.entitlement.SourceSyncClient;
-import java.util.concurrent.*;
 import java.util.List;
+import java.util.concurrent.*;
 
 public class ProSourcesActivity extends Activity {
     LinearLayout box;
     SourceStore sources;
     ExecutorService exec=Executors.newSingleThreadExecutor();
-    int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);    @Override protected void onDestroy(){exec.shutdownNow();super.onDestroy();}
-}
+
+    int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
     String L(String en,String nl,String de){String l=SettingsStore.language(this);return "nl".equals(l)?nl:"de".equals(l)?de:en;}
 
     @Override public void onCreate(Bundle b){
@@ -61,8 +61,10 @@ public class ProSourcesActivity extends Activity {
 
         List<SourceStore.Entry> all=sources.list();
         String active=sources.activeId();
-        if(all.isEmpty()){TextView empty=text(L("No sources saved.","Nog geen bronnen opgeslagen.","Noch keine Quellen gespeichert."),14);empty.setPadding(0,dp(18),0,0);box.addView(empty);return;}
-
+        if(all.isEmpty()){
+            TextView empty=text(L("No sources saved.","Nog geen bronnen opgeslagen.","Noch keine Quellen gespeichert."),14);
+            empty.setPadding(0,dp(18),0,0);box.addView(empty);return;
+        }
         for(SourceStore.Entry e:all)addSourceCard(e,e.id.equals(active));
     }
 
@@ -76,9 +78,13 @@ public class ProSourcesActivity extends Activity {
 
         LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);row.setPadding(0,dp(8),0,0);card.addView(row);
         if(!active){
-            Button use=button(L("Use","Gebruiken","Verwenden"));use.setOnClickListener(v->{if(sources.setActive(e.id)){setResult(RESULT_OK);render();}});row.addView(use,new LinearLayout.LayoutParams(0,dp(48),1));
+            Button use=button(L("Use","Gebruiken","Verwenden"));
+            use.setOnClickListener(v->{if(sources.setActive(e.id)){setResult(RESULT_OK);render();}});
+            row.addView(use,new LinearLayout.LayoutParams(0,dp(48),1));
         }
-        Button edit=button(L("Edit","Bewerken","Bearbeiten"));edit.setOnClickListener(v->{Intent i=new Intent(this,ProfileActivity.class);i.putExtra("source_id",e.id);startActivity(i);});row.addView(edit,new LinearLayout.LayoutParams(0,dp(48),1));
+        Button edit=button(L("Edit","Bewerken","Bearbeiten"));
+        edit.setOnClickListener(v->{Intent i=new Intent(this,ProfileActivity.class);i.putExtra("source_id",e.id);startActivity(i);});
+        row.addView(edit,new LinearLayout.LayoutParams(0,dp(48),1));
         Button more=button("⋮");more.setOnClickListener(v->menu(e));row.addView(more,new LinearLayout.LayoutParams(dp(58),dp(48)));
     }
 
@@ -87,7 +93,10 @@ public class ProSourcesActivity extends Activity {
         exec.execute(()->{
             try{
                 new SourceSyncClient(this).sync();
-                runOnUiThread(()->{Toast.makeText(this,L("Sources synchronized with My NenoTV.","Bronnen gesynchroniseerd met Mijn NenoTV.","Quellen mit Mein NenoTV synchronisiert."),Toast.LENGTH_LONG).show();render();});
+                runOnUiThread(()->{
+                    Toast.makeText(this,L("Sources synchronized with My NenoTV.","Bronnen gesynchroniseerd met Mijn NenoTV.","Quellen mit Mein NenoTV synchronisiert."),Toast.LENGTH_LONG).show();
+                    render();
+                });
             }catch(Exception ex){
                 String m=ex.getMessage()==null?L("Sync unavailable","Sync niet beschikbaar","Synchronisierung nicht verfügbar"):ex.getMessage();
                 runOnUiThread(()->{Toast.makeText(this,m,Toast.LENGTH_LONG).show();render();});
@@ -107,9 +116,11 @@ public class ProSourcesActivity extends Activity {
             else if(w==1)sources.move(e.id,-1);
             else if(w==2)sources.move(e.id,1);
             else if(w==3)new AlertDialog.Builder(this).setMessage(L("Delete this source?","Deze bron verwijderen?","Diese Quelle löschen?"))
-                    .setPositiveButton(L("Delete","Verwijderen","Löschen"),(x,y)->{sources.remove(e.id);render();})
-                    .setNegativeButton(L("Cancel","Annuleren","Abbrechen"),null).show();
+                .setPositiveButton(L("Delete","Verwijderen","Löschen"),(x,y)->{sources.remove(e.id);render();})
+                .setNegativeButton(L("Cancel","Annuleren","Abbrechen"),null).show();
             render();
         }).show();
     }
+
+    @Override protected void onDestroy(){exec.shutdownNow();super.onDestroy();}
 }
