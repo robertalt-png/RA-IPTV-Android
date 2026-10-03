@@ -139,6 +139,17 @@ public final class UiInstrumentation extends ImportInstrumentation {
     }
     void accountChecks()throws Exception{
         Context c=getTargetContext();
+        check((c.getApplicationInfo().flags&android.content.pm.ApplicationInfo.FLAG_ALLOW_BACKUP)==0,"Sensitive app data allowed Android backup");
+        java.util.Map<String,java.util.Set<String>> exclusions=new java.util.HashMap<>();String backupSection="";
+        try(android.content.res.XmlResourceParser rules=c.getResources().getXml(R.xml.data_extraction_rules)){
+            for(int event=rules.getEventType();event!=org.xmlpull.v1.XmlPullParser.END_DOCUMENT;event=rules.next()){
+                if(event!=org.xmlpull.v1.XmlPullParser.START_TAG)continue;
+                if("cloud-backup".equals(rules.getName())||"device-transfer".equals(rules.getName())){backupSection=rules.getName();exclusions.put(backupSection,new java.util.HashSet<>());}
+                if("exclude".equals(rules.getName())){check(".".equals(rules.getAttributeValue(null,"path")),"Incomplete sensitive-data backup exclusion");exclusions.get(backupSection).add(rules.getAttributeValue(null,"domain"));}
+            }
+        }
+        java.util.Set<String> domains=new java.util.HashSet<>(java.util.Arrays.asList("root","file","database","sharedpref","external","device_root","device_file","device_database","device_sharedpref"));
+        check(domains.equals(exclusions.get("cloud-backup"))&&domains.equals(exclusions.get("device-transfer")),"Device identity/source vault can be cloned by backup or transfer");
         com.nenotv.player.entitlement.EntitlementClientChecks.run(c);
         com.nenotv.player.entitlement.PairingClientChecks.run(c);
         com.nenotv.player.entitlement.SourceSyncChecks.run(c);
