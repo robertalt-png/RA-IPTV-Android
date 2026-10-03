@@ -1,0 +1,46 @@
+name: Export tested NenoTV files
+on:
+  push:
+    branches: [nenotv-v0.13.11-one-app-polish]
+    paths: ['.github/workflows/export-delivery.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: NenoTV-v0.13.11-Play-bundle
+          run-id: 37116659717
+          github-token: ${{ github.token }}
+          path: source
+      - uses: actions/download-artifact@v4
+        with:
+          name: NenoTV-v0.13.11-test-app
+          run-id: 37116659717
+          github-token: ${{ github.token }}
+          path: source
+      - name: Export reproducible transfer pieces
+        run: |
+          python - <<'PY'
+          import pathlib,json,hashlib
+          root=pathlib.Path('source');out=pathlib.Path('parts');out.mkdir();manifest=[]
+          for f in sorted(root.iterdir()):
+            if f.suffix not in ('.apk','.aab'):continue
+            h=hashlib.sha256();parts=[]
+            with f.open('rb') as src:
+              i=0
+              while block:=src.read(24*1024*1024):
+                name=f.name+'.part'+str(i).zfill(3);(out/name).write_bytes(block);h.update(block);parts.append(name);i+=1
+            manifest.append({'name':f.name,'sha256':h.hexdigest(),'parts':parts,'size':f.stat().st_size})
+          (out/'delivery-manifest.json').write_text(json.dumps(manifest,indent=2))
+          PY
+          npm install --prefix /tmp/nenotv-transfer @actions/artifact@2.3.2 --no-audit --no-fund
+          NODE_PATH=/tmp/nenotv-transfer/node_modules node <<'JS'
+          const {DefaultArtifactClient}=require('@actions/artifact');
+          const fs=require('fs'),path=require('path');
+          (async()=>{const client=new DefaultArtifactClient(),root=path.resolve('parts');for(const [i,name] of fs.readdirSync(root).filter(n=>n!=='delivery-manifest.json').sort().entries()){await client.uploadArtifact('NenoTV-transfer-'+String(i).padStart(2,'0'),[path.join(root,name)],root,{retentionDays:7,compressionLevel:0});}await client.uploadArtifact('NenoTV-delivery-manifest',[path.join(root,'delivery-manifest.json')],root,{retentionDays:7});})().catch(e=>{console.error(e);process.exit(1)});
+          JS
