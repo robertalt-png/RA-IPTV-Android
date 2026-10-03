@@ -66,6 +66,21 @@ public class MainActivity extends Activity {
         }catch(Exception ignored){return false;}
     }
 
+    @Override protected void onPostResume(){
+        super.onPostResume();
+        if(isFinishing()||isDestroyed())return;
+        android.content.SharedPreferences settings=SettingsStore.prefs(this);
+        if(settings.getBoolean("account_sources_changed",false)){
+            settings.edit().remove("account_sources_changed").apply();recreate();return;
+        }
+        com.nenotv.player.entitlement.AutomaticSourceDownload.check(this,()->runOnUiThread(()->{
+            settings.edit().putBoolean("account_sources_changed",true).apply();
+            if(!isFinishing()&&!isDestroyed()&&!activityPaused&&!playbackActive){
+                settings.edit().remove("account_sources_changed").apply();recreate();
+            }
+        }));
+    }
+
     @Override public void onConfigurationChanged(android.content.res.Configuration newConfig){
         int first=grid==null?0:grid.getFirstVisiblePosition();
         View firstView=grid==null?null:grid.getChildAt(0);

@@ -68,11 +68,32 @@ public final class SourceSyncChecks {
                 try{new SourceSyncClient(context,new EntitlementClient(context,fixture.url())).push();throw new AssertionError("Missing revision accepted");}catch(IOException expected){}
                 check(sources.syncDirty(),"Invalid push acknowledgment lost local edits");
             }
+            sources=seed(context,true);
+            try(EntitlementClientChecks.Fixture fixture=new EntitlementClientChecks.Fixture(200,"{\"ok\":true,\"revision\":5,\"sources\":[]}",false)){
+                SourceSyncClient client=new SourceSyncClient(context,new EntitlementClient(context,fixture.url()));
+                check(!client.pullAutomatically()&&fixture.calls.get()==0&&sources.list().size()==1,"Automatic download replaced local edits or uploaded credentials");
+                sources.markSynced(4);sources.setAutomaticDownloadEnabled(false);
+                check(!client.pullAutomatically()&&fixture.calls.get()==0,"Local-only mode contacted server");
+                sources.setAutomaticDownloadEnabled(true);
+                check(client.pullAutomatically()&&fixture.calls.get()==1&&sources.list().isEmpty()&&!profiles.exists(),"Automatic download did not apply cloud deletion");
+                check(!fixture.requests.get(0).has("sources"),"Automatic download uploaded local credentials");
+                check(!client.pullAutomatically()&&fixture.calls.get()==2,"Unchanged revision caused repeated import");
+            }
+            sources=seed(context,true);sources.markSynced(4);
+            try(EntitlementClientChecks.Fixture fixture=new EntitlementClientChecks.Fixture(200,"{\"ok\":true,\"revision\":3,\"sources\":[]}",false)){
+                try{new SourceSyncClient(context,new EntitlementClient(context,fixture.url())).pullAutomatically();throw new AssertionError("Cloud revision went backwards");}catch(IOException expected){}
+                check(sources.list().size()==1,"Older snapshot erased local sources");
+            }
+            sourcePrefs.edit().putString("sources","invalid-encrypted-data").commit();
+            boolean unreadable=false;try{sources.exportForSync();}catch(IllegalStateException expected){unreadable=true;}
+            check(unreadable&&"invalid-encrypted-data".equals(sourcePrefs.getString("sources","")),"Unreadable local source vault was treated as empty");
+            sources=seed(context,true);
             entPrefs.edit().putString("level","FREE").commit();
             try(EntitlementClientChecks.Fixture fixture=new EntitlementClientChecks.Fixture(200,"{\"ok\":true}",false)){
                 SourceSyncClient client=new SourceSyncClient(context,new EntitlementClient(context,fixture.url()));
                 try{client.push();throw new AssertionError("Basic pushed cloud sources");}catch(IOException expected){}
                 try{client.pull();throw new AssertionError("Basic pulled cloud sources");}catch(IOException expected){}
+                check(!client.pullAutomatically(),"Basic downloaded sources automatically");
                 check(fixture.calls.get()==0,"Basic contacted source service");
             }
         }finally{restore(sourcePrefs,oldSources);restore(entPrefs,oldEnt);if(previous==null)profiles.clear();else profiles.save(previous);}

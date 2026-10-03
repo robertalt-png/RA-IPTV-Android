@@ -55,6 +55,20 @@ public final class SourceSyncClient {
         return out;
     }
 
+    /** Download only; background work never uploads credentials or replaces unsynced edits. */
+    public boolean pullAutomatically()throws Exception{
+        if(!entitlement.isPro()||!sources.automaticDownloadEnabled()||sources.syncDirty())return false;
+        SourceStore.SyncSnapshot snapshot=sources.snapshotForSync();
+        JSONObject out=post("pull",new JSONObject());
+        JSONArray remote=out.optJSONArray("sources");
+        int revision=out.optInt("revision",-1);
+        if(remote==null||revision<snapshot.cloudRevision)throw new IOException("INVALID_SOURCE_RESPONSE");
+        validateRows(remote);
+        if(revision==snapshot.cloudRevision)return false;
+        requirePro();
+        return sources.applyAutomaticCloudSnapshotIfUnchanged(remote,revision,snapshot.localRevision);
+    }
+
     public JSONObject push()throws Exception{
         requirePro();
         SourceStore.SyncSnapshot snapshot=sources.snapshotForSync();

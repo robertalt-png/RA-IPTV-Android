@@ -41,16 +41,25 @@ public class ProSourcesActivity extends Activity {
     Button button(String s){Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextColor(0xFFF7F8FA);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));return b;}
 
     void render(){
+        try{renderSources();}
+        catch(IllegalStateException error){
+            box.removeAllViews();
+            box.addView(text(L("Saved sources cannot be read. No sources have been deleted.","Opgeslagen bronnen kunnen niet worden gelezen. Er zijn geen bronnen verwijderd.","Gespeicherte Quellen sind nicht lesbar. Es wurden keine Quellen gelöscht."),16),new LinearLayout.LayoutParams(-1,-2));
+            Button close=button(L("Close","Sluiten","Schließen"));close.setOnClickListener(v->finish());box.addView(close,new LinearLayout.LayoutParams(-1,-2));
+        }
+    }
+
+    void renderSources(){
         box.removeAllViews();
         LinearLayout h=new LinearLayout(this);h.setGravity(Gravity.CENTER_VERTICAL);
         TextView title=text(L("My sources","Mijn bronnen","Meine Quellen"),24);title.setTypeface(null,Typeface.BOLD);h.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button close=button(L("Close","Sluiten","Schließen"));close.setOnClickListener(v->finish());h.addView(close);box.addView(h);
 
-        TextView help=text(L(
-            "NenoTV Pro can keep multiple IPTV sources. The selected source still uses the normal Light import pipeline.",
-            "NenoTV Pro kan meerdere IPTV-bronnen bewaren. De gekozen bron gebruikt nog steeds de normale Light-laadlaag.",
-            "NenoTV Pro kann mehrere IPTV-Quellen speichern. Die gewählte Quelle nutzt weiterhin die normale Light-Ladeschicht."),13);
-        help.setTextColor(0xFFA7AFBC);help.setPadding(0,dp(6),0,dp(12));box.addView(help);
+        Switch download=new Switch(this);
+        download.setText(L("Download account sources automatically","Accountbronnen automatisch ophalen","Kontoquellen automatisch abrufen"));
+        download.setTextColor(0xFFF7F8FA);download.setChecked(sources.automaticDownloadEnabled());
+        download.setOnCheckedChangeListener((v,on)->{sources.setAutomaticDownloadEnabled(on);if(on)com.nenotv.player.entitlement.AutomaticSourceDownload.check(this,()->runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())render();}));});
+        box.addView(download,new LinearLayout.LayoutParams(-1,-2));
 
         Switch smartMerge=new Switch(this);smartMerge.setText(L("Smart Merge · add secondary sources after the active source loads","Smart Merge · voeg secundaire bronnen toe nadat de actieve bron geladen is","Smart Merge · weitere Quellen nach der aktiven Quelle hinzufügen"));smartMerge.setTextColor(0xFFF7F8FA);smartMerge.setChecked(SettingsStore.prefs(this).getBoolean("pro_smart_merge",false));smartMerge.setOnCheckedChangeListener((v,on)->SettingsStore.prefs(this).edit().putBoolean("pro_smart_merge",on).apply());box.addView(smartMerge,new LinearLayout.LayoutParams(-1,dp(56)));
         Switch smartEpg=new Switch(this);smartEpg.setText(L("Smart EPG · use extra EPG sources as fallback","Smart EPG · gebruik extra EPG-bronnen als fallback","Smart EPG · zusätzliche EPG-Quellen als Fallback"));smartEpg.setTextColor(0xFFF7F8FA);smartEpg.setChecked(SettingsStore.prefs(this).getBoolean("pro_smart_epg",false));smartEpg.setOnCheckedChangeListener((v,on)->SettingsStore.prefs(this).edit().putBoolean("pro_smart_epg",on).apply());box.addView(smartEpg,new LinearLayout.LayoutParams(-1,dp(56)));
@@ -98,6 +107,7 @@ public class ProSourcesActivity extends Activity {
             try{
                 new SourceSyncClient(this).sync();
                 runOnUiThread(()->{
+                    if(isFinishing()||isDestroyed())return;
                     Toast.makeText(this,L("Sources synchronized with My NenoTV.","Bronnen gesynchroniseerd met Mijn NenoTV.","Quellen mit Mein NenoTV synchronisiert."),Toast.LENGTH_LONG).show();
                     render();
                 });

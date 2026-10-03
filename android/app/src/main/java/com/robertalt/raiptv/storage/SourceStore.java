@@ -210,6 +210,12 @@ public final class SourceStore {
     }
 
     public synchronized boolean syncDirty(){return prefs.getBoolean(KEY_DIRTY,false);}
+    public boolean automaticDownloadEnabled(){return prefs.getBoolean("automatic_download",true);}
+    public void setAutomaticDownloadEnabled(boolean enabled){synchronized(SYNC_LOCK){prefs.edit().putBoolean("automatic_download",enabled).commit();}}
+    public boolean applyAutomaticCloudSnapshotIfUnchanged(JSONArray remote,int revision,long expected){synchronized(SYNC_LOCK){
+        if(!automaticDownloadEnabled()||syncDirty()||prefs.getLong("local_revision",0L)!=expected)return false;
+        applyCloudSnapshotLocked(remote,revision);return true;
+    }}
     public void touchSync(){synchronized(SYNC_LOCK){markDirty();}}
     public void markSynced(int revision){synchronized(SYNC_LOCK){prefs.edit().putInt("cloud_revision",Math.max(0,revision)).putBoolean(KEY_DIRTY,false).apply();}}
     private void markDirty(){prefs.edit().putBoolean(KEY_DIRTY,true).putLong("local_revision",prefs.getLong("local_revision",0L)+1L).apply();}
@@ -245,7 +251,7 @@ public final class SourceStore {
     private JSONArray readArray(){
         String enc=prefs.getString(KEY_DATA,"");
         if(enc.isEmpty())return new JSONArray();
-        try{return new JSONArray(crypto.decrypt(enc));}catch(Exception e){return new JSONArray();}
+        try{return new JSONArray(crypto.decrypt(enc));}catch(Exception e){throw new IllegalStateException("SOURCE_STORE_UNREADABLE");}
     }
 
     private void write(JSONArray a,String active){
