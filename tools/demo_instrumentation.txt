@@ -22,7 +22,11 @@
         com.nenotv.player.provider.M3uProvider provider=new com.nenotv.player.provider.M3uProvider(p,"nl");
         provider.authenticate();
         java.util.List<MediaEntry> entries=provider.items("live","all");
-        require(entries.size()==2,"Packaged playlist count");
+        require(entries.size()==DemoSource.LIVE_COUNT,"Live count");
+        java.util.List<MediaEntry> films=provider.items("vod","all");require(films.size()==DemoSource.FILM_COUNT,"Film count");
+        entries.addAll(films);
+        java.util.HashSet<String> ids=new java.util.HashSet<>();
+        for(MediaEntry e:entries){require(ids.add(e.tvgId),"Duplicate catalogue item");require(e.plot.contains("https://"),"Missing credits");require(provider.items(e.type,e.group).contains(e),"Category lost entry");}
         for(MediaEntry item:entries){
             final androidx.media3.exoplayer.ExoPlayer[] player={null};
             final android.graphics.SurfaceTexture[] texture={null};
@@ -49,6 +53,7 @@
                 }
                 require(error.get()==null,"Demo playback error: "+item.tvgId+": "+error.get());
                 require(played.get(),"Demo did not render video and decode audio: "+item.tvgId);
+                android.util.Log.i("NenoTVDemoQA","DEMO_STREAM_PASSED="+item.tvgId);
             }finally{runOnMainSync(()->{if(player[0]!=null)player[0].release();if(surface[0]!=null)surface[0].release();if(texture[0]!=null)texture[0].release();});}
         }
         p.name="Renamed demo";profiles.save(p);
@@ -83,7 +88,7 @@
         com.nenotv.player.model.Profile restored=store.load();
         require(DemoPolicy.isDemo(restored),"Demo identity lost after restart: type="+restored.type+", name="+restored.name+", demoUri="+DemoSource.URL.equals(restored.m3uUrl));
         com.nenotv.player.provider.M3uProvider provider=new com.nenotv.player.provider.M3uProvider(store.load());
-        provider.authenticate();require(provider.items("live","all").size()==2,"Demo list lost after restart");
+        provider.authenticate();require(provider.items("live","all").size()==DemoSource.LIVE_COUNT&&provider.items("vod","all").size()==DemoSource.FILM_COUNT,"Demo list lost after restart");
         store.clear();SettingsStore.prefs(c).edit().remove("qa_demo_expected_expiry").commit();
         result.putString("NENOTV_DEMO_RESUME","passed");finish(Activity.RESULT_OK,result);
     }
