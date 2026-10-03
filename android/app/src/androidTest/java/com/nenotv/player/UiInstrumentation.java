@@ -241,6 +241,9 @@ public final class UiInstrumentation extends ImportInstrumentation {
         sourceStore.remove(qaAId);check(sourceStore.syncDirty(),"Local source deletion did not mark sync dirty");
         result.putString("NENOTV_PRO_SOURCES","passed");
         sourceStore.remove(qaBId);
+        // Source-manager checks remove the active profile; restore the demo for playback policy checks.
+        new SecureProfileStore(c).save(profile());
+        check(DemoPolicy.isDemo(new SecureProfileStore(c).load()),"Playback fixture lost its demo profile");
         // Build the provider before selecting the packaged entry.
         com.nenotv.player.provider.M3uProvider provider=new com.nenotv.player.provider.M3uProvider(profile());provider.authenticate();MediaEntry item=provider.items("vod","all").get(0);
         Intent i=ProModuleInstaller.playerIntent(a);i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);i.putExtra("media",item);
