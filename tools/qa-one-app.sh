@@ -3,7 +3,7 @@ set -euo pipefail
 device="$1"
 mkdir -p qa-results
 trap 'timeout 15s adb logcat -d > qa-results/logcat.txt || true; timeout 15s adb pull /sdcard/Android/data/com.nenotv.player/files/qa qa-results/final-screenshots || true' EXIT
-apk="$PWD/distribution/NenoTV-v0.13.11-vc91-TEST-SIGNED.apk"
+apk="$PWD/distribution/NenoTV-v0.13.12-vc92-TEST-SIGNED.apk"
 if [ "$device" = phone ]; then
   java -jar qa-tools/bundletool.jar install-apks --apks=qa-tools/phone.apks
   adb shell pm path com.nenotv.player > qa-results/base-only-paths.txt
