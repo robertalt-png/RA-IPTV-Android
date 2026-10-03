@@ -32,6 +32,7 @@ public final class SourceStore {
     private static final String PREFS="nenotv_sources_v1";
     private static final String KEY_DATA="sources";
     private static final String KEY_ACTIVE="active_id";
+    private static final String KEY_DIRTY="sync_dirty";
     private final Context app;
     private final SharedPreferences prefs;
     private final CryptoBox crypto;
@@ -55,6 +56,7 @@ public final class SourceStore {
             active=id;
         }
         write(a,active);
+        prefs.edit().putBoolean(KEY_DIRTY,legacy.exists()).apply();
     }
 
     public synchronized List<Entry> list(){
@@ -94,7 +96,7 @@ public final class SourceStore {
         catch(Exception ex){throw new IllegalStateException("SOURCE_STORE_UPDATE_FAILED",ex);}
         String active=makeActive?use:prefs.getString(KEY_ACTIVE,"");
         if(active.isEmpty())active=use;
-        write(a,active);
+        write(a,active); markDirty();
         if(makeActive)new SecureProfileStore(app).save(profile);
         return use;
     }
@@ -124,7 +126,7 @@ public final class SourceStore {
         String active=prefs.getString(KEY_ACTIVE,"");
         if(id.equals(active))active="";
         if(active.isEmpty()&&next.length()>0)active=next.optJSONObject(0).optString("id","");
-        write(next,active);
+        write(next,active); markDirty();
         if(!active.isEmpty())setActive(active);
         else new SecureProfileStore(app).clear();
         return true;
@@ -136,7 +138,7 @@ public final class SourceStore {
             JSONObject o=a.optJSONObject(i);
             if(o!=null&&id.equals(o.optString("id"))){try{o.put("enabled",enabled);a.put(i,o);}catch(Exception ex){throw new IllegalStateException("SOURCE_STORE_UPDATE_FAILED",ex);}break;}
         }
-        write(a,prefs.getString(KEY_ACTIVE,""));
+        write(a,prefs.getString(KEY_ACTIVE,"")); markDirty();
     }
 
     public synchronized void move(String id,int delta){
@@ -148,7 +150,7 @@ public final class SourceStore {
         Entry x=all.get(at);all.set(at,all.get(to));all.set(to,x);
         JSONArray a=new JSONArray();
         for(int i=0;i<all.size();i++){all.get(i).priority=i;a.put(toJson(all.get(i)));}
-        write(a,prefs.getString(KEY_ACTIVE,""));
+        write(a,prefs.getString(KEY_ACTIVE,"")); markDirty();
     }
 
     public synchronized JSONArray exportForSync(){
@@ -157,29 +159,31 @@ public final class SourceStore {
         return out;
     }
 
-    public synchronized void mergeFromCloud(JSONArray remote){
+    public synchronized void applyCloudSnapshot(JSONArray remote,int revision){
         if(remote==null)return;
-        List<Entry> local=list();
-        java.util.LinkedHashMap<String,Entry> merged=new java.util.LinkedHashMap<>();
-        for(Entry e:local)merged.put(e.id,e);
+        JSONArray clean=new JSONArray();
         for(int i=0;i<remote.length();i++){
-            JSONObject o=remote.optJSONObject(i); if(o==null)continue;
-            Entry e=fromJson(o); if(e==null||e.id==null||e.id.isEmpty())continue;
-            Entry have=merged.get(e.id);
-            if(have==null||e.updatedAt>=have.updatedAt)merged.put(e.id,e);
+            JSONObject o=remote.optJSONObject(i);if(o==null)continue;
+            Entry e=fromJson(o);if(e==null||e.id==null||e.id.isEmpty())continue;
+            e.priority=clean.length();clean.put(toJson(e));
         }
-        ArrayList<Entry> all=new ArrayList<>(merged.values());
-        Collections.sort(all,Comparator.comparingInt((Entry e)->e.priority).thenComparingLong(e->-e.updatedAt));
-        JSONArray a=new JSONArray();
-        for(int i=0;i<all.size();i++){all.get(i).priority=i;a.put(toJson(all.get(i)));}
         String active=prefs.getString(KEY_ACTIVE,"");
-        if(active.isEmpty()&&!all.isEmpty())active=all.get(0).id;
-        write(a,active);
-        if(!active.isEmpty())setActive(active);
+        boolean activeFound=false;
+        for(int i=0;i<clean.length();i++){
+            JSONObject o=clean.optJSONObject(i);
+            if(o!=null&&active.equals(o.optString("id"))&&o.optBoolean("enabled",true)){activeFound=true;break;}
+        }
+        if(!activeFound)active=clean.length()>0?clean.optJSONObject(0).optString("id",""):"";
+        write(clean,active);
+        prefs.edit().putInt("cloud_revision",Math.max(0,revision)).putBoolean(KEY_DIRTY,false).apply();
+        if(!active.isEmpty())setActive(active); else if(new SecureProfileStore(app).exists())new SecureProfileStore(app).clear();
     }
 
+    public synchronized boolean syncDirty(){return prefs.getBoolean(KEY_DIRTY,false);}
+    public synchronized void markSynced(int revision){prefs.edit().putInt("cloud_revision",Math.max(0,revision)).putBoolean(KEY_DIRTY,false).apply();}
+    private void markDirty(){prefs.edit().putBoolean(KEY_DIRTY,true).apply();}
+
     public synchronized int cloudRevision(){return prefs.getInt("cloud_revision",0);}
-    public synchronized void setCloudRevision(int revision){prefs.edit().putInt("cloud_revision",Math.max(0,revision)).apply();}
 
     private JSONArray readArray(){
         String enc=prefs.getString(KEY_DATA,"");
