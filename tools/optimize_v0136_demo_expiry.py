@@ -12,6 +12,7 @@ for p in (profile,main,store,instr):
 policy.write_text(r'''package com.nenotv.player;
 
 import android.content.*;
+import com.nenotv.player.storage.SettingsStore;
 
 public final class DemoPolicy {
     public static final long DURATION_MS=30L*24L*60L*60L*1000L;
