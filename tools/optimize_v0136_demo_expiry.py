@@ -121,7 +121,7 @@ main.write_text(m,encoding="utf-8")
 
 i=instr.read_text(encoding="utf-8")
 if "import com.nenotv.player.storage.SettingsStore;" not in i:
-    i=i.replace("import com.nenotv.player.storage.SearchIndexStore;","import com.nenotv.player.storage.SearchIndexStore;\\nimport com.nenotv.player.storage.SettingsStore;")
+    i=i.replace("import com.nenotv.player.storage.SearchIndexStore;","import com.nenotv.player.storage.SearchIndexStore;\nimport com.nenotv.player.storage.SettingsStore;")
 anchor='''            store.upsert(PROFILE, Collections.singletonList(entry("movie", "vod")));
 '''
 if anchor not in i: raise SystemExit("Instrumentation anchor missing")
