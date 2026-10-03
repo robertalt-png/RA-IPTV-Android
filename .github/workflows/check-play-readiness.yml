@@ -1,0 +1,61 @@
+name: NenoTV Play binary compatibility
+on:
+  push:
+    branches: [nenotv-v0.13.11-one-app-polish]
+    paths: ['.github/workflows/check-play-readiness.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: NenoTV-v0.13.11-Play-bundle
+          run-id: 37116659717
+          github-token: ${{ github.token }}
+          path: bundle
+      - uses: actions/download-artifact@v4
+        with:
+          name: NenoTV-v0.13.11-test-app
+          run-id: 37116659717
+          github-token: ${{ github.token }}
+          path: apk
+      - name: Check every 64-bit native LOAD segment
+        run: |
+          python - <<'PY'
+          import zipfile,struct,json,pathlib
+          report=[]
+          with zipfile.ZipFile(next(pathlib.Path('bundle').glob('*.aab'))) as z:
+            for name in z.namelist():
+              if not name.endswith('.so') or not any('/'+abi+'/' in name for abi in ('arm64-v8a','x86_64')): continue
+              data=z.read(name)
+              assert data[:5]==b'\x7fELF\x02',name
+              order='<' if data[5]==1 else '>'
+              offset=struct.unpack_from(order+'Q',data,32)[0]
+              size,count=struct.unpack_from(order+'HH',data,54)
+              aligns=[]
+              for index in range(count):
+                pos=offset+index*size
+                if struct.unpack_from(order+'I',data,pos)[0]==1:
+                  aligns.append(struct.unpack_from(order+'Q',data,pos+48)[0])
+              report.append({'library':name,'load_alignments':aligns,'passed':bool(aligns) and all(x>=16384 for x in aligns)})
+          pathlib.Path('native-alignment.json').write_text(json.dumps(report,indent=2))
+          print(json.dumps(report,indent=2))
+          assert report and all(r['passed'] for r in report),'64-bit native library is not 16 KB aligned'
+          PY
+      - name: Check APK zip alignment
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          "$SDKMANAGER" 'build-tools;36.0.0'
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 -v 4 apk/*.apk > zip-alignment.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: NenoTV-v0.13.11-Play-binary-check
+          path: |
+            native-alignment.json
+            zip-alignment.txt

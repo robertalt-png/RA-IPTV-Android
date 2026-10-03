@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/bg">
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
+    <TextView android:id="@+id/profileTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/text" android:textSize="28sp" android:textStyle="bold" />
+    <TextView android:id="@+id/profileIntro" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/muted" android:paddingTop="4dp" android:paddingBottom="14dp" />
+    <RadioGroup android:id="@+id/typeGroup" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+      <RadioButton android:id="@+id/xtreamRadio" android:layout_width="match_parent" android:layout_height="48dp" android:checked="true" android:textColor="@color/text" />
+      <RadioButton android:id="@+id/m3uRadio" android:layout_width="match_parent" android:layout_height="48dp" android:textColor="@color/text" />
+      <RadioButton android:id="@+id/demoRadio" android:layout_width="match_parent" android:layout_height="48dp" android:textColor="@color/text" />
+    </RadioGroup>
+    <LinearLayout android:id="@+id/xtreamFields" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+      <EditText android:id="@+id/serverField" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:inputType="textUri" android:textColor="@color/text" android:textColorHint="@color/muted" android:background="@drawable/bg_search" android:paddingLeft="14dp" android:paddingRight="14dp" />
+      <EditText android:id="@+id/userField" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:textColor="@color/text" android:textColorHint="@color/muted" android:background="@drawable/bg_search" android:paddingLeft="14dp" android:paddingRight="14dp" />
+      <EditText android:id="@+id/passField" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:inputType="textPassword" android:textColor="@color/text" android:textColorHint="@color/muted" android:background="@drawable/bg_search" android:paddingLeft="14dp" android:paddingRight="14dp" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/m3uFields" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+      <EditText android:id="@+id/m3uField" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:inputType="textUri" android:textColor="@color/text" android:textColorHint="@color/muted" android:background="@drawable/bg_search" android:paddingLeft="14dp" android:paddingRight="14dp" />
+    </LinearLayout>
+    <Button android:id="@+id/advancedButton" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="12dp" android:textAllCaps="false" android:textColor="@color/text" android:backgroundTint="@color/panel2" />
+    <LinearLayout android:id="@+id/advancedFields" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+      <EditText android:id="@+id/nameField" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:textColor="@color/text" android:textColorHint="@color/muted" android:background="@drawable/bg_search" android:paddingLeft="14dp" android:paddingRight="14dp" />
+      <EditText android:id="@+id/epgField" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:inputType="textUri" android:textColor="@color/text" android:textColorHint="@color/muted" android:background="@drawable/bg_search" android:paddingLeft="14dp" android:paddingRight="14dp" />
+    </LinearLayout>
+    <Button android:id="@+id/saveButton" android:layout_width="match_parent" android:layout_height="54dp" android:layout_marginTop="14dp" android:textAllCaps="false" android:textColor="#FFFFFF" android:backgroundTint="@color/accent" />
+    <TextView android:id="@+id/profileStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/muted" android:padding="8dp" />
+  </LinearLayout>
+</ScrollView>

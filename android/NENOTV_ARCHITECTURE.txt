@@ -1,0 +1,9 @@
+NenoTV v0.13.11
+package=com.nenotv.player
+versionCode=91
+versionName=0.13.11
+one_app=Light base + entitlement-gated Pro module
+play=AAB;on-demand Pro
+test=universal APK derived from the same AAB
+source=android/
+demo=17 open films + 2 EU live channels

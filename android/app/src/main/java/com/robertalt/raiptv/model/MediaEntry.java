@@ -1,0 +1,29 @@
+package com.nenotv.player.model;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+
+public class MediaEntry implements Serializable {
+    public String id="", streamId="", seriesId="", name="Untitled", logo="", backdrop="", categoryId="", type="live", rating="", year="", plot="", extension="", directSource="", url="", group="", tvgId="", tvgName="", seriesTitle="", tmdbId="", imdbId="";
+    public int season=0, episode=0, catchupDays=0;
+    public boolean catchup=false;
+    public ArrayList<String> candidates = new ArrayList<>();
+    public String uniqueKey(){ return type+":"+(id.isEmpty()?url:id); }
+    public String displayYear(){if(year==null)return "";java.util.regex.Matcher m=java.util.regex.Pattern.compile("(?:19|20)\\d{2}").matcher(year);return m.find()?m.group():year.trim();}
+    public static String formatRating(String value){
+        if(value==null)return "";
+        try{double d=Double.parseDouble(value.trim().replace(",","."));
+            if(!Double.isFinite(d)||d<=0||d>10)return "";
+            return new java.text.DecimalFormat("0.#").format(d);
+        }catch(Exception ignored){return "";}
+    }
+
+    public String meta(){
+        StringBuilder s=new StringBuilder();
+        String dy=displayYear();if(!dy.isEmpty()) s.append(dy);
+        if(!formatRating(rating).isEmpty()){ if(s.length()>0)s.append(" · "); s.append("★ ").append(formatRating(rating)); }
+        if(type.equals("episode")){ if(s.length()>0)s.append(" · "); s.append("S").append(season).append("E").append(episode); }
+        if(!plot.isEmpty()){ if(s.length()>0)s.append("\n"); s.append(plot); }
+        return s.toString();
+    }
+}

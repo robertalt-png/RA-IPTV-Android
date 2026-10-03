@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:dist="http://schemas.android.com/apk/distribution"
+          xmlns:tools="http://schemas.android.com/tools">
+  <dist:module dist:instant="false" dist:title="@string/title_proextras">
+    <dist:delivery><dist:on-demand/></dist:delivery>
+    <dist:fusing dist:include="true"/>
+  </dist:module>
+  <application>
+    <provider
+      android:name="com.google.mlkit.common.internal.MlKitInitProvider"
+      android:authorities="${applicationId}.mlkitinitprovider"
+      tools:node="remove"/>
+    <activity
+      android:name="com.nenotv.player.proextras.ProPlayerActivity"
+      android:exported="false"
+      android:configChanges="keyboardHidden|orientation|screenSize"
+      android:supportsPictureInPicture="true"/>
+  </application>
+</manifest>

@@ -1,0 +1,1 @@
+Register/host this receiver in Google Cast SDK Developer Console and build with NENOTV_CAST_RECEIVER_ID. Without an ID, NenoTV uses Default Media Receiver plus LAN relay fallback. Relay does not transcode unsupported codecs.
