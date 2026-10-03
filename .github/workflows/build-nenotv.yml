@@ -8,7 +8,7 @@ permissions:
   contents: read
   actions: read
 concurrency:
-  group: nenotv-one-app-${{ github.ref }}
+  group: nenotv-one-app-${{ github.sha }}
   cancel-in-progress: true
 jobs:
   build:
