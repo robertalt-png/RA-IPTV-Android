@@ -8,7 +8,7 @@ The playlist is compiled into `DemoSource` and read through the reserved `nenotv
 
 ## Release validation
 
-The Android instrumentation `demo` phase opens the real onboarding activity, taps its demo choice, verifies the persisted profile and unchanged expiration on repeated activation, parses the actual packaged playlist, then uses Media3 on an Android surface for every entry. Each must render a video frame, expose an audio format and advance playback by at least 1.5 seconds without a player error. It also checks expiration after profile renaming and allows a user's own source after demo expiration. The build fails unless `NENOTV_DEMO_TESTS=passed` appears for both Light and modular base.
+The Android instrumentation `demo` phase opens the real onboarding activity, taps its demo choice, verifies the persisted profile and unchanged expiration on repeated activation, parses the actual packaged playlist, then uses Media3 on an Android surface for every entry. Each must render a video frame, expose an audio format and advance playback by at least 1.5 seconds without a player error. It also checks expiration after profile renaming, disables the expired demo in Dutch, English and German, and allows a user's own source after demo expiration. A second instrumentation process verifies that the saved demo profile, playlist and original expiry survive a force-stop without restarting the trial. The build fails unless `NENOTV_DEMO_TESTS=passed` appears for both Light and modular base.
 
 Existing import and process-restart tests remain in the workflow. Playback checks use live upstream streams and therefore fail when an upstream endpoint is unavailable; such a failure must be investigated rather than bypassed.
 

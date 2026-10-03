@@ -57,7 +57,31 @@
         require(DemoPolicy.startOrKeep(c,System.currentTimeMillis())<0,"Expired demo restarted");
         p.m3uUrl="https://example.com/own.m3u";profiles.save(p);
         require(!DemoPolicy.blockPlayback(c),"Demo expiry blocked own source");
-        profiles.clear();
+        for(String language:new String[]{"nl","en","de"}){
+            SettingsStore.setPrimaryLanguage(c,language);
+            ProfileActivity expired=(ProfileActivity)startActivitySync(new Intent(c,ProfileActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            waitForIdleSync();
+            runOnMainSync(()->{require(!expired.demoRadio.isEnabled(),"Expired demo enabled in "+language);expired.finish();});
+        }
+        // Persist a valid trial for the next instrumentation process.
+        SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_started_at").remove("demo_expires_at").commit();
+        long persistedExpiry=DemoPolicy.startOrKeep(c,System.currentTimeMillis());
+        SettingsStore.prefs(c).edit().putLong("qa_demo_expected_expiry",persistedExpiry).commit();
+        p.name="NenoTV Demo";p.m3uUrl=DemoSource.URL;profiles.save(p);
         result.putString("NENOTV_DEMO_TESTS","passed");
         finish(Activity.RESULT_OK,result);
+    }
+
+    private void verifyDemoResume(Bundle result) throws Exception {
+        android.content.Context c=getTargetContext();
+        long expected=SettingsStore.prefs(c).getLong("qa_demo_expected_expiry",0);
+        require(expected>System.currentTimeMillis(),"Trial expiry missing after restart");
+        require(DemoPolicy.expiresAt(c)==expected,"Trial expiry changed after restart");
+        require(DemoPolicy.startOrKeep(c,System.currentTimeMillis())==expected,"Restart extended trial");
+        com.nenotv.player.storage.SecureProfileStore store=new com.nenotv.player.storage.SecureProfileStore(c);
+        require(store.exists()&&DemoPolicy.isDemo(store.load()),"Demo profile lost after restart");
+        com.nenotv.player.provider.M3uProvider provider=new com.nenotv.player.provider.M3uProvider(store.load());
+        provider.authenticate();require(provider.items("live","all").size()==2,"Demo list lost after restart");
+        store.clear();SettingsStore.prefs(c).edit().remove("qa_demo_expected_expiry").commit();
+        result.putString("NENOTV_DEMO_RESUME","passed");finish(Activity.RESULT_OK,result);
     }

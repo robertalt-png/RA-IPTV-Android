@@ -67,19 +67,19 @@ if anchor not in s:
 s = s.replace(anchor, '''    private final android.os.Handler demoHandler=new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable demoExpiryCheck=new Runnable(){public void run(){
         if(isFinishing()||isDestroyed())return;
-        if(DemoPolicy.blockPlayback(PlayerActivity.this)){finish();return;}
+        if(DemoPolicy.expired(PlayerActivity.this)){finish();return;}
         demoHandler.postDelayed(this,1000);
     }};
 ''' + anchor, 1)
-s = s.replace('if(DemoPolicy.blockPlayback(this)){finish();return;}', 'if(DemoPolicy.blockPlayback(this)){finish();return;}demoHandler.post(demoExpiryCheck);', 1)
+s = s.replace('if(DemoPolicy.blockPlayback(this)){finish();return;}', 'if(DemoPolicy.blockPlayback(this)){finish();return;}com.nenotv.player.storage.SecureProfileStore demoStore=new com.nenotv.player.storage.SecureProfileStore(this);if(demoStore.exists()&&DemoPolicy.isDemo(demoStore.load()))demoHandler.post(demoExpiryCheck);', 1)
 player.write_text(s)
 
 # Existing import tests stay intact. This additional phase exercises the real one-tap UI,
 # provider/parser, and Media3 audio/video decoding against every packaged stream.
 instr = root / 'app/src/androidTest/java/com/nenotv/player/ImportInstrumentation.java'
 replace(instr, '    @Override public void onStart() {', (repo / 'tools/demo_instrumentation.txt').read_text() + '\n    @Override public void onStart() {')
-replace(instr, 'if ("prepare_resume".equals(phase))', 'if ("demo".equals(phase)) demoSuite(result);\n            else if ("prepare_resume".equals(phase))')
-replace(instr, 'String key="prepare_resume".equals(phase)?', 'String key="demo".equals(phase)?"NENOTV_DEMO_TESTS":"prepare_resume".equals(phase)?')
+replace(instr, 'if ("prepare_resume".equals(phase))', 'if ("demo".equals(phase)) demoSuite(result);\n            else if ("demo_resume".equals(phase)) verifyDemoResume(result);\n            else if ("prepare_resume".equals(phase))')
+replace(instr, 'String key="prepare_resume".equals(phase)?', 'String key="demo_resume".equals(phase)?"NENOTV_DEMO_RESUME":"demo".equals(phase)?"NENOTV_DEMO_TESTS":"prepare_resume".equals(phase)?')
 
 mode = sys.argv[1]
 vc = 87 if mode == 'light' else 88

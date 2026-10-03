@@ -159,6 +159,9 @@ jobs:
             grep -q 'NENOTV_RESUME_VERIFY=passed' "$GITHUB_WORKSPACE/import-resume-verify.txt"
             adb shell am instrument -w -e phase demo com.nenotv.player.test/com.nenotv.player.ImportInstrumentation | tee "$GITHUB_WORKSPACE/demo-playback-tests.txt"
             grep -q 'NENOTV_DEMO_TESTS=passed' "$GITHUB_WORKSPACE/demo-playback-tests.txt"
+            adb shell am force-stop com.nenotv.player
+            adb shell am instrument -w -e phase demo_resume com.nenotv.player.test/com.nenotv.player.ImportInstrumentation | tee "$GITHUB_WORKSPACE/demo-resume-tests.txt"
+            grep -q 'NENOTV_DEMO_RESUME=passed' "$GITHUB_WORKSPACE/demo-resume-tests.txt"
 
 
       - name: Archive Light source
@@ -179,6 +182,7 @@ jobs:
             import-resume-prepare.txt
             import-resume-verify.txt
             demo-playback-tests.txt
+            demo-resume-tests.txt
           if-no-files-found: error
           retention-days: 90
 
@@ -327,6 +331,9 @@ jobs:
             grep -q 'NENOTV_RESUME_VERIFY=passed' "$GITHUB_WORKSPACE/import-resume-verify.txt"
             adb shell am instrument -w -e phase demo com.nenotv.player.test/com.nenotv.player.ImportInstrumentation | tee "$GITHUB_WORKSPACE/demo-playback-tests.txt"
             grep -q 'NENOTV_DEMO_TESTS=passed' "$GITHUB_WORKSPACE/demo-playback-tests.txt"
+            adb shell am force-stop com.nenotv.player
+            adb shell am instrument -w -e phase demo_resume com.nenotv.player.test/com.nenotv.player.ImportInstrumentation | tee "$GITHUB_WORKSPACE/demo-resume-tests.txt"
+            grep -q 'NENOTV_DEMO_RESUME=passed' "$GITHUB_WORKSPACE/demo-resume-tests.txt"
 
 
       - name: Archive modular source
@@ -350,5 +357,6 @@ jobs:
             import-resume-prepare.txt
             import-resume-verify.txt
             demo-playback-tests.txt
+            demo-resume-tests.txt
           if-no-files-found: error
           retention-days: 90
