@@ -112,7 +112,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
         String qaAId=sourceStore.upsert("",qaA,true),qaBId=sourceStore.upsert("",qaB,false);
         check(sourceStore.list().size()>=2,"Pro multi-source registry did not retain multiple sources");
         check(sourceStore.setActive(qaBId)&&"QA Source B".equals(new SecureProfileStore(c).load().name),"Active Pro source did not mirror into Light provider profile");
-        sourceStore.setEnabled(qaBId,false);check(qaAId.equals(sourceStore.activeId())&&"QA Source A".equals(new SecureProfileStore(c).load().name),"Disabling active source did not fail over the Light profile");
+        sourceStore.setEnabled(qaBId,false);String fallbackId=sourceStore.activeId();SourceStore.Entry fallbackEntry=null;for(SourceStore.Entry candidate:sourceStore.list())if(candidate.id.equals(fallbackId)){fallbackEntry=candidate;break;}check(!qaBId.equals(fallbackId)&&fallbackEntry!=null&&fallbackEntry.enabled&&fallbackEntry.profile.name.equals(new SecureProfileStore(c).load().name),"Disabling active source did not fail over the Light profile");
         sourceStore.setEnabled(qaBId,true);check(sourceStore.setActive(qaBId),"Re-enabled source could not become active again");
         org.json.JSONArray syncCopy=sourceStore.exportForSync();check(syncCopy.length()>=2,"Source sync export lost entries");
         sourceStore.markSynced(1);
