@@ -16,11 +16,14 @@ import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;\nimport android.widget.ArrayAdapter;\nimport android.widget.Button;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;\nimport android.widget.Spinner;
+import android.widget.ScrollView;
+import android.widget.Spinner;
 import android.widget.Space;
 import android.widget.TextView;
 
@@ -29,7 +32,8 @@ import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
-import java.io.InputStreamReader;\nimport java.io.OutputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -61,7 +65,7 @@ public class MainActivity extends Activity {
     private final String[] tabNames = {"Overzicht", "Analytics", "App", "Meer"};
 
     private SharedPreferences prefs;
-    private SharedPreferences prefs;\n    private JSONObject data;
+    private JSONObject data;
     private LinearLayout content;
     private LinearLayout tabStrip;
     private TextView updatedView;
