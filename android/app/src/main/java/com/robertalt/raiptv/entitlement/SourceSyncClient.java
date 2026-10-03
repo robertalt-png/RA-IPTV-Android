@@ -25,21 +25,14 @@ public final class SourceSyncClient {
 
     public JSONObject sync() throws Exception {
         if(!entitlement.isPro())throw new IOException("PRO_REQUIRED");
-        JSONObject pulled=post("pull",baseBody());
-        JSONArray remote=pulled.optJSONArray("sources");
-        if(remote!=null)sources.mergeFromCloud(remote);
-        JSONObject push=baseBody();
-        push.put("sources",sources.exportForSync());
-        JSONObject pushed=post("push",push);
-        sources.setCloudRevision(pushed.optInt("revision",pulled.optInt("revision",0)));
-        return pushed;
+        if(sources.syncDirty())return push();
+        return pull();
     }
 
     public JSONObject pull() throws Exception {
         JSONObject out=post("pull",baseBody());
         JSONArray remote=out.optJSONArray("sources");
-        if(remote!=null)sources.mergeFromCloud(remote);
-        sources.setCloudRevision(out.optInt("revision",0));
+        if(remote!=null)sources.applyCloudSnapshot(remote,out.optInt("revision",0));
         return out;
     }
 
@@ -47,7 +40,7 @@ public final class SourceSyncClient {
         JSONObject body=baseBody();
         body.put("sources",sources.exportForSync());
         JSONObject out=post("push",body);
-        sources.setCloudRevision(out.optInt("revision",0));
+        sources.markSynced(out.optInt("revision",0));
         return out;
     }
 
