@@ -63,10 +63,17 @@ jobs:
           set -euo pipefail
           cd base/RA_IPTV_Android_v0.1
           python3 "$GITHUB_WORKSPACE/tools/prepare_v0132_architecture.py" light
+          gzip -dc "$GITHUB_WORKSPACE/.github/patches/v0133-common.patch.gz" | git apply --check -
+          gzip -dc "$GITHUB_WORKSPACE/.github/patches/v0133-common.patch.gz" | git apply -
+          python3 "$GITHUB_WORKSPACE/tools/finalize_v0133.py" light
           grep -q "applicationId 'com.nenotv.player'" app/build.gradle
-          grep -q "versionCode 71" app/build.gradle
-          grep -q "versionName '0.13.2-light-test'" app/build.gradle
+          grep -q "versionCode 75" app/build.gradle
+          grep -q "versionName '0.13.3-light-test'" app/build.gradle
           grep -q "LIGHT_BUILD', 'true'" app/build.gradle
+          grep -q 'onboarding=simplified_xtream_m3u_demo' NENOTV_ARCHITECTURE.txt
+          grep -q 'import_resume=durable_sqlite_checkpoint' NENOTV_ARCHITECTURE.txt
+          grep -q 'try_demo_30_days' app/src/main/java/com/robertalt/raiptv/UiText.java
+          grep -q 'import_progress' app/src/main/java/com/robertalt/raiptv/storage/SearchIndexStore.java
           test ! -d proextras
           ! grep -q "dynamicFeatures" app/build.gradle
           ! grep -q "feature-delivery" app/build.gradle
@@ -94,6 +101,8 @@ jobs:
 
       - name: Build pure Light release APK
         working-directory: base/RA_IPTV_Android_v0.1
+        env:
+          NENOTV_DEMO_M3U_URL: ${{ secrets.NENOTV_DEMO_M3U_URL }}
         run: |
           set -euo pipefail
           rm -rf app/build build .gradle
@@ -193,10 +202,17 @@ jobs:
           set -euo pipefail
           cd base/RA_IPTV_Android_v0.1
           python3 "$GITHUB_WORKSPACE/tools/prepare_v0132_architecture.py" modular
+          gzip -dc "$GITHUB_WORKSPACE/.github/patches/v0133-common.patch.gz" | git apply --check -
+          gzip -dc "$GITHUB_WORKSPACE/.github/patches/v0133-common.patch.gz" | git apply -
+          python3 "$GITHUB_WORKSPACE/tools/finalize_v0133.py" modular
           grep -q "applicationId 'com.nenotv.player'" app/build.gradle
-          grep -q "versionCode 74" app/build.gradle
-          grep -q "versionName '0.13.2-play3'" app/build.gradle
+          grep -q "versionCode 76" app/build.gradle
+          grep -q "versionName '0.13.3-play1'" app/build.gradle
           grep -q "dynamicFeatures = \[':proextras'\]" app/build.gradle
+          grep -q 'onboarding=simplified_xtream_m3u_demo' NENOTV_ARCHITECTURE.txt
+          grep -q 'import_resume=durable_sqlite_checkpoint' NENOTV_ARCHITECTURE.txt
+          grep -q 'try_demo_30_days' app/src/main/java/com/robertalt/raiptv/UiText.java
+          grep -q 'import_progress' app/src/main/java/com/robertalt/raiptv/storage/SearchIndexStore.java
           grep -Rqs "provider.items" app/src/main/java
           grep -Rqs "provider.categories" app/src/main/java
           ! grep -RniE 'provider\.items|provider\.categories|XtreamProvider|M3uProvider|HttpText|XtreamUrls|com\.nenotv\.player\.provider' proextras/src/main/java
@@ -223,6 +239,8 @@ jobs:
 
       - name: Build modular Play AAB
         working-directory: base/RA_IPTV_Android_v0.1
+        env:
+          NENOTV_DEMO_M3U_URL: ${{ secrets.NENOTV_DEMO_M3U_URL }}
         run: |
           set -euo pipefail
           rm -rf app/build proextras/build build .gradle
