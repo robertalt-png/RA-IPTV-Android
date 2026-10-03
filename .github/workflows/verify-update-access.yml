@@ -2,7 +2,7 @@ name: Verify update deadline and Basic access
 on:
   push:
     branches: [nenotv-update-notifications]
-    paths: ['android/**', 'tools/tests/UpdatePromptPolicyTest.java', '.github/workflows/verify-update-access.yml']
+    paths: ['android/**', 'tools/tests/**', 'tools/test-*.sh', '.github/workflows/verify-update-access.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,6 +21,8 @@ jobs:
           gradle-version: '8.13'
       - name: Check deadline boundaries and reminders
         run: bash tools/test-update-policy.sh
+      - name: Check Pro language and quality ordering
+        run: bash tools/test-pro-optimizer.sh
       - name: Compile app and access integration tests
         working-directory: android
         run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest

@@ -209,6 +209,12 @@ public final class UiInstrumentation extends ImportInstrumentation {
         MediaEntry langNl=new MediaEntry();langNl.type="live";langNl.id="lang-nl";langNl.name="NL - QA";langNl.group="NL | Algemeen";
         List<MediaEntry> ranked=ProLibraryBridge.optimize(a,Arrays.asList(langEn,langNl),"live","nl");
         check(ranked.size()==2&&ranked.get(0)==langNl,"Pro preferred-language optimizer did not rank Dutch first");
+        MediaEntry sd=new MediaEntry();sd.type="live";sd.id="sd";sd.name="A Channel SD";sd.group="NL | General";
+        MediaEntry hd=new MediaEntry();hd.type="live";hd.id="hd";hd.name="Z Channel HD";hd.group="NL | General";
+        MediaEntry radio=new MediaEntry();radio.type="live";radio.id="radio";radio.name="A FM";radio.group="NL | General";
+        MediaEntry npo=new MediaEntry();npo.type="live";npo.id="npo";npo.name="NPO 1 HD";npo.group="NL | General";
+        List<MediaEntry> quality=ProLibraryBridge.optimize(a,Arrays.asList(sd,radio,hd,npo),"live","nl");
+        check(quality.get(0)==npo&&quality.get(1)==hd&&quality.get(3)==radio,"Pro quality/main-channel/radio ranking failed");
         result.putString("NENOTV_PRO_LANGUAGE","passed");
         SourceStore sourceStore=new SourceStore(c);
         com.nenotv.player.model.Profile qaA=new com.nenotv.player.model.Profile();qaA.type=com.nenotv.player.model.Profile.Type.M3U;qaA.name="QA Source A";qaA.m3uUrl=DemoSource.URL;
