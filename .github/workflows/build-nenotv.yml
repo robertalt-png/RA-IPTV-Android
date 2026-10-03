@@ -1,7 +1,7 @@
 name: NenoTV one app v0.13.12
 on:
   push:
-    branches: [nenotv-v0.13.11-work-handoff]
+    branches: [nenotv-v0.13.11-work-handoff, nenotv-pro-2.0]
     paths: ['android/**', '.github/workflows/build-nenotv.yml', 'tools/qa-one-app.sh']
   workflow_dispatch:
 permissions:
