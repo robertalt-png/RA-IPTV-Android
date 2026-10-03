@@ -3,7 +3,8 @@ from pathlib import Path
 root=Path(".")
 main=root/"app/src/main/java/com/robertalt/raiptv/MainActivity.java"
 instr=root/"app/src/androidTest/java/com/nenotv/player/ImportInstrumentation.java"
-for p in (main,instr):\n    if not p.exists(): raise SystemExit(f"missing {p}")
+for p in (main,instr):
+    if not p.exists(): raise SystemExit(f"missing {p}")
 m=main.read_text(encoding="utf-8")
 
 old='''                    final String[] baseTypes={"live","vod","series"};
