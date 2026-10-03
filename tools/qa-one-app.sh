@@ -2,6 +2,7 @@
 set -euo pipefail
 device="$1"
 mkdir -p qa-results
+trap 'timeout 15s adb logcat -d > qa-results/logcat.txt || true; timeout 15s adb pull /sdcard/Android/data/com.nenotv.player/files/qa qa-results/final-screenshots || true' EXIT
 apk="$PWD/distribution/NenoTV-v0.13.11-vc91-TEST-SIGNED.apk"
 if [ "$device" = phone ]; then
   java -jar qa-tools/bundletool.jar install-apks --apks=qa-tools/phone.apks
@@ -27,7 +28,7 @@ if [ "$device" = phone ]; then
       demo) key=NENOTV_DEMO_TESTS;;
       demo_resume) key=NENOTV_DEMO_RESUME;;
     esac
-    adb shell am instrument -w -e phase "$phase" com.nenotv.player.test/com.nenotv.player.ImportInstrumentation | tee "qa-results/$phase.txt"
+    adb shell am instrument -w -e phase "$phase" com.nenotv.player.test/com.nenotv.player.UiInstrumentation | tee "qa-results/$phase.txt"
     rg -q "$key=passed" "qa-results/$phase.txt"
     adb shell am force-stop com.nenotv.player
   done

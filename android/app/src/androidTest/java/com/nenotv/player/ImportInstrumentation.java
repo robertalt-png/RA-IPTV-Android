@@ -13,7 +13,7 @@ import java.io.InterruptedIOException;
 import java.util.ArrayList;
 import java.util.Collections;
 
-public final class ImportInstrumentation extends Instrumentation {
+public class ImportInstrumentation extends Instrumentation {
     private static final String PROFILE = "nenotv-import-qa";
     private Bundle args;
 

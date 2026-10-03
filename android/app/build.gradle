@@ -9,7 +9,7 @@ android {
     compileSdk 36
 
     defaultConfig {
-        testInstrumentationRunner "com.nenotv.player.ImportInstrumentation"
+        testInstrumentationRunner "com.nenotv.player.UiInstrumentation"
         applicationId 'com.nenotv.player'
         minSdk 26
         targetSdk 36

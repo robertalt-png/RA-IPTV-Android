@@ -13,9 +13,9 @@ import java.io.*;
 import java.net.*;
 
 /** Exercise user-visible behaviour on the actual universal APK generated from the Play AAB. */
-public final class UiInstrumentation extends Instrumentation {
+public final class UiInstrumentation extends ImportInstrumentation {
     Bundle args;
-    @Override public void onCreate(Bundle b){args=b==null?new Bundle():b;super.onCreate(b);start();}
+    @Override public void onCreate(Bundle b){args=b==null?new Bundle():b;super.onCreate(b);}
     static void check(boolean condition,String message){if(!condition)throw new AssertionError(message);}
     static MediaEntry episode(int season,int episode){MediaEntry e=new MediaEntry();e.id="ui-s"+season+"-e"+episode;e.name="QA series · S"+season+"E"+episode;e.type="episode";e.season=season;e.episode=episode;e.seriesId="ui-series";return e;}
     static EpgEntry programme(String title,long start,long end){EpgEntry e=new EpgEntry();e.title=title;e.startEpoch=start;e.endEpoch=end;return e;}
@@ -104,7 +104,7 @@ public final class UiInstrumentation extends Instrumentation {
         c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE).edit().putString("level","FREE").commit();new SecureProfileStore(c).clear();runOnMainSync(a::finish);result.putString("NENOTV_PRO_RUNTIME","passed");finish(Activity.RESULT_OK,result);
     }
     static com.nenotv.player.model.Profile profile(){com.nenotv.player.model.Profile p=new com.nenotv.player.model.Profile();p.type=com.nenotv.player.model.Profile.Type.M3U;p.m3uUrl=DemoSource.URL;p.name="Demo QA";return p;}
-    @Override public void onStart(){Bundle result=new Bundle();String phase=args.getString("phase","ui");try{if("resume".equals(phase))resume(result);else if("pro".equals(phase)){Context c=getTargetContext();SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();DemoPolicy.startOrKeep(c,System.currentTimeMillis());new SecureProfileStore(c).save(profile());pro(result);}else core(result);}catch(Throwable failure){result.putString("NENOTV_UI_TESTS","failed: "+failure.getClass().getSimpleName()+": "+failure.getMessage());finish(Activity.RESULT_CANCELED,result);}}
+    @Override public void onStart(){Bundle result=new Bundle();String phase=args.getString("phase","ui");if(!Arrays.asList("ui","resume","pro").contains(phase)){super.onStart();return;}try{if("resume".equals(phase))resume(result);else if("pro".equals(phase)){Context c=getTargetContext();SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();DemoPolicy.startOrKeep(c,System.currentTimeMillis());new SecureProfileStore(c).save(profile());pro(result);}else core(result);}catch(Throwable failure){result.putString("NENOTV_UI_TESTS","failed: "+failure.getClass().getSimpleName()+": "+failure.getMessage());finish(Activity.RESULT_CANCELED,result);}}
     static final class ImageFixture implements AutoCloseable{
         final ServerSocket socket;final byte[] png;final Thread worker;
         ImageFixture()throws Exception{socket=new ServerSocket(0,8,InetAddress.getByName("127.0.0.1"));Bitmap b=Bitmap.createBitmap(32,48,Bitmap.Config.RGB_565);b.eraseColor(0xFF005A9C);ByteArrayOutputStream out=new ByteArrayOutputStream();b.compress(Bitmap.CompressFormat.PNG,100,out);png=out.toByteArray();b.recycle();worker=new Thread(()->{while(!socket.isClosed())try(Socket s=socket.accept()){BufferedReader reader=new BufferedReader(new InputStreamReader(s.getInputStream()));String request=reader.readLine(),line;while((line=reader.readLine())!=null&&!line.isEmpty()){}boolean ok=request!=null&&request.contains("/ok ");byte[] body=ok?png:new byte[0];OutputStream response=s.getOutputStream();response.write(((ok?"HTTP/1.1 200 OK":"HTTP/1.1 404 Not Found")+"\r\nContent-Type: image/png\r\nContent-Length: "+body.length+"\r\nConnection: close\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.US_ASCII));response.write(body);response.flush();
