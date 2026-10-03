@@ -143,6 +143,11 @@ jobs:
             adb install "$GITHUB_WORKSPACE/base/RA_IPTV_Android_v0.1/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
             adb shell am instrument -w com.nenotv.player.test/com.nenotv.player.ImportInstrumentation | tee "$GITHUB_WORKSPACE/library-import-tests.txt"
             grep -q 'NENOTV_IMPORT_TESTS=passed' "$GITHUB_WORKSPACE/library-import-tests.txt"
+            adb shell am instrument -w -e phase prepare_resume com.nenotv.player.test/com.nenotv.player.ImportInstrumentation | tee "$GITHUB_WORKSPACE/import-resume-prepare.txt"
+            grep -q 'NENOTV_RESUME_PREPARE=passed' "$GITHUB_WORKSPACE/import-resume-prepare.txt"
+            adb shell am force-stop com.nenotv.player
+            adb shell am instrument -w -e phase verify_resume com.nenotv.player.test/com.nenotv.player.ImportInstrumentation | tee "$GITHUB_WORKSPACE/import-resume-verify.txt"
+            grep -q 'NENOTV_RESUME_VERIFY=passed' "$GITHUB_WORKSPACE/import-resume-verify.txt"
 
 
       - name: Archive Light source
@@ -159,6 +164,8 @@ jobs:
             light-signature.txt
             light-startup-logcat.txt
             library-import-tests.txt
+            import-resume-prepare.txt
+            import-resume-verify.txt
           if-no-files-found: error
           retention-days: 90
 
@@ -285,6 +292,11 @@ jobs:
             adb install "$GITHUB_WORKSPACE/base/RA_IPTV_Android_v0.1/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
             adb shell am instrument -w com.nenotv.player.test/com.nenotv.player.ImportInstrumentation | tee "$GITHUB_WORKSPACE/library-import-tests.txt"
             grep -q 'NENOTV_IMPORT_TESTS=passed' "$GITHUB_WORKSPACE/library-import-tests.txt"
+            adb shell am instrument -w -e phase prepare_resume com.nenotv.player.test/com.nenotv.player.ImportInstrumentation | tee "$GITHUB_WORKSPACE/import-resume-prepare.txt"
+            grep -q 'NENOTV_RESUME_PREPARE=passed' "$GITHUB_WORKSPACE/import-resume-prepare.txt"
+            adb shell am force-stop com.nenotv.player
+            adb shell am instrument -w -e phase verify_resume com.nenotv.player.test/com.nenotv.player.ImportInstrumentation | tee "$GITHUB_WORKSPACE/import-resume-verify.txt"
+            grep -q 'NENOTV_RESUME_VERIFY=passed' "$GITHUB_WORKSPACE/import-resume-verify.txt"
 
 
       - name: Archive modular source
@@ -304,5 +316,7 @@ jobs:
             modular-installed-paths.txt
             modular-base-startup-logcat.txt
             library-import-tests.txt
+            import-resume-prepare.txt
+            import-resume-verify.txt
           if-no-files-found: error
           retention-days: 90
