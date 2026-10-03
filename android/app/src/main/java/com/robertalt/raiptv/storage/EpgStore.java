@@ -27,8 +27,11 @@ public class EpgStore extends SQLiteOpenHelper {
         String key="timeline2|"+profile+"|"+channel.uniqueKey();Object lock=fetchLocks.computeIfAbsent(key,k->new Object());
         synchronized(lock){try{
             if(fresh(key))return com.nenotv.player.EpgTimeline.normalize(get(key));
-            List<EpgEntry> rows=com.nenotv.player.EpgTimeline.normalize(provider.epgEntries(channel,50));
-            if(rows.isEmpty()&&new EntitlementStore(app).isPro()&&SettingsStore.prefs(app).getBoolean("pro_smart_epg",false)){
+            boolean smart=new EntitlementStore(app).isPro()&&SettingsStore.prefs(app).getBoolean("pro_smart_epg",false);
+            List<EpgEntry> rows;
+            try{rows=com.nenotv.player.EpgTimeline.normalize(provider.epgEntries(channel,50));}
+            catch(Exception primaryFailure){if(!smart)throw primaryFailure;rows=Collections.emptyList();}
+            if(rows.isEmpty()&&smart){
                 String sourceId=channel.sourceId==null||channel.sourceId.isEmpty()?new SourceStore(app).activeId():channel.sourceId;
                 for(String url:new SmartEpgStore(app).urls(sourceId)){
                     try{
