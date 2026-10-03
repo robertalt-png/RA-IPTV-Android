@@ -50,6 +50,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
                         Thread.sleep(100);
                     }
                     check(a.profile!=null&&a.searchIndex.isComplete(a.profileKey(),"vod")&&a.searchIndex.isComplete(a.profileKey(),"series"),"Shared Xtream import did not complete");
+                    Thread.sleep(1700);
                     for(String action:new String[]{"get_live_streams","get_vod_streams","get_series"})check(fixture.count(action)==1,"Duplicate Xtream download: "+action+"="+fixture.count(action));
                     java.util.concurrent.atomic.AtomicBoolean populated=new java.util.concurrent.atomic.AtomicBoolean();
                     long visibleDeadline=SystemClock.elapsedRealtime()+5000;
