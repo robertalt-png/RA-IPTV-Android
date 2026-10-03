@@ -18,6 +18,7 @@ if [ "$device" = phone ]; then
 fi
 adb install "$apk"
 adb install qa-tools/tests.apk
+adb shell settings put secure immersive_mode_confirmations confirmed
 adb logcat -c
 if [ "$device" = phone ]; then
   for phase in default prepare_resume verify_resume demo demo_resume; do

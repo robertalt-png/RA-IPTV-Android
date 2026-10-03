@@ -22,7 +22,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
     static MediaEntry episode(int season,int episode){MediaEntry e=new MediaEntry();e.id="ui-s"+season+"-e"+episode;e.name="QA series · S"+season+"E"+episode;e.type="episode";e.season=season;e.episode=episode;e.seriesId="ui-series";return e;}
     static EpgEntry programme(String title,long start,long end){EpgEntry e=new EpgEntry();e.title=title;e.startEpoch=start;e.endEpoch=end;return e;}
     void snapshot(String name)throws Exception{
-        Bitmap bitmap=getUiAutomation().takeScreenshot();check(bitmap!=null,"Screenshot missing: "+name);
+        Thread.sleep(350);Bitmap bitmap=getUiAutomation().takeScreenshot();check(bitmap!=null,"Screenshot missing: "+name);
         File folder=new File(getTargetContext().getExternalFilesDir(null),"qa");folder.mkdirs();try(FileOutputStream f=new FileOutputStream(new File(folder,name+".png"))){bitmap.compress(Bitmap.CompressFormat.PNG,100,f);}bitmap.recycle();
     }
     void core(Bundle result)throws Exception{

@@ -7,7 +7,7 @@
   </LinearLayout>
   <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
   <Button android:id="@+id/languageBadge" android:layout_width="48dp" android:layout_height="36dp" android:text="NL" android:textAllCaps="false" android:textColor="#FFF7F8FA" android:textSize="11sp" android:backgroundTint="#151A21" android:contentDescription="Language"/>
-  <Button android:id="@+id/planBadge" android:layout_width="58dp" android:layout_height="36dp" android:layout_marginLeft="5dp" android:text="LIGHT" android:textAllCaps="false" android:textStyle="bold" android:textColor="#FF0A0A0A" android:textSize="10sp" android:backgroundTint="#FFD400" android:contentDescription="Plan"/>
+  <Button android:paddingLeft="4dp" android:paddingRight="4dp" android:minWidth="0dp" android:id="@+id/planBadge" android:layout_width="58dp" android:layout_height="36dp" android:layout_marginLeft="5dp" android:text="LIGHT" android:textAllCaps="false" android:textStyle="bold" android:textColor="#FF0A0A0A" android:textSize="10sp" android:backgroundTint="#FFD400" android:contentDescription="Plan"/>
   <Button android:id="@+id/menuButton" android:layout_width="48dp" android:layout_height="44dp" android:text="☰" android:textSize="24sp" android:textColor="#FFFFFF" android:backgroundTint="#151A21" android:contentDescription="Menu"/>
   <Button android:id="@+id/searchToggle" android:layout_width="40dp" android:layout_height="36dp" android:layout_marginLeft="5dp" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:text="⌕" android:textSize="22sp" android:textColor="#FFFFFFFF" android:backgroundTint="#151A21" android:visibility="visible" android:contentDescription="Search"/>
   <Button android:id="@+id/settingsButton" android:layout_width="1dp" android:layout_height="1dp" android:text="⚙" android:visibility="gone"/>
@@ -25,8 +25,8 @@
       <TextView android:id="@+id/heroTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/text" android:textSize="20sp" android:textStyle="bold" android:maxLines="2" android:ellipsize="end"/>
       <TextView android:id="@+id/heroSubtitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#E2E5EA" android:textSize="11.5sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="3dp"/>
       <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="7dp">
-        <Button android:id="@+id/heroAction" android:layout_width="wrap_content" android:layout_height="36dp" android:minHeight="0dp" android:text="▶ Afspelen" android:textAllCaps="false" android:textColor="#FF0A0A0A" android:backgroundTint="#FFD400" android:visibility="gone"/>
-        <Button android:id="@+id/heroInfo" android:layout_width="wrap_content" android:layout_height="36dp" android:minHeight="0dp" android:layout_marginLeft="6dp" android:text="ⓘ Info" android:textAllCaps="false" android:textColor="@color/text" android:backgroundTint="@color/panel2" android:visibility="gone"/>
+        <Button android:id="@+id/heroAction" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minHeight="48dp" android:paddingTop="6dp" android:paddingBottom="6dp" android:textSize="14sp" android:text="▶ Afspelen" android:textAllCaps="false" android:textColor="#FF0A0A0A" android:backgroundTint="#FFD400" android:visibility="gone"/>
+        <Button android:id="@+id/heroInfo" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minHeight="48dp" android:paddingTop="6dp" android:paddingBottom="6dp" android:textSize="14sp" android:layout_marginLeft="6dp" android:text="ⓘ Info" android:textAllCaps="false" android:textColor="@color/text" android:backgroundTint="@color/panel2" android:visibility="gone"/>
       </LinearLayout>
     </LinearLayout>
   </FrameLayout>
