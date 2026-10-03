@@ -165,7 +165,7 @@ public final class SourceStore {
         for(int i=0;i<remote.length();i++){
             JSONObject o=remote.optJSONObject(i);if(o==null)continue;
             Entry e=fromJson(o);if(e==null||e.id==null||e.id.isEmpty())continue;
-            e.priority=clean.length();clean.put(toJson(e));
+            e.priority=clean.length();new SmartEpgStore(app).setFromJson(e.id,o.optJSONArray("epg_extra"));clean.put(toJson(e));
         }
         String active=prefs.getString(KEY_ACTIVE,"");
         boolean activeFound=false;
@@ -180,6 +180,7 @@ public final class SourceStore {
     }
 
     public synchronized boolean syncDirty(){return prefs.getBoolean(KEY_DIRTY,false);}
+    public synchronized void touchSync(){markDirty();}
     public synchronized void markSynced(int revision){prefs.edit().putInt("cloud_revision",Math.max(0,revision)).putBoolean(KEY_DIRTY,false).apply();}
     private void markDirty(){prefs.edit().putBoolean(KEY_DIRTY,true).apply();}
 
@@ -204,7 +205,7 @@ public final class SourceStore {
             Profile p=e.profile;
             o.put("type",p.type.name());o.put("name",safe(p.name));o.put("server",safe(p.server));
             o.put("username",safe(p.username));o.put("password",safe(p.password));o.put("m3u",safe(p.m3uUrl));
-            o.put("epg",safe(p.epgUrl));o.put("bridge",safe(p.bridgeUrl));o.put("bridge_token",safe(p.bridgeToken));
+            o.put("epg",safe(p.epgUrl));o.put("epg_extra",new SmartEpgStore(app).toJson(e.id));o.put("bridge",safe(p.bridgeUrl));o.put("bridge_token",safe(p.bridgeToken));
             return o;
         }catch(Exception ex){throw new IllegalStateException("SOURCE_STORE_ENCODE_FAILED",ex);}
     }
