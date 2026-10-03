@@ -9,6 +9,8 @@ function register_rest_route(...$args){} function wp_schedule_single_event(...$a
 function wp_salt($kind){return 'fixture-salt-not-a-production-secret';}
 function sanitize_text_field($value){return strip_tags((string)$value);}
 function sanitize_email($value){return (string)$value;}
+function wp_unslash($value){return $value;}
+function absint($value){return abs((int)$value);}
 function esc_url_raw($value){return (string)$value;}
 function wp_json_encode($value,...$flags){return json_encode($value,...$flags);}
 function is_wp_error($value){return $value instanceof WP_Error;}
@@ -47,7 +49,7 @@ class WP_REST_Response {
 }
 class TestDb {
     public string $prefix='fixture_';public array $devices=[],$entitlements=[],$vaults=[],$events=[];
-    public bool $writeFailure=false,$lockAvailable=true;
+    public bool $writeFailure=false,$lockAvailable=true,$transferBeforeUpdate=false;
     public function prepare($sql,...$args){return [$sql,$args];}
     public function get_var($query){
         [$sql,$args]=$query;
@@ -59,13 +61,13 @@ class TestDb {
     public function get_row($query,$format){
         [$sql,$args]=$query;
         if(str_contains($sql,'nenotv_source_vault'))return $this->vaults[$args[0]]??null;
-        if(str_contains($sql,'nenotv_devices')){foreach($this->devices as $d)if($d['device_id']===$args[0])return $d;return null;}
+        if(str_contains($sql,'nenotv_devices')){if(str_contains($sql,'WHERE id='))return $this->devices[$args[0]]??null;foreach($this->devices as $d)if($d['device_id']===$args[0])return $d;return null;}
         if(str_contains($sql,'WHERE email_hash')){foreach($this->entitlements as $e)if($e['email_hash']===$args[0])return $e;return null;}
         if(str_contains($sql,'WHERE id='))return $this->entitlements[$args[0]]??null;
         throw new RuntimeException('Unexpected row query');
     }
     public function insert($table,$values){if($this->writeFailure)return false;$id=count($this->devices)+1;$values['id']=$id;$this->devices[$id]=$values;return 1;}
-    public function update($table,$values,$where){if($this->writeFailure)return false;$id=$where['id'];$this->devices[$id]=array_merge($this->devices[$id],$values);return 1;}
+    public function update($table,$values,$where){if($this->writeFailure)return false;$id=$where['id'];if($this->transferBeforeUpdate){$this->devices[$id]['entitlement_id']=2;$this->transferBeforeUpdate=false;}if(isset($where['entitlement_id'])&&$this->devices[$id]['entitlement_id']!==$where['entitlement_id'])return 0;$this->devices[$id]=array_merge($this->devices[$id],$values);return 1;}
     public function query($query){
         [$sql,$args]=$query;if($this->writeFailure)return false;
         if(str_contains($sql,'nenotv_entitlement_events')){$this->events[]=$args;return 1;}
@@ -154,4 +156,30 @@ check(sources('pull',$p)->status===503,'Unreadable vault reported empty source l
 $wpdb->vaults[1]=$original;$wpdb->writeFailure=true;
 check(sources('push',array_merge($p,['sources'=>[$source],'base_revision'=>2]))->status===503,'Vault write error reported success');
 $wpdb->writeFailure=false;
+$wpdb->devices[1]['status']='active';$wpdb->devices[1]['entitlement_id']=1;
+$_POST=['device_id'=>1,'device_name'=>'Living room','_wpnonce'=>'fixture'];
+$userEmail='owner@example.invalid';$logged=false;
+try{NenoTV_Entitlement_Core::handle_device_rename();throw new LogicException('Anonymous device rename allowed');}catch(Redirect $e){check($e->getMessage()==='login','Rename did not require login');}
+$logged=true;$validNonce=false;
+try{NenoTV_Entitlement_Core::handle_device_rename();throw new LogicException('Invalid rename nonce allowed');}catch(RuntimeException $e){check($e->getMessage()==='Security check failed.','Rename nonce check failed incorrectly');}
+$validNonce=true;$userEmail='unrelated@example.invalid';
+foreach(['handle_device_rename','handle_device_revoke'] as $method){
+    try{NenoTV_Entitlement_Core::$method();throw new LogicException('Unrelated account changed device');}catch(RuntimeException $e){check($e->getMessage()==='You cannot manage this device.','Device ownership check failed');}
+}
+check($wpdb->devices[1]['status']==='active'&&empty($wpdb->devices[1]['display_name']),'Unauthorized management modified device');
+$userEmail='owner@example.invalid';
+foreach(['',str_repeat('x',81),['bad']] as $name){$_POST['device_name']=$name;try{NenoTV_Entitlement_Core::handle_device_rename();throw new LogicException('Invalid device name accepted');}catch(RuntimeException $e){check($e->getMessage()==='Invalid device name.','Invalid device name check failed');}}
+$_POST['device_name']='Living room';$wpdb->writeFailure=true;$events=count($wpdb->events);
+foreach(['handle_device_rename','handle_device_revoke'] as $method){try{NenoTV_Entitlement_Core::$method();throw new LogicException('Failed device write reported success');}catch(RuntimeException $e){check(str_starts_with($e->getMessage(),'Device changed or could not be'),'Write failure not preserved');}}
+check($events===count($wpdb->events)&&$wpdb->devices[1]['status']==='active','Failed device write altered audit/status');
+$wpdb->writeFailure=false;
+foreach(['handle_device_rename','handle_device_revoke'] as $method){
+    $wpdb->devices[1]['entitlement_id']=1;$wpdb->transferBeforeUpdate=true;
+    try{NenoTV_Entitlement_Core::$method();throw new LogicException('Concurrent ownership change ignored');}catch(RuntimeException $e){check(str_starts_with($e->getMessage(),'Device changed or could not be'),'Concurrent device reassignment not rejected');}
+    check(empty($wpdb->devices[1]['display_name'])&&$wpdb->devices[1]['status']==='active'&&count($wpdb->events)===$events,'Changed another account device after ownership race');
+}
+$wpdb->devices[1]['entitlement_id']=1;
+try{NenoTV_Entitlement_Core::handle_device_rename();throw new LogicException('Rename did not redirect');}catch(Redirect $e){check($e->getMessage()==='https://nenotv.com/my-account/','Rename redirected off-site');}
+check($wpdb->devices[1]['display_name']==='Living room','Device label not saved');
+check(!str_contains(json_encode($wpdb->events),'Living room'),'Device label leaked into audit');
 echo $checks." pairing/account authorization checks passed\n";

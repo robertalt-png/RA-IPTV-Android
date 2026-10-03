@@ -2,7 +2,7 @@
 /**
  * Plugin Name: NenoTV Entitlement Core
  * Description: Central NenoTV entitlement control plane for payment grants, refunds, device claims and the app bridge. Defaults to safe shadow mode until commercial launch.
- * Version: 0.1.17
+ * Version: 0.1.18
  * Author: NenoTV
  * Requires at least: 6.6
  * Requires PHP: 8.0
@@ -14,8 +14,8 @@ require_once __DIR__ . '/nenotv-pairing.php';
 
 final class NenoTV_Entitlement_Core {
     use NenoTV_Pairing;
-    const VERSION = '0.1.17';
-    const DB_VERSION = '4';
+    const VERSION = '0.1.18';
+    const DB_VERSION = '5';
     const NS = 'nenotv-backend/v1';
     const APP_NS = 'nenotv/v1';
     const OPT_MODE = 'nenotv_entitlement_mode'; // shadow|live
@@ -50,6 +50,7 @@ final class NenoTV_Entitlement_Core {
         add_filter('plugin_action_links_' . plugin_basename(__FILE__), [__CLASS__, 'plugin_action_links']);
         add_shortcode('nenotv_account_pro', [__CLASS__, 'shortcode_account_pro']);
         add_action('admin_post_nenotv_device_revoke', [__CLASS__, 'handle_device_revoke']);
+        add_action('admin_post_nenotv_device_rename', [__CLASS__, 'handle_device_rename']);
         add_action('admin_post_nenotv_activation_regenerate', [__CLASS__, 'handle_activation_regenerate']);
         add_filter('nenotv_can_buy_plan', [__CLASS__, 'purchase_guard'], 20, 2);
         add_action('admin_post_nenotv_upgrade_multi', [__CLASS__, 'handle_upgrade_multi']);
@@ -135,6 +136,7 @@ final class NenoTV_Entitlement_Core {
             public_device_id varchar(100) NOT NULL DEFAULT '',
             device_key_hash char(64) NOT NULL,
             platform varchar(100) NOT NULL DEFAULT '',
+            display_name varchar(80) NOT NULL DEFAULT '',
             app_version varchar(60) NOT NULL DEFAULT '',
             status varchar(32) NOT NULL DEFAULT 'active',
             created_at datetime NOT NULL,
@@ -1611,7 +1613,7 @@ final class NenoTV_Entitlement_Core {
             if ($status === 'shadow') {
                 $plan_label = $lang === 'nl' ? 'NenoTV-testtoegang' : ($lang === 'de' ? 'NenoTV-Testzugang' : 'NenoTV test access');
             } else {
-                $plan_label = 'NenoTV Pro';
+                $plan_label = 'NenoTV Pro ' . ($max === 1 ? 'Solo' : 'Multi');
             }
             $status_label = $is_expired ? $s['expired'] : ($s[$status] ?? ucfirst($status));
         }
@@ -1620,7 +1622,7 @@ final class NenoTV_Entitlement_Core {
         $html .= '<div class="nv-pro-stats">';
         $html .= '<div><span>' . esc_html($s['plan']) . '</span><strong>' . esc_html($plan_label) . '</strong></div>';
         $html .= '<div><span>' . esc_html($s['status']) . '</span><strong>' . esc_html($status_label) . '</strong></div>';
-        $html .= '<div><span>' . esc_html($s['devices']) . '</span><strong>' . esc_html((string)$used) . '</strong></div>';
+        $html .= '<div><span>' . esc_html($s['devices']) . '</span><strong>' . esc_html($used . ' / ' . $max) . '</strong><span>' . esc_html(($lang === 'nl' ? 'Vrij' : ($lang === 'de' ? 'Frei' : 'Available')) . ': ' . max(0,$max-$used)) . '</span></div>';
         $html .= '<div><span>' . esc_html($s['expires']) . '</span><strong>' . esc_html($expires) . '</strong></div>';
         $html .= '</div>';
 
@@ -1657,17 +1659,23 @@ final class NenoTV_Entitlement_Core {
             foreach ($devices as $device) {
                 $is_active = ($device['status'] ?? '') === 'active';
                 $platform = trim((string)($device['platform'] ?? '')) ?: 'NenoTV device';
+                $display_name = trim((string)($device['display_name'] ?? '')) ?: $platform;
                 $public = trim((string)($device['public_device_id'] ?? ''));
                 $app = trim((string)($device['app_version'] ?? ''));
                 $last = !empty($device['last_seen_at']) ? wp_date('j M Y H:i', strtotime($device['last_seen_at'] . ' UTC')) : '—';
 
                 $html .= '<article class="nv-device-card' . ($is_active ? '' : ' is-revoked') . '">';
                 $html .= '<div class="nv-device-icon" aria-hidden="true">▣</div><div class="nv-device-copy">';
-                $html .= '<h3>' . esc_html($platform) . '</h3>';
+                $html .= '<h3>' . esc_html($display_name) . '</h3>';
                 if ($public !== '') $html .= '<code>' . esc_html($public) . '</code>';
                 $html .= '<p>' . esc_html($s['last_seen']) . ': <strong>' . esc_html($last) . '</strong>';
                 if ($app !== '') $html .= '<br>' . esc_html($s['app']) . ': <strong>' . esc_html($app) . '</strong>';
-                $html .= '</p></div>';
+                $html .= '</p>';
+                $html .= '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+                $html .= '<input type="hidden" name="action" value="nenotv_device_rename"><input type="hidden" name="device_id" value="' . esc_attr((string)$device['id']) . '">';
+                $html .= wp_nonce_field('nenotv_rename_device_' . (int)$device['id'], '_wpnonce', true, false);
+                $html .= '<label>' . esc_html($lang === 'nl' ? 'Apparaatnaam' : ($lang === 'de' ? 'Gerätename' : 'Device name')) . '<input required name="device_name" maxlength="80" value="' . esc_attr($display_name) . '"></label>';
+                $html .= '<button type="submit">' . esc_html($lang === 'nl' ? 'Naam opslaan' : ($lang === 'de' ? 'Name speichern' : 'Save name')) . '</button></form></div>';
 
                 if ($is_active && in_array($status, ['active','shadow'], true)) {
                     $html .= '<form class="nv-device-remove" method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
@@ -1761,6 +1769,29 @@ final class NenoTV_Entitlement_Core {
         wp_safe_redirect(add_query_arg('source_deleted','1',$url)); exit;
     }
 
+    public static function handle_device_rename(): void {
+        if (!is_user_logged_in()) auth_redirect();
+        $device_id = absint($_POST['device_id'] ?? 0);
+        if (!$device_id || !wp_verify_nonce(sanitize_text_field((string)($_POST['_wpnonce'] ?? '')), 'nenotv_rename_device_' . $device_id)) wp_die('Security check failed.');
+        $raw = $_POST['device_name'] ?? '';
+        if (!is_scalar($raw)) wp_die('Invalid device name.');
+        $name = trim(sanitize_text_field(wp_unslash((string)$raw)));
+        $length = function_exists('mb_strlen') ? mb_strlen($name,'UTF-8') : strlen($name);
+        if ($name === '' || $length > 80) wp_die('Invalid device name.');
+        global $wpdb;
+        $device = $wpdb->get_row($wpdb->prepare('SELECT * FROM '.self::dev_table().' WHERE id=%d LIMIT 1', $device_id), ARRAY_A);
+        if (!is_array($device)) wp_die('Device not found.');
+        $ent = self::find_by_id((int)$device['entitlement_id']);
+        if (!is_array($ent) || !self::user_owns_entitlement($ent)) wp_die('You cannot manage this device.');
+        if ($name !== (string)($device['display_name'] ?? '')) {
+            $updated = $wpdb->update(self::dev_table(), ['display_name'=>$name], ['id'=>$device_id,'entitlement_id'=>(int)$ent['id']]);
+            if ($updated !== 1) wp_die('Device changed or could not be saved. Reload your account.');
+            self::log_event('device_self_rename', (string)$ent['reference'], (string)$device['device_id'], 'success', 'Customer changed device name.');
+        }
+        $url = function_exists('wc_get_page_permalink') ? wc_get_page_permalink('myaccount') : home_url('/my-account/');
+        wp_safe_redirect($url); exit;
+    }
+
     public static function handle_device_revoke(): void {
         if (!is_user_logged_in()) auth_redirect();
         $device_id = absint($_POST['device_id'] ?? 0);
@@ -1777,11 +1808,12 @@ final class NenoTV_Entitlement_Core {
         if (!is_array($ent) || !self::user_owns_entitlement($ent)) wp_die('You cannot manage this device.');
 
         if (($device['status'] ?? '') === 'active') {
-            $wpdb->update(self::dev_table(), [
+            $updated = $wpdb->update(self::dev_table(), [
                 'status'=>'revoked',
                 'revoked_at'=>self::now_mysql(),
                 'last_seen_at'=>self::now_mysql(),
-            ], ['id'=>$device_id]);
+            ], ['id'=>$device_id,'entitlement_id'=>(int)$ent['id']]);
+            if ($updated !== 1) wp_die('Device changed or could not be removed. Reload your account.');
             self::log_event('device_self_revoke', (string)$ent['reference'], (string)$device['device_id'], 'success', 'Customer removed device from My NenoTV.');
         }
 
