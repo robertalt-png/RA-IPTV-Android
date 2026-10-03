@@ -151,6 +151,36 @@ public final class SourceStore {
         write(a,prefs.getString(KEY_ACTIVE,""));
     }
 
+    public synchronized JSONArray exportForSync(){
+        JSONArray out=new JSONArray();
+        for(Entry e:list())out.put(toJson(e));
+        return out;
+    }
+
+    public synchronized void mergeFromCloud(JSONArray remote){
+        if(remote==null)return;
+        List<Entry> local=list();
+        java.util.LinkedHashMap<String,Entry> merged=new java.util.LinkedHashMap<>();
+        for(Entry e:local)merged.put(e.id,e);
+        for(int i=0;i<remote.length();i++){
+            JSONObject o=remote.optJSONObject(i); if(o==null)continue;
+            Entry e=fromJson(o); if(e==null||e.id==null||e.id.isEmpty())continue;
+            Entry have=merged.get(e.id);
+            if(have==null||e.updatedAt>=have.updatedAt)merged.put(e.id,e);
+        }
+        ArrayList<Entry> all=new ArrayList<>(merged.values());
+        Collections.sort(all,Comparator.comparingInt((Entry e)->e.priority).thenComparingLong(e->-e.updatedAt));
+        JSONArray a=new JSONArray();
+        for(int i=0;i<all.size();i++){all.get(i).priority=i;a.put(toJson(all.get(i)));}
+        String active=prefs.getString(KEY_ACTIVE,"");
+        if(active.isEmpty()&&!all.isEmpty())active=all.get(0).id;
+        write(a,active);
+        if(!active.isEmpty())setActive(active);
+    }
+
+    public synchronized int cloudRevision(){return prefs.getInt("cloud_revision",0);}
+    public synchronized void setCloudRevision(int revision){prefs.edit().putInt("cloud_revision",Math.max(0,revision)).apply();}
+
     private JSONArray readArray(){
         String enc=prefs.getString(KEY_DATA,"");
         if(enc.isEmpty())return new JSONArray();
