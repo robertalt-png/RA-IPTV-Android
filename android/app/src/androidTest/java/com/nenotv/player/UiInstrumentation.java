@@ -92,12 +92,15 @@ public final class UiInstrumentation extends ImportInstrumentation {
         check(ProModuleInstaller.isInstalled(a),"Fused Pro module is invisible");
         check(!ProLibraryBridge.isActive(a),"Light gained Pro without entitlement");
         check(ProModuleInstaller.playerIntent(a).getComponent().getClassName().equals(PlayerActivity.class.getName()),"Light bypassed basic player");
+        check(ProModuleInstaller.sourcesIntent(a).getComponent().getClassName().equals(ProfileActivity.class.getName()),"Light reached Pro source manager");
         com.nenotv.player.provider.M3uProvider source=new com.nenotv.player.provider.M3uProvider(profile());source.authenticate();MediaEntry basicItem=source.items("vod","all").get(0);
         PlayerActivity basic=(PlayerActivity)startActivitySync(new Intent(c,PlayerActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("media",basicItem));waitForIdleSync();
         long ready=SystemClock.elapsedRealtime()+90000;final java.util.concurrent.atomic.AtomicBoolean basePlaying=new java.util.concurrent.atomic.AtomicBoolean();while(!basePlaying.get()&&SystemClock.elapsedRealtime()<ready){runOnMainSync(()->basePlaying.set(basic.exo!=null&&basic.exo.getCurrentPosition()>1500&&basic.exo.getVideoFormat()!=null&&basic.exo.getAudioFormat()!=null));Thread.sleep(100);}check(basePlaying.get(),"Light player did not play demo");
         runOnMainSync(()->{WindowInsets in=basic.getWindow().getDecorView().getRootWindowInsets();if(Build.VERSION.SDK_INT>=30)check(in!=null&&!in.isVisible(WindowInsets.Type.systemBars()),"Light player is not fullscreen");basic.showControls();check(basic.forward.getText().toString().contains("10"),"Forward control is unclear");basic.forward.performClick();});Thread.sleep(300);runOnMainSync(()->{check(basic.exo.getCurrentPosition()>=10000,"Forward did not seek 10 seconds");basic.rewind.performClick();});Thread.sleep(300);runOnMainSync(()->check(basic.exo.getCurrentPosition()<5000,"Rewind did not seek back"));snapshot("light-player");runOnMainSync(basic::finish);waitForIdleSync();
         c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE).edit().putString("level","PRO").commit();
         check(ProLibraryBridge.isActive(a),"Pro entitlement did not enable module");
+        check(ProModuleInstaller.sourcesIntent(a).getComponent().getClassName().contains("ProSourcesActivity"),"Pro source manager route missing");
+        check(ProModuleInstaller.networkIntent(a).getComponent().getClassName().contains("ProNetworkActivity"),"Pro network route missing");
         SourceStore sourceStore=new SourceStore(c);
         com.nenotv.player.model.Profile qaA=new com.nenotv.player.model.Profile();qaA.type=com.nenotv.player.model.Profile.Type.M3U;qaA.name="QA Source A";qaA.m3uUrl=DemoSource.URL;
         com.nenotv.player.model.Profile qaB=new com.nenotv.player.model.Profile();qaB.type=com.nenotv.player.model.Profile.Type.XTREAM;qaB.name="QA Source B";qaB.server="https://example.invalid";qaB.username="qa";qaB.password="secret";
