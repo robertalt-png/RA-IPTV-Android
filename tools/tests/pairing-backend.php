@@ -137,6 +137,7 @@ $options[$key]['expires']=time()-1;
 check(request('status',$poll)->data['state']==='expired'&&!isset($options[$key]),'Expired session retained proof');
 $wpdb->devices[1]['status']='active';
 $source=['id'=>'source-fixture','type'=>'XTREAM','name'=>'Private fixture','server'=>'https://example.invalid','username'=>'fixture-user','password'=>'fixture-private-password'];
+$p['account_scope']=hash('sha256','owner@example.invalid');
 function sources(string $action,array $p): WP_REST_Response{return NenoTV_Entitlement_Core::app_sources(new WP_REST_Request($p),$action);}
 check(sources('pull',array_merge($p,['device_key'=>str_repeat('z',43)]))->status===403,'Source vault exposed without device proof');
 $first=sources('push',array_merge($p,['sources'=>[$source],'base_revision'=>0]));
@@ -156,6 +157,14 @@ check(sources('pull',$p)->status===503,'Unreadable vault reported empty source l
 $wpdb->vaults[1]=$original;$wpdb->writeFailure=true;
 check(sources('push',array_merge($p,['sources'=>[$source],'base_revision'=>2]))->status===503,'Vault write error reported success');
 $wpdb->writeFailure=false;
+$wrongScope=sources('push',array_merge($p,['account_scope'=>str_repeat('0',64),'sources'=>[$source],'base_revision'=>2]));
+check($wrongScope->status===409&&$wrongScope->data['error']==='source_account_changed','Wrong account scope accepted');
+$missingScope=$p;unset($missingScope['account_scope']);
+check(sources('pull',$missingScope)->status===409,'Unscoped cloud request accepted');
+$wpdb->entitlements[2]=array_merge($wpdb->entitlements[1],['id'=>2,'email'=>'another-owner@example.invalid','email_hash'=>hash('sha256','another-owner@example.invalid')]);
+$wpdb->devices[1]['entitlement_id']=2;
+check(sources('push',array_merge($p,['sources'=>[$source],'base_revision'=>0]))->status===409&&!isset($wpdb->vaults[2]),'Rebound device stored previous account credentials in new vault');
+check(sources('pull',$p)->status===409,'Rebound device read another account vault with old scope');
 $wpdb->devices[1]['status']='active';$wpdb->devices[1]['entitlement_id']=1;
 $_POST=['device_id'=>1,'device_name'=>'Living room','_wpnonce'=>'fixture'];
 $userEmail='owner@example.invalid';$logged=false;

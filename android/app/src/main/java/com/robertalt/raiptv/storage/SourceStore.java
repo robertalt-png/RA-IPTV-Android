@@ -205,11 +205,20 @@ public final class SourceStore {
             if(!retained)new SmartEpgStore(app).setUrls(old.id,Collections.emptyList());
         }
         write(clean,active);
-        prefs.edit().putInt("cloud_revision",Math.max(0,revision)).putBoolean(KEY_DIRTY,false).putLong("local_revision",prefs.getLong("local_revision",0L)+1L).apply();
+        prefs.edit().putInt("cloud_revision",Math.max(0,revision)).putBoolean(KEY_DIRTY,false).putBoolean("account_change_pending",false).putLong("local_revision",prefs.getLong("local_revision",0L)+1L).apply();
         if(!active.isEmpty()){if(!setActive(active))clearActiveProfile();}else clearActiveProfile();
     }
 
     public synchronized boolean syncDirty(){return prefs.getBoolean(KEY_DIRTY,false);}
+    public void bindCloudAccount(String scope){synchronized(SYNC_LOCK){
+        if(scope==null||!scope.matches("[a-f0-9]{64}"))throw new IllegalArgumentException("ACCOUNT_SCOPE_REQUIRED");
+        String previous=prefs.getString("cloud_account_scope","");if(previous.equals(scope))return;
+        boolean confirm=!previous.isEmpty()||cloudRevision()>0;
+        if(!prefs.edit().putString("cloud_account_scope",scope).putInt("cloud_revision",0)
+                .putBoolean("account_change_pending",confirm).putBoolean(KEY_DIRTY,syncDirty()||confirm)
+                .putLong("local_revision",prefs.getLong("local_revision",0L)+1L).commit())throw new IllegalStateException("SOURCE_STORE_WRITE_FAILED");
+    }}
+    public boolean accountChangePending(){return prefs.getBoolean("account_change_pending",false);}
     public boolean automaticDownloadEnabled(){return prefs.getBoolean("automatic_download",true);}
     public void setAutomaticDownloadEnabled(boolean enabled){synchronized(SYNC_LOCK){prefs.edit().putBoolean("automatic_download",enabled).commit();}}
     public boolean applyAutomaticCloudSnapshotIfUnchanged(JSONArray remote,int revision,long expected){synchronized(SYNC_LOCK){

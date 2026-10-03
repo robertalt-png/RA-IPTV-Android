@@ -14,7 +14,7 @@ public final class SourceSyncChecks {
         context.getSharedPreferences("nenotv_sources_v1",Context.MODE_PRIVATE).edit().clear().commit();
         new SecureProfileStore(context).clear();
         Profile profile=new Profile();profile.type=Profile.Type.M3U;profile.name="Priv\u00e9 QA";profile.m3uUrl="https://example.invalid/local.m3u";
-        SourceStore sources=new SourceStore(context);sources.upsert("",profile,true);
+        SourceStore sources=new SourceStore(context);sources.bindCloudAccount(new com.nenotv.player.storage.EntitlementStore(context).cloudAccountScope());sources.upsert("",profile,true);
         if(known){sources.markSynced(4);sources.touchSync();}
         return sources;
     }
@@ -35,7 +35,7 @@ public final class SourceSyncChecks {
         Map<String,?> oldSources=new HashMap<>(sourcePrefs.getAll()),oldEnt=new HashMap<>(entPrefs.getAll());
         SecureProfileStore profiles=new SecureProfileStore(context);Profile previous=profiles.exists()?profiles.load():null;
         try{
-            entPrefs.edit().putString("level","PRO").putLong("expires_at",0).commit();
+            entPrefs.edit().putString("level","PRO").putLong("expires_at",0).putString("account_email","source-owner@example.invalid").commit();
             SourceStore sources=seed(context,false);
             try(EntitlementClientChecks.Fixture fixture=new EntitlementClientChecks.Fixture(200,"{\"ok\":true,\"revision\":2,\"sources\":[]}",false)){
                 new SourceSyncClient(context,new EntitlementClient(context,fixture.url())).sync();
@@ -84,6 +84,21 @@ public final class SourceSyncChecks {
                 try{new SourceSyncClient(context,new EntitlementClient(context,fixture.url())).pullAutomatically();throw new AssertionError("Cloud revision went backwards");}catch(IOException expected){}
                 check(sources.list().size()==1,"Older snapshot erased local sources");
             }
+            sources=seed(context,true);
+            try(EntitlementClientChecks.Fixture fixture=new EntitlementClientChecks.Fixture(200,"{\"ok\":true,\"revision\":0,\"sources\":[]}",false)){
+                SourceSyncClient oldClient=new SourceSyncClient(context,new EntitlementClient(context,fixture.url()));
+                entPrefs.edit().putString("account_email","different-owner@example.invalid").commit();
+                try{oldClient.push();throw new AssertionError("Old client uploaded to changed account");}catch(IOException expected){}
+                check(fixture.calls.get()==0,"Account change exposed source payload before confirmation");
+                SourceSyncClient newClient=new SourceSyncClient(context,new EntitlementClient(context,fixture.url()));
+                try{newClient.sync();throw new AssertionError("New account silently inherited previous sources");}catch(IOException expected){}
+                try{newClient.push();throw new AssertionError("New account uploaded before confirmation");}catch(IOException expected){}
+                check(!newClient.pullAutomatically()&&fixture.calls.get()==0&&sources.list().size()==1&&sources.cloudRevision()==0&&sources.accountChangePending(),"Account change lost local sources or reused another account revision");
+                newClient.pull();
+                check(!sources.accountChangePending()&&sources.list().isEmpty()&&fixture.calls.get()==1,"Explicit new-account cloud choice not applied");
+                check(fixture.requests.get(0).getString("account_scope").equals(new com.nenotv.player.storage.EntitlementStore(context).cloudAccountScope())&&!fixture.requests.get(0).has("sources"),"Explicit cloud choice uploaded previous credentials");
+            }
+            sources=seed(context,true);
             sourcePrefs.edit().putString("sources","invalid-encrypted-data").commit();
             boolean unreadable=false;try{sources.exportForSync();}catch(IllegalStateException expected){unreadable=true;}
             check(unreadable&&"invalid-encrypted-data".equals(sourcePrefs.getString("sources","")),"Unreadable local source vault was treated as empty");

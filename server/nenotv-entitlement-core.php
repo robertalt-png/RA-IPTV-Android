@@ -1105,6 +1105,8 @@ final class NenoTV_Entitlement_Core {
         $auth=self::source_device_auth($raw); if(is_wp_error($auth))return self::wp_error_json($auth);
         $ent=(array)$auth['entitlement'];
         $entitlement_id=(int)$ent['id'];
+        $scope=$raw['account_scope']??null;
+        if(!is_string($scope)||!hash_equals(self::email_hash((string)$ent['email']),$scope))return self::json(['ok'=>false,'error'=>'source_account_changed'],409);
         try {
             if ($action==='pull') {
                 $vault=self::load_source_vault($entitlement_id);

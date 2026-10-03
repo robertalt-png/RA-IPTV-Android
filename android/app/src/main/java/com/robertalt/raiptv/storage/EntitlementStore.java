@@ -35,6 +35,14 @@ public final class EntitlementStore {
     public String publicDeviceId(){return prefs.getString("public_device_id","");}
     public String deviceKey(){return prefs.getString("device_key","");}
     public String accountEmail(){return prefs.getString("account_email","");}
+    public String cloudAccountScope(){
+        String email=accountEmail().trim().toLowerCase(Locale.ROOT);
+        if(email.isEmpty())return "";
+        try{
+            byte[] digest=java.security.MessageDigest.getInstance("SHA-256").digest(email.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder out=new StringBuilder();for(byte value:digest)out.append(String.format(Locale.ROOT,"%02x",value));return out.toString();
+        }catch(Exception error){throw new IllegalStateException("ACCOUNT_SCOPE_UNAVAILABLE");}
+    }
     public int maxDevices(){return prefs.getInt("max_devices",1);}
     public int usedDevices(){return prefs.getInt("used_devices",-1);}
     public int freeDevices(){return usedDevices()<0?-1:Math.max(0,maxDevices()-usedDevices());}

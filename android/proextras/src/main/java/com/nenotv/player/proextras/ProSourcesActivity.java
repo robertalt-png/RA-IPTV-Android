@@ -112,12 +112,13 @@ public class ProSourcesActivity extends Activity {
                     render();
                 });
             }catch(Exception ex){
-                if(ex instanceof com.nenotv.player.entitlement.EntitlementClient.ServiceException&&"source_revision_conflict".equals(((com.nenotv.player.entitlement.EntitlementClient.ServiceException)ex).code)){
+                boolean accountChanged="SOURCE_ACCOUNT_CHANGED_CONFIRM".equals(ex.getMessage())||(ex instanceof com.nenotv.player.entitlement.EntitlementClient.ServiceException&&"source_account_changed".equals(((com.nenotv.player.entitlement.EntitlementClient.ServiceException)ex).code));
+                if(accountChanged||(ex instanceof com.nenotv.player.entitlement.EntitlementClient.ServiceException&&"source_revision_conflict".equals(((com.nenotv.player.entitlement.EntitlementClient.ServiceException)ex).code))){
                     runOnUiThread(()->{
                         if(isFinishing()||isDestroyed())return;
                         render();
                         new android.app.AlertDialog.Builder(this)
-                            .setTitle(L("Sources changed elsewhere","Bronnen elders gewijzigd","Quellen auf anderem Gerät geändert"))
+                            .setTitle(accountChanged?L("Account changed","Account gewijzigd","Konto geändert"):L("Sources changed elsewhere","Bronnen elders gewijzigd","Quellen auf anderem Gerät geändert"))
                             .setMessage(L("Your local changes have not been synchronized.","Uw lokale wijzigingen zijn niet gesynchroniseerd.","Deine lokalen Änderungen wurden nicht synchronisiert."))
                             .setNegativeButton(L("Keep local","Lokaal behouden","Lokal behalten"),(d,w)->{})
                             .setPositiveButton(L("Use cloud version","Cloudversie gebruiken","Cloud-Version verwenden"),(d,w)->useCloudSources())

@@ -12,24 +12,32 @@ public final class SourceSyncClient {
     private final EntitlementStore entitlement;
     private final SourceStore sources;
     private final EntitlementClient transport;
+    private final String accountScope;
 
     public SourceSyncClient(Context context){this(context,new EntitlementClient(context));}
     SourceSyncClient(Context context,EntitlementClient transport){
         entitlement=new EntitlementStore(context);
         sources=new SourceStore(context);
         this.transport=transport;
+        accountScope=entitlement.cloudAccountScope();
     }
 
-    private void requirePro()throws IOException{if(!entitlement.isPro())throw new IOException("PRO_REQUIRED");}
+    private void requirePro()throws IOException{
+        if(!entitlement.isPro())throw new IOException("PRO_REQUIRED");
+        if(accountScope.isEmpty())throw new IOException("ACCOUNT_SCOPE_REQUIRED");
+        if(!accountScope.equals(entitlement.cloudAccountScope()))throw new IOException("SOURCE_ACCOUNT_CHANGED_CONFIRM");
+        sources.bindCloudAccount(accountScope);
+    }
 
     public JSONObject sync()throws Exception{
         requirePro();
         // First contact must not overwrite an account vault with a migrated local source.
+        if(sources.accountChangePending())throw new IOException("SOURCE_ACCOUNT_CHANGED_CONFIRM");
         if(sources.cloudRevision()<=0){
             SourceStore.SyncSnapshot snapshot=sources.snapshotForSync();
             JSONObject remote=post("pull",new JSONObject());
             JSONArray rows=remote.optJSONArray("sources");
-            int revision=remote.optInt("revision",0);
+            int revision=remote.optInt("revision",-1);
             if(rows==null||revision<0)throw new IOException("INVALID_SOURCE_RESPONSE");
             validateRows(rows);
             if(rows.length()>0||revision>0){
@@ -57,7 +65,9 @@ public final class SourceSyncClient {
 
     /** Download only; background work never uploads credentials or replaces unsynced edits. */
     public boolean pullAutomatically()throws Exception{
-        if(!entitlement.isPro()||!sources.automaticDownloadEnabled()||sources.syncDirty())return false;
+        if(!entitlement.isPro()||!sources.automaticDownloadEnabled())return false;
+        requirePro();
+        if(sources.syncDirty()||sources.accountChangePending())return false;
         SourceStore.SyncSnapshot snapshot=sources.snapshotForSync();
         JSONObject out=post("pull",new JSONObject());
         JSONArray remote=out.optJSONArray("sources");
@@ -71,6 +81,7 @@ public final class SourceSyncClient {
 
     public JSONObject push()throws Exception{
         requirePro();
+        if(sources.accountChangePending())throw new IOException("SOURCE_ACCOUNT_CHANGED_CONFIRM");
         SourceStore.SyncSnapshot snapshot=sources.snapshotForSync();
         if(snapshot.sources.length()>20)throw new IOException("SOURCE_LIMIT");
         JSONObject body=new JSONObject().put("sources",snapshot.sources).put("base_revision",snapshot.cloudRevision);
@@ -81,7 +92,11 @@ public final class SourceSyncClient {
         return out;
     }
 
-    private JSONObject post(String action,JSONObject body)throws Exception{return transport.request("sources/"+action,body,1048576);}
+    private JSONObject post(String action,JSONObject body)throws Exception{
+        requirePro();body.put("account_scope",accountScope);
+        JSONObject result=transport.request("sources/"+action,body,1048576);
+        requirePro();return result;
+    }
     private static void validateRows(JSONArray rows)throws IOException{
         if(rows.length()>20)throw new IOException("INVALID_SOURCE_RESPONSE");
         java.util.HashSet<String> ids=new java.util.HashSet<>();
