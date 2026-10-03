@@ -100,6 +100,11 @@ public final class UiInstrumentation extends ImportInstrumentation {
             waitForIdleSync();
             runOnMainSync(()->{
                 check(a.demoRadio.isEnabled()&&a.demoRadio.isChecked(),"NenoTV offer not selected on fresh install");
+                if(Build.VERSION.SDK_INT>=30){
+                    View heading=a.findViewById(R.id.profileTitle);int[] position=new int[2];heading.getLocationOnScreen(position);
+                    WindowInsets insets=heading.getRootWindowInsets();
+                    check(insets!=null&&position[1]>=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout()).top,"Onboarding title overlaps system bars");
+                }
                 check(a.xtreamFields.getVisibility()==View.GONE&&a.m3uFields.getVisibility()==View.GONE,"Technical fields shown before source selection");
                 check(a.findViewById(R.id.nenoOffer).getVisibility()==View.VISIBLE,"NenoTV catalogue missing");
                 check(a.findViewById(R.id.advancedButton).getVisibility()==View.GONE,"Advanced settings shown for built-in offer");
@@ -266,7 +271,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
         c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE).edit().putString("level","FREE").commit();new SecureProfileStore(c).clear();runOnMainSync(a::finish);result.putString("NENOTV_PRO_RUNTIME","passed");finish(Activity.RESULT_OK,result);
     }
     static com.nenotv.player.model.Profile profile(){com.nenotv.player.model.Profile p=new com.nenotv.player.model.Profile();p.type=com.nenotv.player.model.Profile.Type.M3U;p.m3uUrl=DemoSource.URL;p.name="Demo QA";return p;}
-    @Override public void onStart(){Bundle result=new Bundle();String phase=args.getString("phase","ui");if(!Arrays.asList("ui","resume","pro","update","xtream").contains(phase)){super.onStart();return;}try{if("xtream".equals(phase)){XtreamImportChecks.run(getTargetContext());xtreamSharedDownloads();result.putString("NENOTV_XTREAM_IMPORT","passed");finish(Activity.RESULT_OK,result);}else if("update".equals(phase)){UpdateAccessChecks.run(getTargetContext());result.putString("NENOTV_UPDATE_ACCESS","passed");finish(Activity.RESULT_OK,result);}else if("resume".equals(phase))resume(result);else if("pro".equals(phase)){Context c=getTargetContext();SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();DemoPolicy.startOrKeep(c,System.currentTimeMillis());new SecureProfileStore(c).save(profile());pro(result);}else core(result);}catch(Throwable failure){result.putString("NENOTV_UI_TESTS","failed: "+failure.getClass().getSimpleName()+": "+failure.getMessage());finish(Activity.RESULT_CANCELED,result);}}
+    @Override public void onStart(){Bundle result=new Bundle();String phase=args.getString("phase","ui");if(!Arrays.asList("ui","resume","pro","update","xtream","onboarding").contains(phase)){super.onStart();return;}try{if("onboarding".equals(phase)){onboarding(result);finish(Activity.RESULT_OK,result);}else if("xtream".equals(phase)){XtreamImportChecks.run(getTargetContext());xtreamSharedDownloads();result.putString("NENOTV_XTREAM_IMPORT","passed");finish(Activity.RESULT_OK,result);}else if("update".equals(phase)){UpdateAccessChecks.run(getTargetContext());result.putString("NENOTV_UPDATE_ACCESS","passed");finish(Activity.RESULT_OK,result);}else if("resume".equals(phase))resume(result);else if("pro".equals(phase)){Context c=getTargetContext();SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();DemoPolicy.startOrKeep(c,System.currentTimeMillis());new SecureProfileStore(c).save(profile());pro(result);}else core(result);}catch(Throwable failure){result.putString("NENOTV_UI_TESTS","failed: "+failure.getClass().getSimpleName()+": "+failure.getMessage());finish(Activity.RESULT_CANCELED,result);}}
     static final class EpgFixture implements AutoCloseable{
         final ServerSocket socket;final Thread worker;final byte[] body;
         EpgFixture()throws Exception{

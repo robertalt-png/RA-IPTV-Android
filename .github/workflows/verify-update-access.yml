@@ -46,6 +46,10 @@ jobs:
             grep -q 'NENOTV_UPDATE_ACCESS=passed' update-access-results.txt
             adb shell am instrument -w -e phase xtream com.nenotv.player.test/com.nenotv.player.UiInstrumentation | tee xtream-import-results.txt
             grep -q 'NENOTV_XTREAM_IMPORT=passed' xtream-import-results.txt
+            adb shell settings put system font_scale 1.3
+            adb shell am instrument -w -e phase onboarding com.nenotv.player.test/com.nenotv.player.UiInstrumentation | tee onboarding-results.txt
+            grep -q 'NENOTV_ONBOARDING=passed' onboarding-results.txt
+            adb pull /sdcard/Android/data/com.nenotv.player/files/qa onboarding-screenshots
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -53,3 +57,5 @@ jobs:
           path: |
             update-access-results.txt
             xtream-import-results.txt
+            onboarding-results.txt
+            onboarding-screenshots
