@@ -10,12 +10,16 @@ import com.nenotv.player.ProfileActivity;
 import com.nenotv.player.storage.EntitlementStore;
 import com.nenotv.player.storage.SettingsStore;
 import com.nenotv.player.storage.SourceStore;
+import com.nenotv.player.entitlement.SourceSyncClient;
+import java.util.concurrent.*;
 import java.util.List;
 
 public class ProSourcesActivity extends Activity {
     LinearLayout box;
     SourceStore sources;
-    int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
+    ExecutorService exec=Executors.newSingleThreadExecutor();
+    int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);    @Override protected void onDestroy(){exec.shutdownNow();super.onDestroy();}
+}
     String L(String en,String nl,String de){String l=SettingsStore.language(this);return "nl".equals(l)?nl:"de".equals(l)?de:en;}
 
     @Override public void onCreate(Bundle b){
@@ -47,9 +51,13 @@ public class ProSourcesActivity extends Activity {
             "NenoTV Pro kann mehrere IPTV-Quellen speichern. Die gewählte Quelle nutzt weiterhin die normale Light-Ladeschicht."),13);
         help.setTextColor(0xFFA7AFBC);help.setPadding(0,dp(6),0,dp(16));box.addView(help);
 
+        LinearLayout topActions=new LinearLayout(this);topActions.setOrientation(LinearLayout.HORIZONTAL);box.addView(topActions);
         Button add=button("＋ "+L("Add source","Bron toevoegen","Quelle hinzufügen"));
         add.setOnClickListener(v->{Intent i=new Intent(this,ProfileActivity.class);i.putExtra("new_source",true);startActivity(i);});
-        box.addView(add,new LinearLayout.LayoutParams(-1,dp(52)));
+        topActions.addView(add,new LinearLayout.LayoutParams(0,dp(52),1));
+        Button sync=button("↻ "+L("Sync My NenoTV","Sync Mijn NenoTV","Mein NenoTV synchronisieren"));
+        sync.setOnClickListener(v->syncNow(sync));
+        topActions.addView(sync,new LinearLayout.LayoutParams(0,dp(52),1));
 
         List<SourceStore.Entry> all=sources.list();
         String active=sources.activeId();
@@ -72,6 +80,19 @@ public class ProSourcesActivity extends Activity {
         }
         Button edit=button(L("Edit","Bewerken","Bearbeiten"));edit.setOnClickListener(v->{Intent i=new Intent(this,ProfileActivity.class);i.putExtra("source_id",e.id);startActivity(i);});row.addView(edit,new LinearLayout.LayoutParams(0,dp(48),1));
         Button more=button("⋮");more.setOnClickListener(v->menu(e));row.addView(more,new LinearLayout.LayoutParams(dp(58),dp(48)));
+    }
+
+    void syncNow(Button button){
+        button.setEnabled(false);button.setText(L("Syncing…","Synchroniseren…","Synchronisieren…"));
+        exec.execute(()->{
+            try{
+                new SourceSyncClient(this).sync();
+                runOnUiThread(()->{Toast.makeText(this,L("Sources synchronized with My NenoTV.","Bronnen gesynchroniseerd met Mijn NenoTV.","Quellen mit Mein NenoTV synchronisiert."),Toast.LENGTH_LONG).show();render();});
+            }catch(Exception ex){
+                String m=ex.getMessage()==null?L("Sync unavailable","Sync niet beschikbaar","Synchronisierung nicht verfügbar"):ex.getMessage();
+                runOnUiThread(()->{Toast.makeText(this,m,Toast.LENGTH_LONG).show();render();});
+            }
+        });
     }
 
     void menu(SourceStore.Entry e){
