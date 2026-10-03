@@ -1,8 +1,39 @@
 #EXTM3U
-# NenoTV demo: Big Buck Bunny (2008), Blender Foundation, CC BY 3.0.
-# https://peach.blender.org/about/ ; https://creativecommons.org/licenses/by/3.0/
-# HLS test hosting: https://test-streams.mux.dev/
-#EXTINF:-1 tvg-id="nenotv-bbb-auto" group-title="NenoTV Demo",Big Buck Bunny - Auto - Blender Foundation CC BY 3.0
+#EXTINF:-1 tvg-id="ebs" tvg-logo="" group-title="EU live",Europe by Satellite
+https://streams.prd.commavservices.eu/live/ebs/index.m3u8
+#EXTINF:-1 tvg-id="ebsplus" tvg-logo="" group-title="EU live",Europe by Satellite +
+https://streams.prd.commavservices.eu/live/ebsplus/index.m3u8
+#EXTINF:-1 tvg-id="bbb" tvg-logo="" group-title="Open films",Big Buck Bunny
 https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
-#EXTINF:-1 tvg-id="nenotv-bbb-480" group-title="NenoTV Demo",Big Buck Bunny - 480p - Blender Foundation CC BY 3.0
-https://test-streams.mux.dev/x36xhzz/url_6/193039199_mp4_h264_aac_hq_7.m3u8
+#EXTINF:-1 tvg-id="film-46670912" tvg-logo="https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8b/Caminandes%2C_Gran_Dillama_-_Blender_Foundation.webm/500px--Caminandes%2C_Gran_Dillama_-_Blender_Foundation.webm.jpg" group-title="Open films",Caminandes: Gran Dillama
+https://upload.wikimedia.org/wikipedia/commons/transcoded/8/8b/Caminandes%2C_Gran_Dillama_-_Blender_Foundation.webm/Caminandes%2C_Gran_Dillama_-_Blender_Foundation.webm.480p.vp9.webm
+#EXTINF:-1 tvg-id="film-29654117" tvg-logo="https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d0/Caminandes-_Llama_Drama_-_Short_Movie.ogv/500px--Caminandes-_Llama_Drama_-_Short_Movie.ogv.jpg" group-title="Open films",Caminandes: Llama Drama
+https://upload.wikimedia.org/wikipedia/commons/transcoded/d/d0/Caminandes-_Llama_Drama_-_Short_Movie.ogv/Caminandes-_Llama_Drama_-_Short_Movie.ogv.480p.vp9.webm
+#EXTINF:-1 tvg-id="film-52325031" tvg-logo="https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ab/Caminandes_3_-_Llamigos_-_Blender_Animated_Short.webm/500px--Caminandes_3_-_Llamigos_-_Blender_Animated_Short.webm.jpg" group-title="Open films",Caminandes 3 - Llamigos
+https://upload.wikimedia.org/wikipedia/commons/transcoded/a/ab/Caminandes_3_-_Llamigos_-_Blender_Animated_Short.webm/Caminandes_3_-_Llamigos_-_Blender_Animated_Short.webm.480p.vp9.webm
+#EXTINF:-1 tvg-id="film-126665605" tvg-logo="https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7a/Charge_-_Blender_Open_Movie-full_movie.webm/500px--Charge_-_Blender_Open_Movie-full_movie.webm.jpg" group-title="Open films",Charge
+https://upload.wikimedia.org/wikipedia/commons/transcoded/7/7a/Charge_-_Blender_Open_Movie-full_movie.webm/Charge_-_Blender_Open_Movie-full_movie.webm.480p.vp9.webm
+#EXTINF:-1 tvg-id="film-90795798" tvg-logo="https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3f/Coffee_Run_-_Blender_Open_Movie-full_movie.webm/500px--Coffee_Run_-_Blender_Open_Movie-full_movie.webm.jpg" group-title="Open films",Coffee Run
+https://upload.wikimedia.org/wikipedia/commons/transcoded/3/3f/Coffee_Run_-_Blender_Open_Movie-full_movie.webm/Coffee_Run_-_Blender_Open_Movie-full_movie.webm.480p.vp9.webm
+#EXTINF:-1 tvg-id="film-46666797" tvg-logo="https://thumb.wikimedia.org/wikipedia/commons/thumb/3/36/Cosmos_Laundromat_-_First_Cycle_-_Official_Blender_Foundation_release.webm/500px--Cosmos_Laundromat_-_First_Cycle_-_Official_Blender_Foundation_release.webm.jpg" group-title="Open films",Cosmos Laundromat - First Cycle
+https://upload.wikimedia.org/wikipedia/commons/transcoded/3/36/Cosmos_Laundromat_-_First_Cycle_-_Official_Blender_Foundation_release.webm/Cosmos_Laundromat_-_First_Cycle_-_Official_Blender_Foundation_release.webm.480p.vp9.webm
+#EXTINF:-1 tvg-id="film-71719912" tvg-logo="https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a2/Elephants_Dream_%282006%29.webm/500px--Elephants_Dream_%282006%29.webm.jpg" group-title="Open films",Elephants Dream
+https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a2/Elephants_Dream_%282006%29.webm/Elephants_Dream_%282006%29.webm.480p.vp9.webm
+#EXTINF:-1 tvg-id="film-79398399" tvg-logo="https://thumb.wikimedia.org/wikipedia/commons/thumb/0/02/Glass_Half_-_Blender_Open_Movie-full_movie.webm/500px--Glass_Half_-_Blender_Open_Movie-full_movie.webm.jpg" group-title="Open films",Glass Half
+https://upload.wikimedia.org/wikipedia/commons/transcoded/0/02/Glass_Half_-_Blender_Open_Movie-full_movie.webm/Glass_Half_-_Blender_Open_Movie-full_movie.webm.480p.vp9.webm
+#EXTINF:-1 tvg-id="film-79397076" tvg-logo="https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a9/HERO_-_Blender_Open_Movie-full_movie.webm/500px--HERO_-_Blender_Open_Movie-full_movie.webm.jpg" group-title="Open films",HERO
+https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a9/HERO_-_Blender_Open_Movie-full_movie.webm/HERO_-_Blender_Open_Movie-full_movie.webm.480p.vp9.webm
+#EXTINF:-1 tvg-id="film-191817212" tvg-logo="https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f2/SINGULARITY_-_Blender_Open_Movie-full_movie.webm/500px--SINGULARITY_-_Blender_Open_Movie-full_movie.webm.jpg" group-title="Open films",SINGULARITY
+https://upload.wikimedia.org/wikipedia/commons/transcoded/f/f2/SINGULARITY_-_Blender_Open_Movie-full_movie.webm/SINGULARITY_-_Blender_Open_Movie-full_movie.webm.480p.vp9.webm
+#EXTINF:-1 tvg-id="film-39990395" tvg-logo="https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f1/Sintel_movie_4K.webm/500px--Sintel_movie_4K.webm.jpg" group-title="Open films",Sintel
+https://upload.wikimedia.org/wikipedia/commons/transcoded/f/f1/Sintel_movie_4K.webm/Sintel_movie_4K.webm.480p.vp9.webm
+#EXTINF:-1 tvg-id="film-77900952" tvg-logo="https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a5/Spring_-_Blender_Open_Movie.webm/500px--Spring_-_Blender_Open_Movie.webm.jpg" group-title="Open films",Spring
+https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a5/Spring_-_Blender_Open_Movie.webm/Spring_-_Blender_Open_Movie.webm.480p.vp9.webm
+#EXTINF:-1 tvg-id="film-112031806" tvg-logo="https://thumb.wikimedia.org/wikipedia/commons/thumb/7/76/Sprite_Fright_-_Blender_Open_Movie-full_movie.webm/500px--Sprite_Fright_-_Blender_Open_Movie-full_movie.webm.jpg" group-title="Open films",Sprite Fright
+https://upload.wikimedia.org/wikipedia/commons/transcoded/7/76/Sprite_Fright_-_Blender_Open_Movie-full_movie.webm/Sprite_Fright_-_Blender_Open_Movie-full_movie.webm.480p.vp9.webm
+#EXTINF:-1 tvg-id="film-40033389" tvg-logo="https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cb/Tears_of_Steel_1080p.webm/500px--Tears_of_Steel_1080p.webm.jpg" group-title="Open films",Tears of Steel
+https://upload.wikimedia.org/wikipedia/commons/transcoded/c/cb/Tears_of_Steel_1080p.webm/Tears_of_Steel_1080p.webm.480p.vp9.webm
+#EXTINF:-1 tvg-id="film-79398607" tvg-logo="https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b2/The_Daily_Dweebs_-_Blender_Open_Movie-full_movie.webm/500px--The_Daily_Dweebs_-_Blender_Open_Movie-full_movie.webm.jpg" group-title="Open films",The Daily Dweebs
+https://upload.wikimedia.org/wikipedia/commons/transcoded/b/b2/The_Daily_Dweebs_-_Blender_Open_Movie-full_movie.webm/The_Daily_Dweebs_-_Blender_Open_Movie-full_movie.webm.480p.vp9.webm
+#EXTINF:-1 tvg-id="film-137469478" tvg-logo="https://thumb.wikimedia.org/wikipedia/commons/thumb/3/38/WING_IT%21_-_Blender_Open_Movie-full_movie.webm/500px--WING_IT%21_-_Blender_Open_Movie-full_movie.webm.jpg" group-title="Open films",WING IT!
+https://upload.wikimedia.org/wikipedia/commons/transcoded/3/38/WING_IT%21_-_Blender_Open_Movie-full_movie.webm/WING_IT%21_-_Blender_Open_Movie-full_movie.webm.480p.vp9.webm

@@ -14,16 +14,40 @@ def replace(path, old, new):
         raise SystemExit(f'demo patch anchor missing: {path}: {old[:80]}')
     path.write_text(text.replace(old, new, 1))
 
+catalogue = json.loads((repo / 'demo/catalogue.json').read_text())
 playlist = (repo / 'demo/nenotv-demo.m3u').read_text()
-if playlist.count('#EXTINF:') != 2:
-    raise SystemExit('reviewed demo playlist must contain two entries')
-(java / 'DemoSource.java').write_text('''package com.nenotv.player;
-public final class DemoSource {
-    public static final String URL="nenotv://demo/v1";
-    public static final String PLAYLIST=''' + json.dumps(playlist) + ''';
-    private DemoSource(){}
-}
-''')
+if playlist.count('#EXTINF:') != len(catalogue) or len({e['id'] for e in catalogue}) != len(catalogue):
+    raise SystemExit('demo catalogue and playlist disagree')
+statements = []
+for e in catalogue:
+    values = dict(type=e['type'], year=e['year'], plot=e['credit']+' | '+e['license']+' | '+e['license_url']+' | Source: '+e['source']+' | Unmodified film/official live feed.')
+    statements.append('if('+json.dumps(e['id'])+'.equals(e.tvgId)){'+''.join('e.'+k+'='+json.dumps(v)+';' for k,v in values.items())+'return;}')
+(java / 'DemoSource.java').write_text('package com.nenotv.player;\npublic final class DemoSource {\n'
+    +'public static final String URL="nenotv://demo/v1";\n'
+    +'public static final int LIVE_COUNT='+str(sum(e['type']=='live' for e in catalogue))+';\n'
+    +'public static final int FILM_COUNT='+str(sum(e['type']=='vod' for e in catalogue))+';\n'
+    +'public static final String PLAYLIST='+json.dumps(playlist)+';\n'
+    +'public static void decorate(com.nenotv.player.model.MediaEntry e){'+''.join(statements)+'}\n'
+    +'public static androidx.media3.exoplayer.source.DefaultMediaSourceFactory mediaSourceFactory(android.content.Context c, com.nenotv.player.model.MediaEntry e){'
+    +'androidx.media3.exoplayer.source.DefaultMediaSourceFactory factory=new androidx.media3.exoplayer.source.DefaultMediaSourceFactory(c);'
+    +'if(e!=null&&e.url!=null&&PLAYLIST.contains("\\n"+e.url+"\\n")){'
+    +'androidx.media3.datasource.DefaultHttpDataSource.Factory http=new androidx.media3.datasource.DefaultHttpDataSource.Factory().setUserAgent("NenoTV/0.13.10 (https://nenotv.com; info@nenotv.com) Android Media3");'
+    +'factory.setDataSourceFactory(new androidx.media3.datasource.DefaultDataSource.Factory(c,http));'
+    +'factory.setLoadErrorHandlingPolicy(new androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(6){'
+    +'@Override public long getRetryDelayMsFor(androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo info){'
+    +'Throwable cause=info.exception;while(cause!=null){if(cause instanceof androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException){'
+    +'int status=((androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)cause).responseCode;'
+    +'if(status==429||status==503)return 15000L*Math.min(info.errorCount,4);}cause=cause.getCause();}return super.getRetryDelayMsFor(info);}});'
+    +'}return factory;}\nprivate DemoSource(){}\n}\n')
+provider = java / 'provider/M3uProvider.java'
+replace(provider, 'all=new ArrayList<>(r.items);', 'all=new ArrayList<>(r.items);if(com.nenotv.player.DemoSource.URL.equals(p.m3uUrl))for(MediaEntry e:all)com.nenotv.player.DemoSource.decorate(e);')
+s = provider.read_text()
+s = s.replace('if(!type.equals("live"))return Collections.emptyList();','')
+s = s.replace('for(MediaEntry e:all)s.add(e.group);','for(MediaEntry e:all)if(type.equals(e.type))s.add(e.group);')
+s = s.replace('new Category(g,g,"live")','new Category(g,g,type)')
+s = s.replace('if(cat==null||cat.isEmpty()||cat.equals("all"))return new ArrayList<>(all);','')
+s = s.replace('if(cat.equals(e.group))o.add(e);','if(type.equals(e.type)&&(cat==null||cat.isEmpty()||cat.equals("all")||cat.equals(e.group)))o.add(e);')
+provider.write_text(s)
 replace(java / 'net/HttpText.java', 'return execute("GET", url, null, Collections.emptyMap());',
         'if(com.nenotv.player.DemoSource.URL.equals(url))return com.nenotv.player.DemoSource.PLAYLIST;\n        return execute("GET", url, null, Collections.emptyMap());')
 gradle = root / 'app/build.gradle'
@@ -66,6 +90,7 @@ replace(main, '@Override protected void onResume(){super.onResume();',
 replace(main, 'library.recent(e);Intent i=ProModuleInstaller.playerIntent(this);',
         'if(DemoPolicy.blockPlayback(this)){recreate();return;}library.recent(e);Intent i=ProModuleInstaller.playerIntent(this);')
 player = java / 'PlayerActivity.java'
+replace(player, 'new ExoPlayer.Builder(this).build()', 'new ExoPlayer.Builder(this).setMediaSourceFactory(DemoSource.mediaSourceFactory(this,entry)).build()')
 replace(player, 'super.onCreate(b);', 'super.onCreate(b);if(DemoPolicy.blockPlayback(this)){finish();return;}')
 # Check while watching too; a session cannot stay open beyond its expiry.
 s = player.read_text()
@@ -90,15 +115,15 @@ replace(instr, 'if ("prepare_resume".equals(phase))', 'if ("demo".equals(phase))
 replace(instr, 'String key="prepare_resume".equals(phase)?', 'String key="demo_resume".equals(phase)?"NENOTV_DEMO_RESUME":"demo".equals(phase)?"NENOTV_DEMO_TESTS":"prepare_resume".equals(phase)?')
 
 mode = sys.argv[1]
-vc = 87 if mode == 'light' else 88
-vn = '0.13.9-light-test' if mode == 'light' else '0.13.9-play1'
+vc = 89 if mode == 'light' else 90
+vn = '0.13.10-light-test' if mode == 'light' else '0.13.10-play1'
 s = gradle.read_text()
 s = re.sub(r'versionCode\s+\d+', f'versionCode {vc}', s, count=1)
 s = re.sub(r"versionName\s+'[^']+'", f"versionName '{vn}'", s, count=1)
 gradle.write_text(s)
 arch = root / 'NENOTV_ARCHITECTURE.txt'
-s = arch.read_text().replace('v0.13.8', 'v0.13.9')
+s = arch.read_text().replace('v0.13.8', 'v0.13.10')
 s = re.sub(r'versionCode=\d+', f'versionCode={vc}', s, count=1)
 s = re.sub(r'versionName=.*', f'versionName={vn}', s, count=1)
-arch.write_text(s + 'demo_playlist=packaged_reviewed_cc_by_3_0\ndemo_network=playback_only\n')
+arch.write_text(s + 'demo_playlist=packaged_reviewed_open_films_and_eu_live\ndemo_network=playback_only\n')
 print(f'Demo configured: {mode}, {vn}, vc{vc}')
