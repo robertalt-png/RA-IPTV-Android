@@ -1,0 +1,13 @@
+<resources>
+    <color name="bg">#07111F</color>
+    <color name="surface">#0D1A2B</color>
+    <color name="surface2">#122238</color>
+    <color name="text">#F7FAFF</color>
+    <color name="muted">#91A3BB</color>
+    <color name="blue">#1F75FF</color>
+    <color name="cyan">#11DDE8</color>
+    <color name="green">#29D17D</color>
+    <color name="orange">#FFB547</color>
+    <color name="red">#FF5D66</color>
+    <color name="line">#1C3350</color>
+</resources>
