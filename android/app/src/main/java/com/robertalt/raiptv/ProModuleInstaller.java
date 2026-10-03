@@ -11,6 +11,7 @@ public final class ProModuleInstaller {
     private static final String MODULE="proextras";
     private static final String PRO_PLAYER="com.nenotv.player.proextras.ProPlayerActivity";
     private static final String PRO_SOURCES="com.nenotv.player.proextras.ProSourcesActivity";
+    private static final String PRO_NETWORK="com.nenotv.player.proextras.ProNetworkActivity";
     private ProModuleInstaller(){}
 
     public static boolean isInstalled(Activity a){
@@ -51,6 +52,13 @@ public final class ProModuleInstaller {
         }
         if(pro&&!isInstalled(a))request(a);
         return new Intent(a,ProfileActivity.class);
+    }
+
+    public static Intent networkIntent(Activity a){
+        boolean pro=new EntitlementStore(a).isPro();
+        if(pro&&isInstalled(a)){Intent i=new Intent();i.setClassName(a,PRO_NETWORK);return i;}
+        if(pro&&!isInstalled(a))request(a);
+        return new Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS);
     }
 
     public static Intent playerIntent(Activity a){
