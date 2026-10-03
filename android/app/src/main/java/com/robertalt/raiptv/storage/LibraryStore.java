@@ -1,7 +1,9 @@
 package com.nenotv.player.storage;
 import android.content.*; import com.nenotv.player.model.MediaEntry; import org.json.*; import java.util.*;
 public class LibraryStore {
-    private final SharedPreferences p; private final CryptoBox crypto; public LibraryStore(Context c){p=c.getSharedPreferences("library",Context.MODE_PRIVATE);crypto=new CryptoBox();}
+    private final SharedPreferences p; private final CryptoBox crypto;
+    public final String viewerId;
+    public LibraryStore(Context c){viewerId=new HouseholdProfileStore(c).activeId();p=c.getSharedPreferences(HouseholdProfileStore.libraryName(viewerId),Context.MODE_PRIVATE);crypto=new CryptoBox();}
     public boolean isFavorite(MediaEntry e){return e!=null&&p.getStringSet("favorites",Collections.emptySet()).contains(e.uniqueKey());}
     public void toggleFavorite(MediaEntry e){Set<String>s=new HashSet<>(p.getStringSet("favorites",Collections.emptySet()));if(!s.add(e.uniqueKey()))s.remove(e.uniqueKey());p.edit().putStringSet("favorites",s).apply();cache(e);noteInterest(e);}
     public void recent(MediaEntry e){cache(e);noteInterest(e);List<String>r=new ArrayList<>();try{JSONArray a=new JSONArray(p.getString("recent","[]"));for(int i=0;i<a.length();i++)if(!a.optString(i).equals(e.uniqueKey()))r.add(a.optString(i));}catch(Exception ignored){}r.add(0,e.uniqueKey());if(r.size()>80)r=r.subList(0,80);p.edit().putString("recent",new JSONArray(r).toString()).apply();}

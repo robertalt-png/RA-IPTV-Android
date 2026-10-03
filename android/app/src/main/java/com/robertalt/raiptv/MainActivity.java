@@ -69,6 +69,7 @@ public class MainActivity extends Activity {
     @Override protected void onPostResume(){
         super.onPostResume();
         if(isFinishing()||isDestroyed())return;
+        if(library!=null&&!library.viewerId.equals(new HouseholdProfileStore(this).activeId())){recreate();return;}
         android.content.SharedPreferences settings=SettingsStore.prefs(this);
         if(settings.getBoolean("account_sources_changed",false)){
             settings.edit().remove("account_sources_changed").apply();recreate();return;
@@ -150,6 +151,7 @@ public class MainActivity extends Activity {
     EntitlementStore ent=new EntitlementStore(this);TextView plan=new TextView(this);plan.setText(ent.statusLabel(this));plan.setTextColor(0xFFA7AFBC);plan.setTextSize(13);plan.setPadding(0,0,0,dp(10));box.addView(plan);
     addNenoMenuItem(d,box,T("search_everywhere"),()->{toggleSearch();});
     addNenoMenuItem(d,box,T("account_and_pro"),()->startActivity(new Intent(this,AccountActivity.class)));
+    addNenoMenuItem(d,box,T("household_profiles"),()->{if(ProGate.require(this,T("household_profiles")))startActivity(new Intent(this,HouseholdProfilesActivity.class));});
     addNenoMenuItem(d,box,T("manage_source"),()->startActivityForResult(ProModuleInstaller.sourcesIntent(this),10));
     addNenoMenuItem(d,box,T("casting"),()->{if(ProGate.require(this,T("casting")))showTvShareMenu();});
     addNenoMenuItem(d,box,SettingsStore.language(this).equals("nl")?"Netwerk & Privacy":SettingsStore.language(this).equals("de")?"Netzwerk & Datenschutz":"Network & Privacy",()->{if(ProGate.require(this,"Network & Privacy"))startActivity(ProModuleInstaller.networkIntent(this));});
