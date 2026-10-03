@@ -36,7 +36,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
         String previousStart=SettingsStore.startScreen(c);
         try{
             for(String category:new String[]{"NL | Films","General"})try(XtreamFixture fixture=new XtreamFixture(category)){
-                Profile p=new Profile();p.type=Profile.Type.XTREAM;p.server=fixture.url();p.username="qa";p.password="qa";p.name="Xtream QA";
+                Profile p=new Profile();p.type=Profile.Type.XTREAM;p.server=fixture.url();p.username="qa-"+System.nanoTime();p.password="qa";p.name="Xtream QA";
                 new SecureProfileStore(c).save(p);
                 SettingsStore.setPrimaryLanguage(c,"nl");
                 SettingsStore.prefs(c).edit().putString("start_screen","vod").commit();
@@ -51,8 +51,10 @@ public final class UiInstrumentation extends ImportInstrumentation {
                     }
                     check(a.profile!=null&&a.searchIndex.isComplete(a.profileKey(),"vod")&&a.searchIndex.isComplete(a.profileKey(),"series"),"Shared Xtream import did not complete");
                     for(String action:new String[]{"get_live_streams","get_vod_streams","get_series"})check(fixture.count(action)==1,"Duplicate Xtream download: "+action+"="+fixture.count(action));
-                    waitForIdleSync();
-                    runOnMainSync(()->check(a.gridAdapter.getCount()>0,"Shared import did not populate screen"));
+                    java.util.concurrent.atomic.AtomicBoolean populated=new java.util.concurrent.atomic.AtomicBoolean();
+                    long visibleDeadline=SystemClock.elapsedRealtime()+5000;
+                    while(!populated.get()&&SystemClock.elapsedRealtime()<visibleDeadline){runOnMainSync(()->populated.set(a.gridAdapter.getCount()>0));Thread.sleep(100);}
+                    check(populated.get(),"Shared import did not populate screen");
                     snapshot("xtream-shared-"+(category.startsWith("NL")?"language":"all"));
                 }finally{runOnMainSync(a::finish);waitForIdleSync();}
             }
@@ -113,6 +115,16 @@ public final class UiInstrumentation extends ImportInstrumentation {
         runOnMainSync(()->{check(saved.demoRadio.isChecked(),"Saved NenoTV offer reopened as own M3U");saved.finish();});
         ProfileActivity added=(ProfileActivity)startActivitySync(new Intent(c,ProfileActivity.class).putExtra("new_source",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));waitForIdleSync();
         runOnMainSync(()->{check(added.xtream.isChecked(),"Adding own source changed default");added.finish();});
+        String previousStart=SettingsStore.startScreen(c);
+        SettingsStore.prefs(c).edit().putString("start_screen","vod").commit();
+        MainActivity films=(MainActivity)startActivitySync(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        try{
+            java.util.concurrent.atomic.AtomicBoolean visible=new java.util.concurrent.atomic.AtomicBoolean();
+            long deadline=SystemClock.elapsedRealtime()+10000;
+            while(!visible.get()&&SystemClock.elapsedRealtime()<deadline){runOnMainSync(()->visible.set(films.gridAdapter.getCount()>0));Thread.sleep(100);}
+            check(visible.get(),"Built-in NenoTV films blocked as M3U live-only");
+            snapshot("nenotv-offer-films");
+        }finally{runOnMainSync(films::finish);SettingsStore.prefs(c).edit().putString("start_screen",previousStart).commit();}
         result.putString("NENOTV_ONBOARDING","passed");
     }
     void core(Bundle result)throws Exception{
