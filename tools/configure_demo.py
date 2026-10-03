@@ -32,7 +32,13 @@ for e in catalogue:
     +'androidx.media3.exoplayer.source.DefaultMediaSourceFactory factory=new androidx.media3.exoplayer.source.DefaultMediaSourceFactory(c);'
     +'if(e!=null&&e.url!=null&&PLAYLIST.contains("\\n"+e.url+"\\n")){'
     +'androidx.media3.datasource.DefaultHttpDataSource.Factory http=new androidx.media3.datasource.DefaultHttpDataSource.Factory().setUserAgent("NenoTV/0.13.10 (https://nenotv.com; info@nenotv.com) Android Media3");'
-    +'factory.setDataSourceFactory(new androidx.media3.datasource.DefaultDataSource.Factory(c,http));}return factory;}\nprivate DemoSource(){}\n}\n')
+    +'factory.setDataSourceFactory(new androidx.media3.datasource.DefaultDataSource.Factory(c,http));'
+    +'factory.setLoadErrorHandlingPolicy(new androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(6){'
+    +'@Override public long getRetryDelayMsFor(androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo info){'
+    +'Throwable cause=info.exception;while(cause!=null){if(cause instanceof androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException){'
+    +'int status=((androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)cause).responseCode;'
+    +'if(status==429||status==503)return 15000L*Math.min(info.errorCount,4);}cause=cause.getCause();}return super.getRetryDelayMsFor(info);}});'
+    +'}return factory;}\nprivate DemoSource(){}\n}\n')
 provider = java / 'provider/M3uProvider.java'
 replace(provider, 'all=new ArrayList<>(r.items);', 'all=new ArrayList<>(r.items);if(com.nenotv.player.DemoSource.URL.equals(p.m3uUrl))for(MediaEntry e:all)com.nenotv.player.DemoSource.decorate(e);')
 s = provider.read_text()

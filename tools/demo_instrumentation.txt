@@ -45,7 +45,7 @@
                     });
                     player[0].setMediaItem(androidx.media3.common.MediaItem.fromUri(item.url));player[0].prepare();player[0].play();
                 });
-                long end=android.os.SystemClock.elapsedRealtime()+45000;
+                long end=android.os.SystemClock.elapsedRealtime()+240000;
                 final java.util.concurrent.atomic.AtomicBoolean played=new java.util.concurrent.atomic.AtomicBoolean();
                 while(!played.get()&&error.get()==null&&android.os.SystemClock.elapsedRealtime()<end){
                     runOnMainSync(()->played.set(frame.get()&&player[0].getCurrentPosition()>=1500&&player[0].getAudioFormat()!=null));
@@ -53,8 +53,9 @@
                 }
                 require(error.get()==null,"Demo playback error: "+item.tvgId+": "+error.get());
                 require(played.get(),"Demo did not render video and decode audio: "+item.tvgId);
-                android.util.Log.i("NenoTVDemoQA","DEMO_STREAM_PASSED="+item.tvgId);
+                result.putString("NENOTV_DEMO_STREAM_"+item.tvgId,"passed");
             }finally{runOnMainSync(()->{if(player[0]!=null)player[0].release();if(surface[0]!=null)surface[0].release();if(texture[0]!=null)texture[0].release();});}
+            Thread.sleep(5000);
         }
         p.name="Renamed demo";profiles.save(p);
         SettingsStore.prefs(c).edit().putLong("demo_expires_at",System.currentTimeMillis()-1).commit();
