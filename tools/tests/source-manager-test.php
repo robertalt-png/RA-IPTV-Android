@@ -7,6 +7,12 @@ function wp_nonce_field($action,$name,$referer,$echo){return '<input name="'.esc
 function check_admin_referer($action){global $validNonce,$nonceAction;$nonceAction=$action;if(!$validNonce)wp_die('fixture-security-error');return true;}
 function add_query_arg($key,$value,$url){return $url.'?'.urlencode($key).'='.urlencode($value);}
 require __DIR__.'/pairing-backend.php';
+class SourceReadDb extends TestDb {
+    public function get_results($query,$format){[$sql,$args]=$query;preg_match('/SELECT (.*?) FROM /',$sql,$m);$columns=array_flip(explode(',',$m[1]));return array_values(array_map(fn($d)=>array_intersect_key($d,$columns),array_filter($this->devices,fn($d)=>$d['entitlement_id']===$args[0])));}
+}
+$read=new SourceReadDb();$read->devices=$wpdb->devices;$read->entitlements=$wpdb->entitlements;$read->vaults=$wpdb->vaults;$wpdb=$read;
+$accountDevices=new ReflectionMethod(NenoTV_Entitlement_Core::class,'account_devices');
+check($accountDevices->invoke(null,1)[0]['display_name']==='Living room','Account overview omitted saved device name');
 $_GET=['lang'=>'en'];$logged=true;$userEmail='owner@example.invalid';$validNonce=true;
 $options['nenotv_entitlement_mode']='live';$startChecks=$checks;
 function source_vault(){global $p;return sources('pull',$p)->data;}
@@ -14,7 +20,7 @@ function post_source(string $action,array $values): string {
     global $nonceAction;
     $_POST=$values;
     try {NenoTV_Entitlement_Core::{'handle_source_'.$action}();throw new LogicException('Missing redirect');}
-    catch(Redirect $e){return $e->getMessage();}
+    catch(Redirect $e){if($e->getMessage()==='login')throw $e;return $e->getMessage();}
 }
 function source_error(string $action,array $values,string $expected): void {
     global $wpdb;

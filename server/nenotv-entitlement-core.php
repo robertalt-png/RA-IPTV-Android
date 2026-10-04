@@ -1249,7 +1249,7 @@ final class NenoTV_Entitlement_Core {
     private static function account_devices(int $entitlement_id): array {
         global $wpdb;
         $rows = $wpdb->get_results($wpdb->prepare(
-            'SELECT id,public_device_id,platform,app_version,status,created_at,last_seen_at FROM '.self::dev_table().' WHERE entitlement_id=%d ORDER BY status=%s DESC,last_seen_at DESC',
+            'SELECT id,display_name,public_device_id,platform,app_version,status,created_at,last_seen_at FROM '.self::dev_table().' WHERE entitlement_id=%d ORDER BY status=%s DESC,last_seen_at DESC',
             $entitlement_id, 'active'
         ), ARRAY_A);
         return is_array($rows) ? $rows : [];

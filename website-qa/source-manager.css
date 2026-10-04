@@ -1,0 +1,15 @@
+
+/* My NenoTV source management, compatible with app 0.14.2. */
+.nv-source-vault{margin-top:28px;min-width:0}
+.nv-source-card{margin:18px 0;padding:20px;border:1px solid #dce4e9;border-radius:18px;background:#fff;min-width:0}
+.nv-source-card h4{margin-top:0;overflow-wrap:anywhere}
+.nv-source-form{max-width:680px;padding:14px 0;min-width:0}
+.nv-source-form label{display:block;color:#253444;font-weight:600}
+.nv-source-form input[type="text"],.nv-source-form input[type="password"],.nv-source-form input[type="url"],.nv-source-form input[type="number"],.nv-source-form select{display:block;box-sizing:border-box;width:100%;max-width:100%;min-width:0;margin-top:7px;padding:11px 12px;border:1px solid #b9c8d2;border-radius:10px;background:#fff;color:#172432;font:inherit}
+.nv-source-form input[type="checkbox"]{width:auto;margin-right:7px;accent-color:#007b84}
+.nv-source-form input:focus-visible,.nv-source-form select:focus-visible,.nv-source-add summary:focus-visible{outline:3px solid #007b84;outline-offset:3px}
+.nv-source-add summary{padding:12px 0;cursor:pointer;font-weight:700;color:#006a72}
+.nv-source-delete{margin-top:12px}
+.nv-source-form button,.nv-source-delete button{max-width:100%;white-space:normal}
+.nv-source-vault p,.nv-pro-account .nv-account-notice{overflow-wrap:anywhere}
+@media(max-width:600px){.nv-source-card{padding:15px}.nv-source-form button,.nv-source-delete button{width:100%}}
