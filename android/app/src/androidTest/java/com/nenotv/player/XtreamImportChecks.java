@@ -37,6 +37,15 @@ final class XtreamImportChecks {
             check(failed&&store.countSection(profile,"vod")==2&&store.importCount(invalid,profile,"vod")==0,"Invalid batch was partially committed");
             store.abortSectionImport(invalid);
             store.clearImportProgress(profile,"vod");
+            MediaEntry a=item("same-id","vod"),b=item("same-id","vod"),primary=item("same-id","vod");
+            a.sourceId="source-a";b.sourceId="source-b";
+            String multiple=store.beginSectionImport();
+            store.importBatch(multiple,profile,"vod",Arrays.asList(primary,a,b),true);
+            check(store.importCount(multiple,profile,"vod")==3,"Equal provider IDs overwrote staged sources");
+            store.finishSectionImport(multiple,profile,"vod");
+            java.util.List<MediaEntry> loaded=store.sectionPage(profile,"vod",0,10);
+            java.util.Set<String> identities=new java.util.HashSet<>();for(MediaEntry e:loaded)identities.add(e.uniqueKey());
+            check(loaded.size()==3&&identities.contains(primary.uniqueKey())&&identities.contains(a.uniqueKey())&&identities.contains(b.uniqueKey()),"Index lost equal provider IDs or source tags");
         }
     }
 }

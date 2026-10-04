@@ -10,6 +10,8 @@ public final class UiText {
     private UiText(){}
     private static Map<String,String> map(String[][] rows){LinkedHashMap<String,String> m=new LinkedHashMap<>();for(String[] r:rows)m.put(r[0],r[1]);return Collections.unmodifiableMap(m);}
     private static final Map<String,String> EN=map(new String[][]{
+        {"source_unavailable","This source is no longer available"},
+        {"source_changed","This source changed. Please try again"},
         {"pair_by_phone","Link via phone"},
         {"pair_qr","My NenoTV pairing QR code"},
         {"pair_waiting","Waiting for confirmation"},
@@ -335,6 +337,8 @@ public final class UiText {
         {"m3u_live_only","Only live TV is available for this M3U profile"},
     });
     private static final Map<String,String> NL=map(new String[][]{
+        {"source_unavailable","Deze bron is niet meer beschikbaar"},
+        {"source_changed","Deze bron is gewijzigd. Probeer het opnieuw"},
         {"pair_by_phone","Koppelen via telefoon"},
         {"pair_qr","Mijn NenoTV-koppelcode"},
         {"pair_waiting","Wachten op bevestiging"},
@@ -956,6 +960,8 @@ public final class UiText {
         {"m3u_live_only","Solo TV en directo está disponible para este perfil M3U"},
     });
     private static final Map<String,String> DE=map(new String[][]{
+        {"source_unavailable","Diese Quelle ist nicht mehr verfügbar"},
+        {"source_changed","Diese Quelle wurde geändert. Bitte erneut versuchen"},
         {"pair_by_phone","Per Telefon verbinden"},
         {"pair_qr","Mein NenoTV-Verbindungscode"},
         {"pair_waiting","Warten auf Bestatigung"},

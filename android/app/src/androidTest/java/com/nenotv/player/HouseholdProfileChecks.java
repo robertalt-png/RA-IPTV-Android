@@ -29,6 +29,20 @@ final class HouseholdProfileChecks {
             try(android.database.Cursor c=db.rawQuery("SELECT cursor,item_count FROM import_progress",null)){
                 check(c.moveToFirst()&&c.getString(0).equals("category:2")&&c.getInt(1)==2,"Index migration lost import checkpoint");
             }
+            db.beginTransaction();
+            try(android.database.sqlite.SQLiteStatement insert=db.compileStatement("INSERT INTO entries(profile,item_key,type,payload) VALUES('qa',?,'vod',?)")){
+                for(int n=0;n<4096;n++){
+                    insert.bindString(1,"vod:bulk-"+n);
+                    insert.bindString(2,new org.json.JSONObject().put("id","bulk-"+n).put("type","vod").put("sourceId","bulk").toString());
+                    insert.executeInsert();
+                }
+                db.setTransactionSuccessful();
+            }finally{db.endTransaction();}
+            long started=android.os.SystemClock.elapsedRealtime();helper.onUpgrade(db,3,4);
+            android.util.Log.i("NenoTVIndexMigration","4098 rows migrated in "+(android.os.SystemClock.elapsedRealtime()-started)+" ms");
+            try(android.database.Cursor c=db.rawQuery("SELECT COUNT(*) FROM entries WHERE item_key LIKE 'source:4:bulk|vod:bulk-%'",null)){
+                check(c.moveToFirst()&&c.getInt(0)==4096,"Batched migration skipped or duplicated rows");
+            }
         }finally{helper.close();context.deleteDatabase(database);}
     }
     static void check(boolean value,String message){if(!value)throw new AssertionError(message);}
