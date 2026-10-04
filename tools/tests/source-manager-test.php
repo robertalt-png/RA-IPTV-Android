@@ -8,7 +8,7 @@ function check_admin_referer($action){global $validNonce,$nonceAction;$nonceActi
 function add_query_arg($key,$value,$url){return $url.'?'.urlencode($key).'='.urlencode($value);}
 require __DIR__.'/pairing-backend.php';
 class SourceReadDb extends TestDb {
-    public function get_results($query,$format){[$sql,$args]=$query;preg_match('/SELECT (.*?) FROM /',$sql,$m);$columns=array_flip(explode(',',$m[1]));return array_values(array_map(fn($d)=>array_intersect_key($d,$columns),array_filter($this->devices,fn($d)=>$d['entitlement_id']===$args[0])));}
+    public function get_results($query,$format){[$sql,$args]=$query;preg_match('/SELECT (.*?) FROM /',$sql,$m);$columns=array_flip(explode(',',$m[1]));return array_values(array_map(fn($d)=>array_intersect_key($d,$columns),array_filter($this->devices,fn($d)=>$d['entitlement_id']===$args[0] && (!str_contains($sql,'AND status=%s') || $d['status']===$args[1]))));}
 }
 $read=new SourceReadDb();$read->devices=$wpdb->devices;$read->entitlements=$wpdb->entitlements;$read->vaults=$wpdb->vaults;$wpdb=$read;
 $accountDevices=new ReflectionMethod(NenoTV_Entitlement_Core::class,'account_devices');

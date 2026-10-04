@@ -235,9 +235,8 @@ public final class UiInstrumentation extends ImportInstrumentation {
             ProfileActivity input=(ProfileActivity)startActivitySync(new Intent(getTargetContext(),ProfileActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             try{
                 runOnMainSync(()->{input.xtream.setChecked(true);input.server.setText("https://provider.example.invalid");input.user.setText("qa-user");input.pass.setText("qa-password");input.connectAndSave();input.connectAndSave();});
-                long until=SystemClock.elapsedRealtime()+5000;while(opened.get()==0&&SystemClock.elapsedRealtime()<until)Thread.sleep(50);
-                check(opened.get()==1&&!savedProfiles.exists(),"Unpaired input imported locally or opened duplicate pairing sessions");
-                android.app.Activity top=waitForMonitorWithTimeout(pairingMonitor,1000);
+                android.app.Activity top=waitForMonitorWithTimeout(pairingMonitor,5000);
+                check(top!=null&&pairingMonitor.getHits()==1&&!savedProfiles.exists()&&opened.get()==0,"Unpaired input imported locally, opened browser or launched duplicate pairing sessions");
                 if(top!=null)runOnMainSync(top::finish);
             }finally{
                 removeMonitor(pairingMonitor);runOnMainSync(input::finish);entitlementPrefs.edit().putString("level",oldLevel).commit();

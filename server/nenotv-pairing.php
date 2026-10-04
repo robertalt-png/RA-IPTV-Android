@@ -174,7 +174,7 @@ trait NenoTV_Pairing {
             'inactive'=>'Pairing is not available for this account yet.',
         ]);
         get_header();
-        echo '<main class="nv-pro-account"><h1>'.esc_html($s['title']).'</h1>';
+        echo '<main class="nv-pro-account nv-pair-page"><h1>'.esc_html($s['title']).'</h1>';
         if(!empty($_GET['approved'])&&get_transient('nenotv_pair_notice_'.get_current_user_id())){
             delete_transient('nenotv_pair_notice_'.get_current_user_id());
             echo '<p>'.esc_html($s['done']).'</p>';
@@ -187,7 +187,7 @@ trait NenoTV_Pairing {
         else{
             $code=self::pairing_code(is_scalar($_GET['code']??null)?(string)$_GET['code']:'');
             if($code===''){
-                echo '<form method="get"><label>'.esc_html($s['code']).'<input name="code" maxlength="11" required autocomplete="off"></label><button type="submit">'.esc_html($s['find']).'</button></form>';
+                echo '<p>'.esc_html($lang==='nl'?'Open NenoTV op uw apparaat. Scan de QR met uw telefooncamera, of vul hier de vier tekens van het app-scherm in.':($lang==='de'?'Öffne NenoTV. Scanne den QR-Code mit deiner Handykamera oder gib die vier Zeichen aus der App hier ein.':'Open NenoTV. Scan its QR with your phone camera, or enter the four characters shown in the app here.')).'</p><form class="nv-pair-form" method="get"><input type="hidden" name="lang" value="'.esc_attr($lang).'"><label for="nv-pair-code">'.esc_html($s['code']).'</label><input id="nv-pair-code" name="code" placeholder="— — — —" maxlength="11" required autocomplete="off" autocapitalize="characters" spellcheck="false"><button type="submit">'.esc_html($s['approve']).'</button></form>';
             }elseif(!self::pairing_rate('lookup',(string)get_current_user_id(),5,5*MINUTE_IN_SECONDS)||!self::pairing_rate('web_lookup',(string)($_SERVER['REMOTE_ADDR']??'unknown'),15,5*MINUTE_IN_SECONDS)){
                 echo '<p>'.esc_html($s['expired']).'</p>';
             }else{
@@ -195,7 +195,7 @@ trait NenoTV_Pairing {
                 if(!$session)echo '<p>'.esc_html($s['expired']).'</p>';
                 elseif($session['state']!=='pending')echo '<p>'.esc_html($s['pending']).'</p>';
                 else{
-                    echo self::pairing_qr(home_url('/nenotv-pair/?code='.$code.'&lang='.$lang));
+                    // The QR was scanned in the app; this page only confirms the device.
                     echo '<h2>'.esc_html($session['name']).'</h2><p><code>'.esc_html(strlen($code)===4?$code:substr($code,0,5).'-'.substr($code,5)).'</code></p><p>'.esc_html($session['public_device_id']).'</p>';
                     echo '<form method="post" action="'.esc_url(admin_url('admin-post.php')).'">';
                     echo '<input type="hidden" name="action" value="nenotv_pair_approve"><input type="hidden" name="code" value="'.esc_attr($code).'">';

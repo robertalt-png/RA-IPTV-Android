@@ -47,18 +47,19 @@ trait NenoTV_Source_Manager {
         else $h.='<p><label>Type<select name="source_type"><option value="XTREAM">Xtream</option><option value="M3U">M3U</option></select></label></p><p>'.esc_html($s['format']).'</p>';
         $type=$edit?(string)$source['type']:'';
         if (!$edit || $type==='XTREAM') {
-            $h.='<p><label>Server<input name="source_server" type="url" maxlength="1000" autocomplete="off" placeholder="https://"></label></p>';
+            $h.='<div data-source-kind="XTREAM"><p><label>Server<input name="source_server" type="url" maxlength="1000" autocomplete="off" placeholder="https://"></label></p>';
             $h.='<p><label>'.esc_html($s['user']).'<input name="source_username" type="text" maxlength="500" autocomplete="off"></label></p>';
-            $h.='<p><label>'.esc_html($s['password']).'<input name="source_password" type="password" maxlength="500" autocomplete="new-password"></label></p>';
+            $h.='<p><label>'.esc_html($s['password']).'<input name="source_password" type="password" maxlength="500" autocomplete="new-password"></label></p></div>';
         }
-        if (!$edit || $type==='M3U') $h.='<p><label>M3U URL<input name="source_m3u" type="url" maxlength="2000" autocomplete="off" placeholder="https://"></label></p>';
-        $h.='<p><label>EPG URL<input name="source_epg" type="url" maxlength="2000" autocomplete="off" placeholder="https://"></label></p>';
+        if (!$edit || $type==='M3U') $h.='<div data-source-kind="M3U"><p><label>M3U URL<input name="source_m3u" type="url" maxlength="2000" autocomplete="off" placeholder="https://"></label></p></div>';
+        $h.='<details class="nv-source-advanced"><summary>'.esc_html($lang==='nl'?'Geavanceerd (optioneel)':($lang==='de'?'Erweitert (optional)':'Advanced (optional)')).'</summary><p><label>EPG URL<input name="source_epg" type="url" maxlength="2000" autocomplete="off" placeholder="https://"></label></p>';
         if ($edit) $h.='<p><label><input name="source_clear_epg" type="checkbox" value="1"> '.esc_html($s['clear']).'</label></p>';
         $h.='<p><label><input name="source_enabled" type="checkbox" value="1"'.(!$edit || !empty($source['enabled'])?' checked':'').'> '.esc_html($s['enabled']).'</label></p>';
         $h.='<p><label>'.esc_html($s['priority']).'<input name="source_priority" type="number" min="0" max="99" value="'.esc_attr((string)($source['priority']??0)).'" required></label></p>';
+        $h.='</details>';
         $consent=$lang==='nl'?'Ik geef Mijn NenoTV toestemming om met deze gegevens mijn lijst op te halen, versleuteld op te slaan en als mediapakket beschikbaar te maken voor mijn gekoppelde apparaten.':($lang==='de'?'Mein NenoTV darf mit diesen Daten meine Liste abrufen, verschlüsselt speichern und das Medienpaket meinen verbundenen Geräten bereitstellen.':'I allow My NenoTV to retrieve my list with these details, store them encrypted and make the media package available to my linked devices.');
         $h.='<p><label><input type="checkbox" name="source_consent" value="1" required> '.esc_html($consent).'</label></p>';
-        return $h.'<button type="submit">'.esc_html($s['save']).'</button></form>';
+        return $h.'<button type="submit">'.esc_html($s['save']).'</button></form><script>(function(){var script=document.currentScript,form=script.previousElementSibling,select=form.querySelector("select[name=source_type]");if(!select)return;function update(){form.querySelectorAll("[data-source-kind]").forEach(function(box){var show=box.dataset.sourceKind===select.value;box.hidden=!show;box.querySelectorAll("input").forEach(function(input){input.disabled=!show;});});}select.addEventListener("change",update);update();})();</script>';
     }
 
     private static function source_account_notice(?array $ent, string $lang): string {
@@ -66,7 +67,7 @@ trait NenoTV_Source_Manager {
         $guide=$lang==='nl'?'/language/nl/installatie/qr-koppeling/':($lang==='de'?'/language/de/einrichtung/qr-kopplung/':'/setup/qr-pairing/');
         $h='<div class="nv-account-notice"><strong>'.esc_html($s['pair']).'</strong><p>';
         if (is_array($ent) && self::app_service_live($ent) && self::entitlement_is_active($ent)) {
-            $h.=self::pairing_qr('nenotv://setup');
+            $h.=esc_html($lang==='nl'?'1. Open de app en kies uw taal. 2. Scan de QR in de app met uw telefooncamera, of vul de vier tekens in via de knop hieronder.':($lang==='de'?'1. App öffnen und Sprache wählen. 2. QR-Code der App scannen oder den vierstelligen Code unten eingeben.':'1. Open the app and choose your language. 2. Scan its QR with your phone camera, or enter its four-character code using the button below.')).'</p><p>'; 
             $h.='<a class="button" href="'.esc_url(add_query_arg('lang',$lang,home_url('/nenotv-pair/'))).'">'.esc_html($s['pair']).'</a>';
         } else $h.=esc_html(self::mode()==='live'?$s['inactive']:$s['pending']);
         return $h.'</p><a href="'.esc_url(home_url($guide)).'">'.esc_html($s['guide']).'</a></div>';

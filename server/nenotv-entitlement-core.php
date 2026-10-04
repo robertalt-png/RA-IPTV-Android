@@ -2,7 +2,7 @@
 /**
  * Plugin Name: NenoTV Entitlement Core
  * Description: Central NenoTV entitlement control plane for payment grants, refunds, device claims and the app bridge. Defaults to safe shadow mode until commercial launch.
- * Version: 0.1.21
+ * Version: 0.1.22
  * Author: NenoTV
  * Requires at least: 6.6
  * Requires PHP: 8.0
@@ -18,7 +18,7 @@ final class NenoTV_Entitlement_Core {
     use NenoTV_Pairing;
     use NenoTV_Source_Manager;
     use NenoTV_Catalog_Package;
-    const VERSION = '0.1.21';
+    const VERSION = '0.1.22';
     const DB_VERSION = '5';
     const NS = 'nenotv-backend/v1';
     const APP_NS = 'nenotv/v1';
@@ -43,6 +43,7 @@ final class NenoTV_Entitlement_Core {
 
     public static function init(): void {
         self::pairing_hooks();
+        add_action('wp_enqueue_scripts', static function(){wp_enqueue_style('nenotv-account-flow', plugins_url('account-flow.css',__FILE__), [], self::VERSION);});
         self::catalog_hooks();
         add_action('rest_api_init', [__CLASS__, 'register_routes']);
         add_action('admin_menu', [__CLASS__, 'admin_menu'], 65);
@@ -1254,7 +1255,7 @@ final class NenoTV_Entitlement_Core {
     private static function account_devices(int $entitlement_id): array {
         global $wpdb;
         $rows = $wpdb->get_results($wpdb->prepare(
-            'SELECT id,display_name,public_device_id,platform,app_version,status,created_at,last_seen_at FROM '.self::dev_table().' WHERE entitlement_id=%d ORDER BY status=%s DESC,last_seen_at DESC',
+            'SELECT id,display_name,public_device_id,platform,app_version,status,created_at,last_seen_at FROM '.self::dev_table().' WHERE entitlement_id=%d AND status=%s ORDER BY last_seen_at DESC',
             $entitlement_id, 'active'
         ), ARRAY_A);
         return is_array($rows) ? $rows : [];
@@ -1689,7 +1690,7 @@ final class NenoTV_Entitlement_Core {
                 $html .= '<label>' . esc_html($lang === 'nl' ? 'Apparaatnaam' : ($lang === 'de' ? 'Gerätename' : 'Device name')) . '<input required name="device_name" maxlength="80" value="' . esc_attr($display_name) . '"></label>';
                 $html .= '<button type="submit">' . esc_html($lang === 'nl' ? 'Naam opslaan' : ($lang === 'de' ? 'Name speichern' : 'Save name')) . '</button></form></div>';
 
-                if ($is_active && in_array($status, ['active','shadow'], true)) {
+                if ($is_active && self::user_owns_entitlement($ent)) {
                     $html .= '<form class="nv-device-remove" method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
                     $html .= '<input type="hidden" name="action" value="nenotv_device_revoke"><input type="hidden" name="device_id" value="' . esc_attr((string)$device['id']) . '"><input type="hidden" name="lang" value="' . esc_attr($lang) . '">';
                     $html .= wp_nonce_field('nenotv_revoke_device_' . (int)$device['id'], '_wpnonce', true, false);

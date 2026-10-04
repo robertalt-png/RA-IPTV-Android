@@ -14,7 +14,7 @@ public class ProfileActivity extends Activity {
     final Runnable sourcePoll=()->checkWebsiteSource();
     String accountUrl(){String l=SettingsStore.language(this);return "https://nenotv.com"+("nl".equals(l)?"/language/nl/mijn-account/":("de".equals(l)?"/language/de/mein-konto/":"/my-account/"))+"?nenotv_setup=1#nenotv-sources";}
     void openWebsite(){try{startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(accountUrl())));}catch(Exception ignored){status.setText(T("Open My NenoTV on your phone or computer.","Open Mijn NenoTV op uw telefoon of computer.","Öffne Mein NenoTV auf deinem Telefon oder Computer."));}}
-    void startAccountSetup(){if(pairLaunched)return;pairLaunched=true;startActivityForResult(new android.content.Intent(this,PairingActivity.class).putExtra("auto_web",true).putExtra("setup",true),31);}
+    void startAccountSetup(){if(pairLaunched)return;pairLaunched=true;startActivityForResult(new android.content.Intent(this,PairingActivity.class).putExtra("setup",true),31);}
     void chooseOffer(){
         if(store.exists())return;
         new AlertDialog.Builder(this).setTitle(T("Choose your TV source","Kies uw tv-aanbod","TV-Angebot auswählen"))
