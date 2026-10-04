@@ -850,7 +850,7 @@ function nenotv_status_for_slug($slug) {
         'parental-controls' => 'Planned',
         'cloud-backup' => 'Planned',
         'source-health' => 'Planned',
-        'qr-pairing' => 'Planned',
+        'qr-pairing' => 'Integration prepared',
         'device-sync' => 'Planned',
         'migrate-restore' => 'Planned',
         'error-codes' => 'Concept',
@@ -859,8 +859,8 @@ function nenotv_status_for_slug($slug) {
     $status = $map[$slug] ?? '';
     $lang = function_exists('nenotv_current_language') ? nenotv_current_language() : 'en';
     $labels = [
-        'nl' => ['In development'=>'In ontwikkeling', 'Active testing'=>'Actieve testfase', 'Planned'=>'Gepland', 'Concept'=>'Concept'],
-        'de' => ['In development'=>'In Entwicklung', 'Active testing'=>'Aktive Testphase', 'Planned'=>'Geplant', 'Concept'=>'Konzept'],
+        'nl' => ['In development'=>'In ontwikkeling', 'Active testing'=>'Actieve testfase', 'Planned'=>'Gepland', 'Concept'=>'Concept', 'Integration prepared'=>'Koppeling voorbereid'],
+        'de' => ['In development'=>'In Entwicklung', 'Active testing'=>'Aktive Testphase', 'Planned'=>'Geplant', 'Concept'=>'Konzept', 'Integration prepared'=>'Kopplung vorbereitet'],
     ];
     return $labels[$lang][$status] ?? $status;
 }
@@ -1869,9 +1869,9 @@ function nenotv_account_overview_shortcode(): string {
     if (!is_user_logged_in() || !function_exists('wc_get_account_endpoint_url')) return '';
     $lang = nenotv_current_language();
     $all = [
-        'en'=>['k'=>'Account overview','t'=>'Everything for your NenoTV account','p'=>'Manage your NenoTV account, devices, orders and security from one place. Pro users can optionally sync encrypted IPTV source settings through My NenoTV.','o'=>'Orders & licences','os'=>'Review purchases and order status','a'=>'Account & security','as'=>'Update your name, email or password','s'=>'Support','ss'=>'Create a ticket only when you need help'],
-        'nl'=>['k'=>'Accountoverzicht','t'=>'Alles voor je NenoTV-account','p'=>'Beheer je NenoTV-account, apparaten, bestellingen en beveiliging op één plek. Pro-gebruikers kunnen optioneel versleutelde IPTV-broninstellingen synchroniseren via Mijn NenoTV.','o'=>'Bestellingen & licenties','os'=>'Bekijk aankopen en bestelstatus','a'=>'Account & beveiliging','as'=>'Wijzig naam, e-mail of wachtwoord','s'=>'Support','ss'=>'Maak alleen een ticket aan als je hulp nodig hebt'],
-        'de'=>['k'=>'Kontoübersicht','t'=>'Alles für dein NenoTV-Konto','p'=>'Verwalte dein NenoTV-Konto, Geräte, Bestellungen und Sicherheit an einem Ort. Pro-Nutzer können optional verschlüsselte IPTV-Quelleneinstellungen über Mein NenoTV synchronisieren.','o'=>'Bestellungen & Lizenzen','os'=>'Käufe und Bestellstatus ansehen','a'=>'Konto & Sicherheit','as'=>'Name, E-Mail oder Passwort ändern','s'=>'Support','ss'=>'Nur bei Bedarf ein Support-Ticket erstellen'],
+        'en'=>['k'=>'Account overview','t'=>'Everything for your NenoTV account','p'=>'Manage your NenoTV account, devices, orders and security from one place. Optional encrypted source sync through My NenoTV requires an enabled service and an active account. Full cloud sync of profiles and favourites remains planned.','o'=>'Orders & licences','os'=>'Review purchases and order status','a'=>'Account & security','as'=>'Update your name, email or password','s'=>'Support','ss'=>'Create a ticket only when you need help'],
+        'nl'=>['k'=>'Accountoverzicht','t'=>'Alles voor je NenoTV-account','p'=>'Beheer je NenoTV-account, apparaten, bestellingen en beveiliging op één plek. Optionele, versleutelde bronsynchronisatie via Mijn NenoTV vereist een ingeschakelde dienst en een actief account. Volledige cloudsynchronisatie van profielen en favorieten blijft gepland.','o'=>'Bestellingen & licenties','os'=>'Bekijk aankopen en bestelstatus','a'=>'Account & beveiliging','as'=>'Wijzig naam, e-mail of wachtwoord','s'=>'Support','ss'=>'Maak alleen een ticket aan als je hulp nodig hebt'],
+        'de'=>['k'=>'Kontoübersicht','t'=>'Alles für dein NenoTV-Konto','p'=>'Verwalte dein NenoTV-Konto, Geräte, Bestellungen und Sicherheit an einem Ort. Optionale verschlüsselte Quellensynchronisierung über Mein NenoTV benötigt einen aktivierten Dienst und ein aktives Konto. Vollständige Cloud-Synchronisierung von Profilen und Favoriten bleibt geplant.','o'=>'Bestellungen & Lizenzen','os'=>'Käufe und Bestellstatus ansehen','a'=>'Konto & Sicherheit','as'=>'Name, E-Mail oder Passwort ändern','s'=>'Support','ss'=>'Nur bei Bedarf ein Support-Ticket erstellen'],
     ];
     $s = $all[$lang] ?? $all['en'];
     $blocked = !empty($_GET['purchase_blocked']);
