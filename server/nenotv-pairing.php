@@ -76,7 +76,7 @@ trait NenoTV_Pairing {
                 'public_device_id'=>$p['public_device_id']??'', 'platform'=>$p['platform']??'android',
                 'name'=>substr(sanitize_text_field(is_scalar($raw['device_name']??null)?(string)$raw['device_name']:'NenoTV'),0,80),
                 'token_hash'=>self::key_hash($token), 'expires'=>time()+300,
-                'entitlement_id'=>0, 'state'=>'pending',
+                'entitlement_id'=>0, 'state'=>'pending', 'lang'=>in_array($raw['lang']??'',['nl','en','de'],true)?$raw['lang']:'en',
             ];
             $code='';
             for($i=0;$i<5;$i++){
@@ -141,7 +141,7 @@ trait NenoTV_Pairing {
             if(!update_option('nenotv_pair_'.$code,$session,false))wp_die('Approval could not be saved.');
         }finally{self::pairing_unlock($code);}
         set_transient('nenotv_pair_notice_'.get_current_user_id(),1,MINUTE_IN_SECONDS);
-        wp_safe_redirect(home_url('/nenotv-pair/?approved=1'));exit;
+        wp_safe_redirect(home_url('/nenotv-pair/?approved=1&lang='.($session['lang']??'en')));exit;
     }
 
     private static function pairing_qr(string $url): string {

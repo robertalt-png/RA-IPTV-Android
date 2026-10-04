@@ -98,7 +98,7 @@ public final class PairingActivity extends Activity {
                     code.setText(created.displayCode());status.setText(text("pair_waiting"));open.setEnabled(true);retry.setEnabled(true);
                     handler.postDelayed(()->{if(!destroyed&&!complete&&current==generation)expire();},Math.max(0,created.deadline-SystemClock.elapsedRealtime()));
                     if(getIntent().getBooleanExtra("auto_web",false)&&!openedWebsite){openedWebsite=true;try{browserOpener.open(this,created.url);}catch(Exception ignored){/* Android TV retains QR and the short code. */}}
-                    if(resumed)handler.postDelayed(poll,created.pollSeconds*1000L);
+                    if(resumed||getIntent().getBooleanExtra("auto_web",false))handler.postDelayed(poll,created.pollSeconds*1000L);
                 });
             }catch(Exception error){runOnUiThread(()->{if(destroyed||current!=generation)return;busy=false;retry.setEnabled(true);status.setText(failureMessage(error));});}
         });
