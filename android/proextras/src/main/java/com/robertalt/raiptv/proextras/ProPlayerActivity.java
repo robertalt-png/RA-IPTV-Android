@@ -84,6 +84,7 @@ public class ProPlayerActivity extends FragmentActivity {
     ExecutorService exec=Executors.newSingleThreadExecutor();
     Handler ui=new Handler(Looper.getMainLooper());
     Profile profile=new Profile();
+    com.nenotv.player.provider.PlaybackSourceRoute playbackRoute;
     File externalSubtitle;
     LibraryStore library;
     long lastWatchPosition=0L,lastProgressAt=0L,watchGraceUntil=0L,lastRecoveryAt=0L,pendingResumeMs=0L,sleepUntil=0L,recordingStartedAt=0L;
@@ -129,7 +130,6 @@ public class ProPlayerActivity extends FragmentActivity {
         root=findViewById(R.id.playerRoot);controls=findViewById(R.id.playerControls);vlcLayout=findViewById(R.id.vlcLayout);media3View=findViewById(R.id.media3View);title=findViewById(R.id.playerTitle);status=findViewById(R.id.playerStatus);timeText=findViewById(R.id.timeText);playPause=findViewById(R.id.playPauseButton);rewind=findViewById(R.id.rewindButton);forward=findViewById(R.id.forwardButton);audio=findViewById(R.id.audioButton);subtitle=findViewById(R.id.subtitleButton);pip=findViewById(R.id.pipButton);seek=findViewById(R.id.seekBar);channelPrev=findViewById(R.id.channelPrevButton);channelNext=findViewById(R.id.channelNextButton);speed=findViewById(R.id.speedButton);aspect=findViewById(R.id.aspectButton);sleep=findViewById(R.id.sleepButton);record=findViewById(R.id.recordButton);favorite=findViewById(R.id.favoriteButton);castButton=findViewById(R.id.castRouteButton);
         audio.setText(T("audio"));subtitle.setText(T("subtitles"));aspect.setText(T("fit"));sleep.setText(T("sleep_short"));pip.setContentDescription(T("picture_in_picture"));
         entry=(MediaEntry)getIntent().getSerializableExtra("media");if(entry==null){finish();return;}
-        profile.bridgeUrl=getIntent().getStringExtra("bridgeUrl");profile.bridgeToken=getIntent().getStringExtra("bridgeToken");
         PlaybackQueueStore.Payload qp=PlaybackQueueStore.take(getIntent().getStringExtra("queueToken"));
         if(qp!=null){if("live".equals(qp.kind)){liveQueue=qp.items;liveIndex=qp.index;}else if("episode".equals(qp.kind)){episodeQueue=qp.items;episodeIndex=qp.index;}}
         else{
@@ -137,13 +137,22 @@ public class ProPlayerActivity extends FragmentActivity {
             Object eq=getIntent().getSerializableExtra("episodeQueue");if(eq instanceof ArrayList<?>)try{episodeQueue=(ArrayList<MediaEntry>)eq;}catch(Exception ignored){}
             liveIndex=getIntent().getIntExtra("liveIndex",-1);episodeIndex=getIntent().getIntExtra("episodeIndex",-1);
         }
-        prepareEntry(entry);updateFavoriteUi();
+        if(!prepareEntry(entry))return;updateFavoriteUi();
         if(candidates.isEmpty()){status.setText(T("no_stream_url"));return;}
         wireControls();setupCast();updateQueueControls();startPreferredPlayer();searchExternalSubtitle();ui.post(tick);showControls();
     }
 
-    void prepareEntry(MediaEntry e){
+    boolean prepareEntry(MediaEntry e){
+        try{playbackRoute=com.nenotv.player.provider.PlaybackSourceRoute.resolve(this,e,new com.nenotv.player.storage.EntitlementStore(this).isPro());profile=playbackRoute.profile();}
+        catch(Exception unavailable){status.setText(T("source_unavailable"));finish();return false;}
         entry=e;title.setText(DisplayText.title(e));candidates=new ArrayList<>(e.candidates);if(candidates.isEmpty()&&e.url!=null&&!e.url.isEmpty())candidates.add(e.url);index=0;freezeOnCandidate=0;pendingResumeMs=0;recovering=false;wantPlaying=true;externalSubtitle=null;lastWatchPosition=0;lastProgressAt=0;watchGraceUntil=0;
+        return true;
+    }
+
+    boolean currentPlaybackRoute(){
+        if(destroyed||isFinishing())return false;
+        if(playbackRoute!=null&&playbackRoute.isCurrent(new com.nenotv.player.storage.EntitlementStore(this).isPro()))return true;
+        wantPlaying=false;status.setText(T("source_unavailable"));finish();return false;
     }
 
     void updateFavoriteUi(){if(favorite==null||entry==null)return;boolean on=library.isFavorite(entry);favorite.setText(on?"♥":"♡");favorite.setContentDescription(on?T("remove_favorite"):T("add_favorite"));}
@@ -179,7 +188,20 @@ public class ProPlayerActivity extends FragmentActivity {
     long currentLocalPosition(){try{return usingVlc&&vlc!=null?Math.max(0,vlc.getTime()):exo!=null?Math.max(0,exo.getCurrentPosition()):0;}catch(Exception e){return 0;}}
     boolean isLocalPlaying(){try{return usingVlc&&vlc!=null?vlc.isPlaying():exo!=null&&exo.isPlaying();}catch(Exception e){return false;}}
     String castMime(String u){String x=u==null?"":u.toLowerCase(Locale.ROOT);if(x.contains(".m3u8"))return "application/vnd.apple.mpegurl";if(x.contains(".mpd"))return "application/dash+xml";if(x.matches(".*\\.(?:mp4|m4v)(?:[?&#].*)?$"))return "video/mp4";if(x.matches(".*\\.(?:ts|mts|m2ts)(?:[?&#].*)?$"))return "video/mp2t";if(x.matches(".*\\.mkv(?:[?&#].*)?$"))return "video/x-matroska";return "application/octet-stream";}
-    ArrayList<String> castCandidates(){LinkedHashSet<String> urls=new LinkedHashSet<>();addCastUrls(urls,entry);if(entry!=null&&"live".equals(entry.type)){ArrayList<MediaEntry>alts=new ArrayList<>();for(MediaEntry z:liveQueue)if(z!=null&&z!=entry&&sameCastChannel(entry,z))alts.add(z);alts.sort((a,b)->Integer.compare(castVariantRank(a),castVariantRank(b)));for(MediaEntry z:alts)addCastUrls(urls,z);}return new ArrayList<>(urls);}
+    ArrayList<String> castCandidates(){
+        LinkedHashSet<String> urls=new LinkedHashSet<>();if(!currentPlaybackRoute())return new ArrayList<>();
+        addCastUrls(urls,entry);
+        if(entry!=null&&"live".equals(entry.type)){
+            ArrayList<MediaEntry>alts=new ArrayList<>();
+            for(MediaEntry z:liveQueue)if(z!=null&&z!=entry&&sameCastChannel(entry,z)){
+                try{com.nenotv.player.provider.PlaybackSourceRoute.resolve(this,z,new com.nenotv.player.storage.EntitlementStore(this).isPro());alts.add(z);}
+                catch(Exception unavailable){}
+            }
+            alts.sort((a,b)->Integer.compare(castVariantRank(a),castVariantRank(b)));
+            for(MediaEntry z:alts)addCastUrls(urls,z);
+        }
+        return new ArrayList<>(urls);
+    }
     void addCastUrls(LinkedHashSet<String> out,MediaEntry e){if(e==null)return;ArrayList<String>x=new ArrayList<>(e.candidates);if(x.isEmpty()&&e.url!=null&&!e.url.isEmpty())x.add(e.url);x.sort((a,b)->Integer.compare(castPreference(a),castPreference(b)));out.addAll(x);}
     boolean sameCastChannel(MediaEntry a,MediaEntry b){String x=castChannelKey(a),y=castChannelKey(b);return !x.isEmpty()&&x.equals(y);}
     String castChannelKey(MediaEntry e){String x=e==null||e.name==null?"":e.name.toLowerCase(Locale.ROOT);return x.replaceAll("\\b(?:4k|uhd|fhd|full ?hd|hd|sd|hevc|h265|h264)\\b"," ").replaceAll("[^a-z0-9]+"," ").trim();}
@@ -235,6 +257,7 @@ public class ProPlayerActivity extends FragmentActivity {
     }
 
     void playVlcCandidate(){
+        if(!currentPlaybackRoute())return;
         if(index>=candidates.size()){if("vlc".equals(SettingsStore.player(this))){status.setText(T("vlc_cannot_open"));wantPlaying=false;}else startMedia3();return;}
         String u=candidates.get(index);status.setText(T("connecting_vlc"));resetWatchdogGrace();Media m=new Media(libVLC,Uri.parse(u));if(DemoSource.isEntry(entry))m.addOption(":http-user-agent=NenoTV/0.13.11 (https://nenotv.com; info@nenotv.com)");m.setHWDecoderEnabled(true,false);m.addOption(":network-caching="+SettingsStore.bufferMs(this));m.addOption(":http-reconnect");String ap=audioCodes(),sp=subtitleCodes();if(!ap.isEmpty())m.addOption(":audio-language="+ap);if(!sp.isEmpty())m.addOption(":sub-language="+sp);if(externalSubtitle!=null)m.addOption(":sub-file="+externalSubtitle.getAbsolutePath());vlc.setMedia(m);m.release();vlc.play();
     }
@@ -257,6 +280,7 @@ public class ProPlayerActivity extends FragmentActivity {
     }
 
     void playMedia3Candidate(long resume){
+        if(!currentPlaybackRoute())return;
         if(index>=candidates.size())return;status.setText(T("opening_stream")+" "+(index+1)+"/"+candidates.size()+"…");resetWatchdogGrace();MediaItem.Builder b=new MediaItem.Builder().setUri(candidates.get(index));
         if(externalSubtitle!=null){MediaItem.SubtitleConfiguration sc=new MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(externalSubtitle)).setMimeType("text/vtt").setLanguage(SettingsStore.resolvedSubtitleLanguage(this)).setLabel(SettingsStore.displayLanguage(this,SettingsStore.resolvedSubtitleLanguage(this))+" "+T("external_subtitle")).setSelectionFlags(C.SELECTION_FLAG_DEFAULT).build();b.setSubtitleConfigurations(Collections.singletonList(sc));}
         exo.setMediaItem(b.build());exo.prepare();if(resume>0)exo.seekTo(resume);exo.play();
@@ -269,11 +293,11 @@ public class ProPlayerActivity extends FragmentActivity {
     }
 
     void switchLiveInternal(int delta){
-        saveProgress();int n=liveQueue.size();if(liveIndex<0)liveIndex=0;liveIndex=(liveIndex+delta+n)%n;MediaEntry next=liveQueue.get(liveIndex);boolean remote=hasCastSession();if(!remote)releasePlayers();prepareEntry(next);library.recent(next);updateFavoriteUi();updateQueueControls();status.setText(T("zapping")+" · "+DisplayText.title(next));if(remote){castRemoteConfirmed=false;castRelayMode=false;closeCastRelay();castCandidateIndex=0;loadCastCandidate(0,true);}else startPreferredPlayer();
+        saveProgress();int n=liveQueue.size();if(liveIndex<0)liveIndex=0;liveIndex=(liveIndex+delta+n)%n;MediaEntry next=liveQueue.get(liveIndex);boolean remote=hasCastSession();if(!remote)releasePlayers();if(!prepareEntry(next))return;library.recent(next);updateFavoriteUi();updateQueueControls();status.setText(T("zapping")+" · "+DisplayText.title(next));if(remote){castRemoteConfirmed=false;castRelayMode=false;closeCastRelay();castCandidateIndex=0;loadCastCandidate(0,true);}else startPreferredPlayer();
     }
 
     void switchEpisode(int delta){
-        if(episodeQueue.isEmpty())return;int n=episodeQueue.size();if(episodeIndex<0)episodeIndex=0;int nextIndex=episodeIndex+delta;if(nextIndex<0||nextIndex>=n){wantPlaying=false;return;}saveProgress();episodeIndex=nextIndex;MediaEntry next=episodeQueue.get(episodeIndex);boolean remote=hasCastSession();if(!remote)releasePlayers();prepareEntry(next);library.recent(next);updateFavoriteUi();updateQueueControls();status.setText(T("next_episode")+" · "+DisplayText.title(next));if(remote){castRemoteConfirmed=false;castRelayMode=false;closeCastRelay();castCandidateIndex=0;loadCastCandidate(library.progress(next),true);}else{startPreferredPlayer();searchExternalSubtitle();}
+        if(episodeQueue.isEmpty())return;int n=episodeQueue.size();if(episodeIndex<0)episodeIndex=0;int nextIndex=episodeIndex+delta;if(nextIndex<0||nextIndex>=n){wantPlaying=false;return;}saveProgress();episodeIndex=nextIndex;MediaEntry next=episodeQueue.get(episodeIndex);boolean remote=hasCastSession();if(!remote)releasePlayers();if(!prepareEntry(next))return;library.recent(next);updateFavoriteUi();updateQueueControls();status.setText(T("next_episode")+" · "+DisplayText.title(next));if(remote){castRemoteConfirmed=false;castRelayMode=false;closeCastRelay();castCandidateIndex=0;loadCastCandidate(library.progress(next),true);}else{startPreferredPlayer();searchExternalSubtitle();}
     }
 
     void togglePlay(){if(isCasting()){try{castClient.togglePlayback();wantPlaying=!castClient.isPlaying();}catch(Exception ignored){}updatePlayIcon();return;}if(usingVlc&&vlc!=null){if(vlc.isPlaying()){wantPlaying=false;vlc.pause();}else{wantPlaying=true;resetWatchdogGrace();vlc.play();}}else if(exo!=null){if(exo.isPlaying()){wantPlaying=false;exo.pause();}else{wantPlaying=true;resetWatchdogGrace();exo.play();}}updatePlayIcon();}
@@ -339,6 +363,7 @@ public class ProPlayerActivity extends FragmentActivity {
     long freeBytes(File dir){try{StatFs s=new StatFs(dir.getAbsolutePath());return s.getAvailableBytes();}catch(Exception e){return Long.MAX_VALUE;}}
 
     void startRecording(){
+        if(!currentPlaybackRoute())return;
         if(destroyed||entry==null||!"live".equals(entry.type)||vlc==null)return;
         File dir=recordingDirectory();if(!dir.exists()&&!dir.mkdirs()){status.setText(T("record_dir_failed"));return;}
         if(freeBytes(dir)<200L*1024L*1024L){new AlertDialog.Builder(this).setTitle(T("storage_low_title")).setMessage(T("storage_low_msg")).setPositiveButton("OK",null).show();return;}
@@ -386,7 +411,18 @@ public class ProPlayerActivity extends FragmentActivity {
     void hideControls(){ui.removeCallbacks(hide);hide.run();}
     void enterPip(){if(!SettingsStore.pip(this))return;if(Build.VERSION.SDK_INT>=26&&!isInPictureInPictureMode())try{enterPictureInPictureMode(new PictureInPictureParams.Builder().build());}catch(Exception ignored){}}
 
-    void searchExternalSubtitle(){if(entry==null||"live".equals(entry.type)||profile.bridgeUrl==null||profile.bridgeUrl.trim().isEmpty())return;SubtitleBridgeClient c=new SubtitleBridgeClient(profile,SettingsStore.resolvedSubtitleLanguage(this));exec.execute(()->{try{SubtitleBridgeClient.Result r=c.best(entry);if(r==null)return;File f=c.fetchTo(getCacheDir(),r);externalSubtitle=f;runOnUiThread(()->attachSubtitle(f,r.label));}catch(Exception ignored){}});}
+    void searchExternalSubtitle(){
+        if(entry==null||"live".equals(entry.type)||profile.bridgeUrl==null||profile.bridgeUrl.trim().isEmpty())return;
+        MediaEntry requested=entry;com.nenotv.player.provider.PlaybackSourceRoute route=playbackRoute;
+        SubtitleBridgeClient c=new SubtitleBridgeClient(route.profile(),SettingsStore.resolvedSubtitleLanguage(this));
+        exec.execute(()->{try{
+            if(destroyed||!route.isCurrent(new com.nenotv.player.storage.EntitlementStore(this).isPro()))return;
+            SubtitleBridgeClient.Result r=c.best(requested);if(r==null)return;
+            if(destroyed||!route.isCurrent(new com.nenotv.player.storage.EntitlementStore(this).isPro()))return;
+            File f=c.fetchTo(getCacheDir(),r);
+            runOnUiThread(()->{if(!destroyed&&!isFinishing()&&playbackRoute==route&&entry==requested&&route.isCurrent(new com.nenotv.player.storage.EntitlementStore(this).isPro())){externalSubtitle=f;attachSubtitle(f,r.label);}else f.delete();});
+        }catch(Exception ignored){}});
+    }
     void attachSubtitle(File f,String label){if(destroyed)return;if(usingVlc&&vlc!=null){try{boolean ok=vlc.addSlave(Media.Slave.Type.Subtitle,Uri.fromFile(f),true);status.setText(ok?T("subtitles")+": "+label:T("subtitle_downloaded"));}catch(Exception e){status.setText(T("subtitle_ready"));}}else if(exo!=null){long pos=exo.getCurrentPosition();boolean was=exo.isPlaying();playMedia3Candidate(pos);if(was)exo.play();status.setText(T("subtitles")+": "+label);}}
     void releaseVlc(){if(vlc!=null){try{vlc.stop();vlc.detachViews();vlc.release();}catch(Exception ignored){}vlc=null;}if(libVLC!=null){try{libVLC.release();}catch(Exception ignored){}libVLC=null;}}
     void releasePlayers(){releaseVlc();if(exo!=null){try{exo.release();}catch(Exception ignored){}exo=null;}}
@@ -409,3 +445,4 @@ public class ProPlayerActivity extends FragmentActivity {
     @Override protected void onPause(){saveProgress();super.onPause();}
     @Override protected void onDestroy(){destroyed=true;ui.removeCallbacksAndMessages(null);saveProgress();try{if(castClient!=null)castClient.unregisterCallback(castMediaCallback);}catch(Exception ignored){}closeCastRelay();if(vlc!=null&&(recording||recordingStarting))try{vlc.record(null);}catch(Exception ignored){}releasePlayers();exec.shutdownNow();super.onDestroy();}
 }
+

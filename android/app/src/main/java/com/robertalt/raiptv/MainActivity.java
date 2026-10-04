@@ -880,8 +880,11 @@ TextView addInfoBlock(LinearLayout b,String l,String x){TextView h=new TextView(
     void openWeb(String url){try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url)));}catch(Exception e){status.setText(T("info_failed"));}}
 
     void play(MediaEntry e){
+        Profile playbackProfile;
+        try{playbackProfile=com.nenotv.player.provider.PlaybackSourceRoute.resolve(this,e,ProLibraryBridge.isActive(this)).profile();}
+        catch(Exception unavailable){status.setText(T("source_unavailable"));return;}
         pauseIndexForPlayback();
-        if(DemoPolicy.blockPlayback(this)){recreate();return;}library.recent(e);Intent i=ProModuleInstaller.playerIntent(this);i.putExtra("media",e);i.putExtra("profileType",profile.type.name());i.putExtra("bridgeUrl",profile.bridgeUrl);i.putExtra("bridgeToken",profile.bridgeToken);
+        if(DemoPolicy.blockPlayback(this)){recreate();return;}library.recent(e);Intent i=ProModuleInstaller.playerIntent(this);i.putExtra("media",e);i.putExtra("profileType",playbackProfile.type.name());
         String queueToken="";
         if("live".equals(e.type)){ArrayList<MediaEntry>q=new ArrayList<>();for(MediaEntry z:all)if("live".equals(z.type)&&!isAdultLocked(z)){q.add(z);if(q.size()>=250)break;}int at=-1;for(int n=0;n<q.size();n++)if(q.get(n).uniqueKey().equals(e.uniqueKey())){at=n;break;}if(at>=0)queueToken=com.nenotv.player.storage.PlaybackQueueStore.put("live",q,at);}
         else if("episode".equals(e.type)&&seriesEpisodeMode){ArrayList<MediaEntry>q=new ArrayList<>();for(MediaEntry z:seriesEpisodes)if("episode".equals(z.type)&&!isAdultLocked(z))q.add(z);int at=-1;for(int n=0;n<q.size();n++)if(q.get(n).uniqueKey().equals(e.uniqueKey())){at=n;break;}if(at>=0)queueToken=com.nenotv.player.storage.PlaybackQueueStore.put("episode",q,at);}
@@ -968,3 +971,4 @@ TextView addInfoBlock(LinearLayout b,String l,String x){TextView h=new TextView(
     }
     int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
 }
+

@@ -76,6 +76,8 @@ public class PlayerActivity extends FragmentActivity {
     }
 
     void startPlayer(){
+        try{com.nenotv.player.provider.PlaybackSourceRoute.resolve(this,entry,false);}
+        catch(Exception unavailable){status.setText(T("source_unavailable"));finish();return;}
         ArrayList<String> urls=new ArrayList<>(entry.candidates);if(urls.isEmpty()&&entry.url!=null&&!entry.url.isEmpty())urls.add(entry.url);if(urls.isEmpty()){status.setText(T("no_stream_url"));return;}
         exo=new ExoPlayer.Builder(this).setMediaSourceFactory(DemoSource.mediaSourceFactory(this,entry)).build();media3View.setPlayer(exo);exo.setMediaItem(MediaItem.fromUri(urls.get(0)));long resume=library.progress(entry);exo.prepare();if(resume>10000&&!"live".equals(entry.type))exo.seekTo(resume);exo.play();status.setText("Media3 · "+T("playing"));
         exo.addListener(new Player.Listener(){@Override public void onPlaybackStateChanged(int state){if(state==Player.STATE_READY){status.setText("Media3 · "+T("playing"));scheduleControlsHide();}else if(state==Player.STATE_ENDED){library.markWatched(entry);finish();}}@Override public void onIsPlayingChanged(boolean playing){if(playing)scheduleControlsHide();else{cancelControlsHide();showControls();}}@Override public void onPlayerError(PlaybackException e){cancelControlsHide();showControls();status.setText(T("error_prefix")+": "+e.getErrorCodeName());}});
@@ -93,3 +95,4 @@ public class PlayerActivity extends FragmentActivity {
     @Override public void onWindowFocusChanged(boolean focus){super.onWindowFocusChanged(focus);if(focus)ScreenInsets.player(this);}
     @Override protected void onDestroy(){destroyed=true;ui.removeCallbacksAndMessages(null);if(exo!=null){exo.release();exo=null;}super.onDestroy();}
 }
+

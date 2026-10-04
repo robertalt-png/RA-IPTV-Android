@@ -42,14 +42,29 @@ final class SourceRegistryChecks {
         SourceProviderResolver.Factory factory=(profile,language)->{check(profile.m3uUrl.equals(second.m3uUrl),"Wrong provider profile routed");return fake(()->authentications[0]++);};
         SourceProviderResolver resolver=new SourceProviderResolver(context,factory);
         Provider routed=resolver.resolve(item,primary,true);
+        com.nenotv.player.provider.PlaybackSourceRoute playback=com.nenotv.player.provider.PlaybackSourceRoute.resolve(context,item,true);
+        check(playback.profile().m3uUrl.equals(second.m3uUrl)&&playback.isCurrent(true),"Playback used the primary profile for a secondary item");
+        check(!playback.isCurrent(false),"Basic retained a secondary playback route");
+        Profile exported=playback.profile();exported.m3uUrl="mutated";
+        check(playback.profile().m3uUrl.equals(second.m3uUrl),"Playback snapshot exposed mutable source credentials");
+        boolean playbackDenied=false;try{com.nenotv.player.provider.PlaybackSourceRoute.resolve(context,item,false);}catch(java.io.IOException expected){playbackDenied=true;}
+        check(playbackDenied,"Basic opened a tagged cached favorite");
+        check(com.nenotv.player.provider.PlaybackSourceRoute.resolve(context,new MediaEntry(),false).isCurrent(false),"Primary playback requires Pro");
         check(routed!=primary&&resolver.resolve(item,primary,true)==routed&&authentications[0]==1,"Secondary provider reloaded or fell back to primary");
         check(resolver.resolve(new MediaEntry(),primary,false)==primary,"Local primary requires Pro");
         check(new SourceProviderResolver(context,factory).resolve(item,primary,true)!=primary&&authentications[0]==2,"Restart lost source routing");
         boolean denied=false;try{resolver.resolve(item,primary,false);}catch(java.io.IOException expected){denied=true;}
         check(denied,"Basic used cached secondary provider");
         second.m3uUrl="https://example.invalid/changed";store.upsert(id,second,false);
+        check(!playback.isCurrent(true),"Playback retained an edited source snapshot");
+        second.bridgeUrl="https://example.invalid/second-bridge";second.bridgeToken="private-test-token";store.upsert(id,second,false);
+        playback=com.nenotv.player.provider.PlaybackSourceRoute.resolve(context,item,true);
+        check(playback.profile().bridgeUrl.equals(second.bridgeUrl)&&playback.profile().bridgeToken.equals(second.bridgeToken),"Secondary subtitles used primary bridge credentials");
         check(resolver.resolve(item,primary,true)!=routed&&authentications[0]==3,"Edited credentials reused stale provider");
         store.setEnabled(id,false);denied=false;try{resolver.resolve(item,primary,true);}catch(java.io.IOException expected){denied=true;}
+        check(!playback.isCurrent(true),"Disabled source retained a playback snapshot");
+        playbackDenied=false;try{com.nenotv.player.provider.PlaybackSourceRoute.resolve(context,item,true);}catch(java.io.IOException expected){playbackDenied=true;}
+        check(playbackDenied,"Disabled source reopened through the queue");
         check(denied&&authentications[0]==3,"Disabled source authenticated or fell back to primary");
         store.setEnabled(id,true);
         SourceProviderResolver revoked=new SourceProviderResolver(context,(profile,language)->fake(()->store.remove(id)));
@@ -57,6 +72,9 @@ final class SourceRegistryChecks {
         check(denied,"Source revoked during authentication was cached");
         denied=false;try{resolver.resolve(item,primary,true);}catch(java.io.IOException expected){denied=true;}
         check(denied,"Removed source fell back to primary");
+        check(!playback.isCurrent(true),"Deleted source retained a playback snapshot");
+        playbackDenied=false;try{com.nenotv.player.provider.PlaybackSourceRoute.resolve(context,item,true);}catch(java.io.IOException expected){playbackDenied=true;}
+        check(playbackDenied,"Deleted source fell back to primary during playback");
         store.upsert(id,second,false);
         SourceProviderResolver edited=new SourceProviderResolver(context,(profile,language)->fake(()->{
             second.m3uUrl="https://example.invalid/edited-during-auth";store.upsert(id,second,false);
@@ -115,3 +133,4 @@ final class SourceRegistryChecks {
         }
     }
 }
+
