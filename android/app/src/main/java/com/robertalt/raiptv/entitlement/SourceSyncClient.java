@@ -1,112 +1,110 @@
 package com.nenotv.player.entitlement;
 
 import android.content.Context;
-import com.nenotv.player.BuildConfig;
 import com.nenotv.player.storage.EntitlementStore;
 import com.nenotv.player.storage.SourceStore;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import java.io.*;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
+import java.io.IOException;
 
 /** Account-scoped Pro source sync. Light never depends on this class. */
 public final class SourceSyncClient {
-    private final Context app;
     private final EntitlementStore entitlement;
     private final SourceStore sources;
+    private final EntitlementClient transport;
+    private final String accountScope;
 
-    public SourceSyncClient(Context c){
-        app=c.getApplicationContext();
-        entitlement=new EntitlementStore(app);
-        sources=new SourceStore(app);
+    public SourceSyncClient(Context context){this(context,new EntitlementClient(context));}
+    SourceSyncClient(Context context,EntitlementClient transport){
+        entitlement=new EntitlementStore(context);
+        sources=new SourceStore(context);
+        this.transport=transport;
+        accountScope=entitlement.cloudAccountScope();
     }
 
-    public JSONObject sync() throws Exception {
+    private void requirePro()throws IOException{
         if(!entitlement.isPro())throw new IOException("PRO_REQUIRED");
-        // First contact is cloud-first so a newly upgraded/reinstalled device cannot
-        // overwrite an existing account vault with its locally migrated legacy source.
+        if(accountScope.isEmpty())throw new IOException("ACCOUNT_SCOPE_REQUIRED");
+        if(!accountScope.equals(entitlement.cloudAccountScope()))throw new IOException("SOURCE_ACCOUNT_CHANGED_CONFIRM");
+        sources.bindCloudAccount(accountScope);
+    }
+
+    public JSONObject sync()throws Exception{
+        requirePro();
+        // First contact must not overwrite an account vault with a migrated local source.
+        if(sources.accountChangePending())throw new IOException("SOURCE_ACCOUNT_CHANGED_CONFIRM");
         if(sources.cloudRevision()<=0){
-            JSONObject remote=post("pull",baseBody());
+            SourceStore.SyncSnapshot snapshot=sources.snapshotForSync();
+            JSONObject remote=post("pull",new JSONObject());
             JSONArray rows=remote.optJSONArray("sources");
-            int revision=remote.optInt("revision",0);
-            if(rows!=null&&rows.length()>0){
-                sources.applyCloudSnapshot(rows,revision);
+            int revision=remote.optInt("revision",-1);
+            if(rows==null||revision<0)throw new IOException("INVALID_SOURCE_RESPONSE");
+            validateRows(rows);
+            if(rows.length()>0||revision>0){
+                if(!sources.applyCloudSnapshotIfUnchanged(rows,revision,snapshot.localRevision))throw new IOException("LOCAL_SOURCES_CHANGED_RETRY_SYNC");
                 return remote;
             }
+            if(!sources.markCloudRevisionIfUnchanged(revision,snapshot.localRevision))throw new IOException("LOCAL_SOURCES_CHANGED_RETRY_SYNC");
             if(sources.syncDirty())return push();
-            sources.markSynced(revision);
             return remote;
         }
-        if(sources.syncDirty())return push();
-        return pull();
+        return sources.syncDirty()?push():pull();
     }
 
-    public JSONObject pull() throws Exception {
-        JSONObject out=post("pull",baseBody());
+    public JSONObject pull()throws Exception{
+        requirePro();
+        SourceStore.SyncSnapshot snapshot=sources.snapshotForSync();
+        JSONObject out=post("pull",new JSONObject());
         JSONArray remote=out.optJSONArray("sources");
-        if(remote!=null)sources.applyCloudSnapshot(remote,out.optInt("revision",0));
+        int revision=out.optInt("revision",-1);
+        if(remote==null||revision<0)throw new IOException("INVALID_SOURCE_RESPONSE");
+        validateRows(remote);
+        if(!sources.applyCloudSnapshotIfUnchanged(remote,revision,snapshot.localRevision))throw new IOException("LOCAL_SOURCES_CHANGED_RETRY_SYNC");
         return out;
     }
 
-    public JSONObject push() throws Exception {
-        JSONObject body=baseBody();
-        body.put("sources",sources.exportForSync());
+    /** Download only; background work never uploads credentials or replaces unsynced edits. */
+    public boolean pullAutomatically()throws Exception{
+        if(!entitlement.isPro()||!sources.automaticDownloadEnabled())return false;
+        requirePro();
+        if(sources.syncDirty()||sources.accountChangePending())return false;
+        SourceStore.SyncSnapshot snapshot=sources.snapshotForSync();
+        JSONObject out=post("pull",new JSONObject());
+        JSONArray remote=out.optJSONArray("sources");
+        int revision=out.optInt("revision",-1);
+        if(remote==null||revision<snapshot.cloudRevision)throw new IOException("INVALID_SOURCE_RESPONSE");
+        validateRows(remote);
+        if(revision==snapshot.cloudRevision)return false;
+        requirePro();
+        return sources.applyAutomaticCloudSnapshotIfUnchanged(remote,revision,snapshot.localRevision);
+    }
+
+    public JSONObject push()throws Exception{
+        requirePro();
+        if(sources.accountChangePending())throw new IOException("SOURCE_ACCOUNT_CHANGED_CONFIRM");
+        SourceStore.SyncSnapshot snapshot=sources.snapshotForSync();
+        if(snapshot.sources.length()>20)throw new IOException("SOURCE_LIMIT");
+        JSONObject body=new JSONObject().put("sources",snapshot.sources).put("base_revision",snapshot.cloudRevision);
         JSONObject out=post("push",body);
-        sources.markSynced(out.optInt("revision",0));
+        int revision=out.optInt("revision",-1);
+        if(revision<=snapshot.cloudRevision)throw new IOException("INVALID_SOURCE_RESPONSE");
+        if(!sources.markSyncedIfUnchanged(revision,snapshot.localRevision))throw new IOException("LOCAL_SOURCES_CHANGED_RETRY_SYNC");
         return out;
     }
 
-    private JSONObject baseBody() throws Exception {
-        JSONObject o=new JSONObject();
-        o.put("device_id",entitlement.deviceId());
-        o.put("public_device_id",entitlement.publicDeviceId());
-        o.put("device_key",entitlement.deviceKey());
-        o.put("platform","android");
-        o.put("app_version",BuildConfig.VERSION_NAME);
-        return o;
+    private JSONObject post(String action,JSONObject body)throws Exception{
+        requirePro();body.put("account_scope",accountScope);
+        JSONObject result=transport.request("sources/"+action,body,1048576);
+        requirePro();return result;
     }
-
-    private JSONObject post(String action,JSONObject body) throws Exception {
-        Exception first=null;
-        try{return postUrl("https://nenotv.com/wp-json/nenotv/v1/sources/"+action,body);}
-        catch(Exception e){first=e;}
-        try{return postUrl("https://nenotv.com/index.php?rest_route=/nenotv/v1/sources/"+action,body);}
-        catch(Exception e){
-            String m=e.getMessage();
-            if(m==null||m.trim().isEmpty())m=first==null?"NenoTV source sync unavailable":first.getMessage();
-            throw new IOException(m);
-        }
-    }
-
-    private JSONObject postUrl(String url,JSONObject body) throws Exception {
-        HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();
-        c.setInstanceFollowRedirects(false);
-        c.setConnectTimeout(9000);
-        c.setReadTimeout(12000);
-        c.setRequestMethod("POST");
-        c.setDoOutput(true);
-        c.setRequestProperty("Content-Type","application/json; charset=utf-8");
-        c.setRequestProperty("Accept","application/json");
-        c.setRequestProperty("User-Agent","NenoTV/"+BuildConfig.VERSION_NAME+" Android");
-        byte[] bytes=body.toString().getBytes(StandardCharsets.UTF_8);
-        c.setFixedLengthStreamingMode(bytes.length);
-        try(OutputStream os=c.getOutputStream()){os.write(bytes);}
-        int code=c.getResponseCode();
-        InputStream in=code>=200&&code<300?c.getInputStream():c.getErrorStream();
-        String text=read(in).trim();
-        if(text.startsWith("<"))throw new IOException("Unexpected HTML response");
-        JSONObject out=new JSONObject(text);
-        if(code<200||code>=300||!out.optBoolean("ok",false))
-            throw new IOException(out.optString("message",out.optString("error","HTTP "+code)));
-        return out;
-    }
-
-    private static String read(InputStream in)throws IOException{
-        if(in==null)return "";
-        try(BufferedReader r=new BufferedReader(new InputStreamReader(in,StandardCharsets.UTF_8))){
-            StringBuilder b=new StringBuilder();String s;while((s=r.readLine())!=null)b.append(s);return b.toString();
+    private static void validateRows(JSONArray rows)throws IOException{
+        if(rows.length()>20)throw new IOException("INVALID_SOURCE_RESPONSE");
+        java.util.HashSet<String> ids=new java.util.HashSet<>();
+        for(int i=0;i<rows.length();i++){
+            JSONObject row=rows.optJSONObject(i);
+            if(row==null)throw new IOException("INVALID_SOURCE_RESPONSE");
+            String id=row.optString("id","");
+            if(id.isEmpty()||id.length()>80||!ids.add(id)||!java.util.Arrays.asList("M3U","XTREAM").contains(row.optString("type","")))throw new IOException("INVALID_SOURCE_RESPONSE");
         }
     }
 }

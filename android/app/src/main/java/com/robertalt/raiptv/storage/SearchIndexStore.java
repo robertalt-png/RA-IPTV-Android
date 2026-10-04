@@ -12,9 +12,27 @@ import java.util.*;
 
 public class SearchIndexStore extends SQLiteOpenHelper {
     private static final String DB="nenotv_search.db";
-    private static final int VERSION=3;
+    private static final int VERSION=5;
+    private final CachePayloadCipher cipher;
+    private final SharedPreferences maintenance;
+    private final String maintenanceKey;
 
-    public SearchIndexStore(Context c){ super(c,DB,null,VERSION); try{setWriteAheadLoggingEnabled(true);}catch(Exception ignored){} }
+    public SearchIndexStore(Context c){this(c,DB);}
+    SearchIndexStore(Context c,String database){super(c,database,null,VERSION);cipher=new CachePayloadCipher(c,database);maintenance=c.getSharedPreferences("nenotv_cache_maintenance",Context.MODE_PRIVATE);maintenanceKey=StoredMediaKey.of(database);try{setWriteAheadLoggingEnabled(true);}catch(Exception ignored){} }
+
+    @Override public void onConfigure(SQLiteDatabase db){super.onConfigure(db);try(Cursor c=db.rawQuery("PRAGMA secure_delete=ON",null)){if(!c.moveToFirst()||c.getInt(0)!=1)throw new IllegalStateException("CACHE_SECURE_DELETE_UNAVAILABLE");}}
+    @Override public void onOpen(SQLiteDatabase db){
+        super.onOpen(db);
+        if(maintenance.getBoolean(maintenanceKey,false)){
+            checkpoint(db);db.execSQL("VACUUM");checkpoint(db);
+            if(!maintenance.edit().remove(maintenanceKey).commit())throw new IllegalStateException("CACHE_CLEANUP_STATE_FAILED");
+        }
+    }
+    private static void checkpoint(SQLiteDatabase db){
+        try(Cursor c=db.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)",null)){
+            if(!c.moveToFirst()||c.getInt(0)!=0)throw new IllegalStateException("CACHE_CLEANUP_BUSY");
+        }
+    }
 
     @Override public void onCreate(SQLiteDatabase db){
         db.execSQL("CREATE TABLE entries(profile TEXT NOT NULL, item_key TEXT NOT NULL, type TEXT NOT NULL, name TEXT, name_norm TEXT, hay_norm TEXT, lang_tag TEXT NOT NULL DEFAULT '', lang_scanned INTEGER NOT NULL DEFAULT 1, payload TEXT NOT NULL, PRIMARY KEY(profile,item_key))");
@@ -34,6 +52,62 @@ public class SearchIndexStore extends SQLiteOpenHelper {
         if(oldV<3){
             db.execSQL("CREATE TABLE IF NOT EXISTS category_cache(profile TEXT NOT NULL, section TEXT NOT NULL, category_id TEXT NOT NULL, name TEXT NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY(profile,section,category_id))");
             db.execSQL("CREATE TABLE IF NOT EXISTS import_progress(profile TEXT NOT NULL, section TEXT NOT NULL, session TEXT NOT NULL, cursor TEXT NOT NULL DEFAULT '', item_count INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL, PRIMARY KEY(profile,section))");
+        }
+        if(oldV<4&&newV>=4){
+            migrateSourceKeys(db,"entries");
+            try(Cursor tables=db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='import_entries'",null)){
+                if(tables.moveToFirst())migrateSourceKeys(db,"import_entries");
+            }
+        }
+        if(oldV<5&&newV>=5){
+            migratePrivatePayloads(db,"entries");
+            try(Cursor tables=db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='import_entries'",null)){
+                if(tables.moveToFirst())migratePrivatePayloads(db,"import_entries");
+            }
+            if(!maintenance.edit().putBoolean(maintenanceKey,true).commit())throw new IllegalStateException("CACHE_CLEANUP_STATE_FAILED");
+        }
+    }
+
+    private void migratePrivatePayloads(SQLiteDatabase db,String table){
+        long after=0;
+        while(true){
+            ArrayList<Long> rows=new ArrayList<>();ArrayList<ContentValues> updates=new ArrayList<>();
+            try(Cursor c=db.rawQuery("SELECT rowid,payload FROM "+table+" WHERE rowid>? ORDER BY rowid LIMIT 256",new String[]{Long.toString(after)})){
+                while(c.moveToNext()){
+                    after=c.getLong(0);String raw=c.getString(1);
+                    try{
+                        MediaEntry e=decodePlain(CachePayloadCipher.encrypted(raw)?cipher.decrypt(raw):raw);
+                        if(e==null)throw new IllegalStateException("CACHE_MIGRATION_INVALID");
+                        ContentValues v=new ContentValues();v.put("item_key",StoredMediaKey.of(e));
+                        v.put("payload",cipher.encrypt(encode(e)));String name=metadata(e.name);
+                        v.put("name",name);v.put("name_norm",norm(name));
+                        v.put("hay_norm",norm(metadata(e.name)+" "+metadata(e.plot)+" "+metadata(e.group)+" "+metadata(e.seriesTitle)+" "+metadata(e.tvgName)));
+                        rows.add(after);updates.add(v);
+                    }catch(Exception failure){throw new IllegalStateException("CACHE_MIGRATION_FAILED",failure);}
+                }
+            }
+            if(rows.isEmpty())break;
+            for(int i=0;i<rows.size();i++)if(db.update(table,updates.get(i),"rowid=?",new String[]{Long.toString(rows.get(i))})!=1)throw new IllegalStateException("CACHE_MIGRATION_WRITE_FAILED");
+        }
+    }
+
+    private void migrateSourceKeys(SQLiteDatabase db,String table){
+        long after=0;
+        while(true){
+            ArrayList<Long> rows=new ArrayList<>();ArrayList<String> keys=new ArrayList<>();
+            int scanned=0;
+            try(Cursor c=db.rawQuery("SELECT rowid,item_key,payload FROM "+table+" WHERE rowid>? ORDER BY rowid LIMIT 256",new String[]{Long.toString(after)})){
+                while(c.moveToNext()){
+                    scanned++;after=c.getLong(0);String raw=c.getString(2);MediaEntry entry=CachePayloadCipher.encrypted(raw)?decode(raw):decodePlain(raw);
+                    if(entry!=null&&!c.getString(1).equals(entry.uniqueKey())){rows.add(after);keys.add(entry.uniqueKey());}
+                }
+            }
+            if(scanned==0)break;
+            for(int i=0;i<rows.size();i++){
+                ContentValues v=new ContentValues();v.put("item_key",keys.get(i));
+                // A collision must roll back the upgrade, never silently discard a cached item.
+                db.update(table,v,"rowid=?",new String[]{Long.toString(rows.get(i))});
+            }
         }
     }
 
@@ -68,12 +142,19 @@ public class SearchIndexStore extends SQLiteOpenHelper {
         upsertInternal(db,"entries",null,profile,e);
     }
     private void upsertInternal(SQLiteDatabase db,String table,String session,String profile,MediaEntry e){
+        upsertInternal(db,table,session,profile,e,false);
+    }
+    private void upsertInternal(SQLiteDatabase db,String table,String session,String profile,MediaEntry e,boolean visible){
         try{
-            ContentValues v=new ContentValues();v.put("profile",profile);v.put("item_key",e.uniqueKey());v.put("type",e.type);v.put("name",safe(e.name));
-            String nameNorm=norm(e.name);String hay=norm(safe(e.name)+" "+safe(e.plot)+" "+safe(e.group)+" "+safe(e.seriesTitle)+" "+safe(e.tvgName));
-            v.put("name_norm",nameNorm);v.put("hay_norm",hay);v.put("lang_tag",ContentLanguage.detectTag(e));v.put("lang_scanned",1);v.put("payload",encode(e));
+            ContentValues v=new ContentValues();v.put("profile",profile);v.put("item_key",StoredMediaKey.of(e));v.put("type",e.type);v.put("name",metadata(e.name));
+            String nameNorm=norm(metadata(e.name));String hay=norm(metadata(e.name)+" "+metadata(e.plot)+" "+metadata(e.group)+" "+metadata(e.seriesTitle)+" "+metadata(e.tvgName));
+            v.put("name_norm",nameNorm);v.put("hay_norm",hay);v.put("lang_tag",ContentLanguage.detectTag(e));v.put("lang_scanned",1);v.put("payload",cipher.encrypt(encode(e)));
             if(session!=null){v.put("session",session);v.put("started",System.currentTimeMillis());}
             if(db.insertWithOnConflict(table,null,v,SQLiteDatabase.CONFLICT_REPLACE)<0)throw new IllegalStateException("cache_write_failed");
+            if(visible){
+                v.remove("session");v.remove("started");
+                if(db.insertWithOnConflict("entries",null,v,SQLiteDatabase.CONFLICT_REPLACE)<0)throw new IllegalStateException("cache_write_failed");
+            }
         }catch(Exception failure){throw new IllegalStateException("cache_write_failed",failure);}
     }
 
@@ -138,13 +219,16 @@ public class SearchIndexStore extends SQLiteOpenHelper {
     }
 
     public void importBatch(String session,String profile,String section,List<MediaEntry> items) throws java.io.InterruptedIOException {
+        importBatch(session,profile,section,items,false);
+    }
+    public void importBatch(String session,String profile,String section,List<MediaEntry> items,boolean visible) throws java.io.InterruptedIOException {
         com.nenotv.player.net.StreamingJsonArray.checkCancelled();
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
         try {
             for(MediaEntry e:items){
                 com.nenotv.player.net.StreamingJsonArray.checkCancelled();
                 if(!section.equals(e.type))throw new IllegalArgumentException("import_section_mismatch");
-                upsertInternal(db,"import_entries",session,profile,e);
+                upsertInternal(db,"import_entries",session,profile,e,visible);
             }
             db.setTransactionSuccessful();
         } finally {db.endTransaction();}
@@ -281,9 +365,12 @@ public class SearchIndexStore extends SQLiteOpenHelper {
     private static String encode(MediaEntry e)throws Exception{
         JSONObject x=new JSONObject();x.put("id",e.id);x.put("streamId",e.streamId);x.put("seriesId",e.seriesId);x.put("name",e.name);x.put("logo",e.logo);x.put("backdrop",e.backdrop);x.put("categoryId",e.categoryId);x.put("type",e.type);x.put("rating",e.rating);x.put("year",e.year);x.put("plot",e.plot);x.put("extension",e.extension);x.put("directSource",e.directSource);x.put("url",e.url);x.put("group",e.group);x.put("tvgId",e.tvgId);x.put("tvgName",e.tvgName);x.put("seriesTitle",e.seriesTitle);x.put("tmdbId",e.tmdbId);x.put("imdbId",e.imdbId);x.put("sourceId",e.sourceId);x.put("sourceName",e.sourceName);x.put("season",e.season);x.put("episode",e.episode);x.put("catchup",e.catchup);x.put("catchupDays",e.catchupDays);x.put("candidates",new JSONArray(e.candidates));return x.toString();
     }
-    private static MediaEntry decode(String raw){
+    private MediaEntry decode(String raw){try{return decodePlain(cipher.decrypt(raw));}catch(Exception invalid){return null;}}
+    private static MediaEntry decodePlain(String raw){
         try{JSONObject x=new JSONObject(raw);MediaEntry e=new MediaEntry();e.id=x.optString("id");e.streamId=x.optString("streamId");e.seriesId=x.optString("seriesId");e.name=x.optString("name","Untitled");e.logo=x.optString("logo");e.backdrop=x.optString("backdrop");e.categoryId=x.optString("categoryId");e.type=x.optString("type","live");e.rating=x.optString("rating");e.year=x.optString("year");e.plot=x.optString("plot");e.extension=x.optString("extension");e.directSource=x.optString("directSource");e.url=x.optString("url");e.group=x.optString("group");e.tvgId=x.optString("tvgId");e.tvgName=x.optString("tvgName");e.seriesTitle=x.optString("seriesTitle");e.tmdbId=x.optString("tmdbId");e.imdbId=x.optString("imdbId");e.sourceId=x.optString("sourceId");e.sourceName=x.optString("sourceName");e.season=x.optInt("season");e.episode=x.optInt("episode");e.catchup=x.optBoolean("catchup",false);e.catchupDays=x.optInt("catchupDays",0);JSONArray a=x.optJSONArray("candidates");if(a!=null)for(int i=0;i<a.length();i++)e.candidates.add(a.optString(i));return e;}catch(Exception ex){return null;}
     }
     private static String safe(String s){return s==null?"":s;}
+    private static String metadata(String s){return safe(s).replaceAll("(?i)(?:https?|rtsp|rtmp)://\\S+","");}
     private static String norm(String s){return safe(s).toLowerCase(Locale.ROOT).replace('|',' ').replaceAll("\\s+"," ").trim();}
 }
+

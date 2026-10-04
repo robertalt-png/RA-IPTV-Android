@@ -17,8 +17,8 @@ public class MediaGridAdapter extends BaseAdapter {
     private final LibraryStore store;
     private List<MediaEntry> items=new ArrayList<>();
     private boolean liveMode=false;
-    private Provider epgProvider; private EpgStore epgStore; private String epgProfileKey="";
-    private final Map<String,List<EpgEntry>> epgCache=new ConcurrentHashMap<>();
+    private volatile EpgRequests epgRequests;
+    private final EpgRequests.Cache epgCache=new EpgRequests.Cache();
     private final Set<String> epgLoading=ConcurrentHashMap.newKeySet();
     private static final ExecutorService epgExec=Executors.newSingleThreadExecutor();
     private static final Handler ui=new Handler(Looper.getMainLooper());
@@ -26,7 +26,7 @@ public class MediaGridAdapter extends BaseAdapter {
     static class H { ImageView poster; TextView name,meta,fav,badge; ProgressBar progress; }
 
     public MediaGridAdapter(Context c,LibraryStore s){context=c;store=s;}
-    public void setEpg(Provider p,EpgStore s,String key){epgProvider=p;epgStore=s;epgProfileKey=key==null?"":key;epgCache.clear();epgLoading.clear();}
+    public void setEpg(EpgRequests requests){epgRequests=requests;epgCache.clear();epgLoading.clear();}
     public void set(List<MediaEntry> x,boolean live){items=x==null?new ArrayList<>():x;liveMode=live;notifyDataSetChanged();}
     public void append(List<MediaEntry> more){if(more==null||more.isEmpty())return;if(!(items instanceof ArrayList))items=new ArrayList<>(items);items.addAll(more);notifyDataSetChanged();}
     public int getCount(){return items.size();}
@@ -62,8 +62,8 @@ public class MediaGridAdapter extends BaseAdapter {
     }
 
     private void loadLiveEpg(TextView meta,MediaEntry e,String base){
-        if(epgProvider==null||epgStore==null)return;String k=epgProfileKey+"|"+e.uniqueKey();List<EpgEntry>rows=epgCache.get(k);if(rows!=null){bindLive(meta,e,base,rows);return;}if(!epgLoading.add(k))return;
-        epgExec.execute(()->{try{List<EpgEntry>r=epgStore.getOrFetch(epgProvider,epgProfileKey,e);epgCache.put(k,r);}catch(Exception ex){epgCache.put(k,Collections.emptyList());}finally{epgLoading.remove(k);ui.post(this::notifyDataSetChanged);}});
+        final EpgRequests r=epgRequests;if(r==null)return;String k=r.key(e);List<EpgEntry>rows=epgCache.get(k);if(rows!=null){bindLive(meta,e,base,rows);return;}if(!epgLoading.add(k))return;
+        epgExec.execute(()->{if(epgRequests!=r)return;try{List<EpgEntry>found=r.load(e);if(epgRequests==r)epgCache.put(k,found);}catch(Exception ex){if(epgRequests==r)epgCache.failed(k);}finally{if(epgRequests==r){epgLoading.remove(k);ui.post(()->{if(epgRequests==r)notifyDataSetChanged();});}}});
     }
     private void bindLive(TextView meta,MediaEntry e,String base,List<EpgEntry> rows){
         long epoch=System.currentTimeMillis()/1000L;EpgEntry current=EpgTimeline.now(rows,epoch),next=EpgTimeline.next(rows,epoch);
