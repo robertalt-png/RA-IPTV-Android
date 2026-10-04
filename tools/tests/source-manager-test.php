@@ -13,6 +13,7 @@ class SourceReadDb extends TestDb {
 $read=new SourceReadDb();$read->devices=$wpdb->devices;$read->entitlements=$wpdb->entitlements;$read->vaults=$wpdb->vaults;$wpdb=$read;
 $accountDevices=new ReflectionMethod(NenoTV_Entitlement_Core::class,'account_devices');
 check($accountDevices->invoke(null,1)[0]['display_name']==='Living room','Account overview omitted saved device name');
+$wpdb->devices[1]['status']='revoked';check($accountDevices->invoke(null,1)===[],'Removed device still shown in account');$wpdb->devices[1]['status']='active';
 $_GET=['lang'=>'en'];$logged=true;$userEmail='owner@example.invalid';$validNonce=true;
 $options['nenotv_entitlement_mode']='live';$startChecks=$checks;
 function source_vault(){global $p;return sources('pull',$p)->data;}

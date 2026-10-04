@@ -156,7 +156,8 @@ trait NenoTV_Pairing {
         if(trim((string)parse_url($_SERVER['REQUEST_URI']??'',PHP_URL_PATH),'/')!=='nenotv-pair')return;
         nocache_headers();header('X-Robots-Tag: noindex, nofollow');
         header('X-Frame-Options: DENY');header("Content-Security-Policy: frame-ancestors 'none'");
-        if(!is_user_logged_in())auth_redirect();
+        $enteredCode=self::pairing_code(is_scalar($_GET['code']??null)?(string)$_GET['code']:'');
+        if(!is_user_logged_in()&&($enteredCode!==''||!empty($_GET['approved'])))auth_redirect();
         status_header(200);
         if(isset($GLOBALS['wp_query']))$GLOBALS['wp_query']->is_404=false;
         $lang=is_string($_GET['lang']??null)&&in_array($_GET['lang'],['nl','en','de'],true)?$_GET['lang']:self::account_language();
@@ -183,7 +184,7 @@ trait NenoTV_Pairing {
             echo '<a class="button" href="'.esc_url($destination).'">'.esc_html($lang==='nl'?'Kies uw tv-aanbod':($lang==='de'?'TV-Angebot auswählen':'Choose your TV source')).'</a>';
             echo '<script>location.replace('.wp_json_encode($destination,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT).');</script>';
         }
-        elseif(!self::app_service_live(self::current_user_entitlement()))echo '<p>'.esc_html($s['inactive']).'</p>';
+        elseif($enteredCode!==''&&!self::app_service_live(self::current_user_entitlement()))echo '<p>'.esc_html($s['inactive']).'</p>';
         else{
             $code=self::pairing_code(is_scalar($_GET['code']??null)?(string)$_GET['code']:'');
             if($code===''){
