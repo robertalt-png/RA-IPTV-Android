@@ -21,8 +21,10 @@ class Harness {
  use NenoTV_Catalog_Package;
  const APP_NS='nenotv/v1';const CRON='daily';
  static function mode(){global $mode;return $mode;}
+ static function find_by_id($id){return ["id"=>1,"email"=>"qa@example.test","source"=>"internal_catalog_test"];}
+ static function entitlement_is_active($ent){return true;}
  static function load_source_vault($id){global $vault;return ['sources'=>$vault[$id]??[]];}
- static function source_device_auth($p){global $allowed;return $allowed?['entitlement'=>['id'=>1,'email'=>'qa@example.test'],'device'=>['device_id'=>'qa-device']]:new WP_Error();}
+ static function source_device_auth($p){global $allowed;return $allowed?['entitlement'=>['id'=>1,'email'=>'qa@example.test','source'=>'internal_catalog_test'],'device'=>['device_id'=>'qa-device']]:new WP_Error();}
  static function email_hash($e){return hash('sha256',$e);}
  static function json($d,$s){return new WP_REST_Response($d,$s);}
  static function wp_error_json($e){return self::json(['ok'=>false],403);}
@@ -47,7 +49,7 @@ try{
  if(getenv('NENOTV_EXPORT_FIXTURE')){mkdir('android/app/src/androidTest/assets',0777,true);file_put_contents('android/app/src/androidTest/assets/catalog-fixture.gz',$package);file_put_contents('android/app/src/androidTest/assets/catalog-fixture.json',json_encode($manifest));}
  $body['sha256']=$manifest['sha256'];check(Harness::catalog_request(new WP_REST_Request($body),'ack')->status===200,'device ack');$body['sha256']='wrong';check(Harness::catalog_request(new WP_REST_Request($body),'ack')->status===400,'ack checksum');
  $bad=$body;$bad['account_scope']='another';check(Harness::catalog_request(new WP_REST_Request($bad),'download')->status===409,'account mismatch');$bad=$body;$bad['source_id']='other';check(Harness::catalog_request(new WP_REST_Request($bad),'download')->status===404,'source ownership');$bad=$body;$bad['fingerprint']='old';check(Harness::catalog_request(new WP_REST_Request($bad),'download')->status===409,'stale version');
- $allowed=false;check(Harness::catalog_request(new WP_REST_Request($body),'download')->status===403,'unlinked device');$allowed=true;$mode='shadow';check(Harness::catalog_request(new WP_REST_Request($body),'status')->status===403,'prelaunch remains blocked');$mode='live';
+ $allowed=false;check(Harness::catalog_request(new WP_REST_Request($body),'download')->status===403,'unlinked device');$allowed=true;$mode='shadow';check(Harness::catalog_request(new WP_REST_Request($body),'status')->status===403,'prelaunch remains blocked');$mode='shadow';$opts['nenotv_catalog_internal_tests']=['1'=>time()+600];check(Harness::catalog_request(new WP_REST_Request($body),'status')->status===200,'scoped internal test');$opts['nenotv_catalog_internal_tests']=['2'=>time()+600];check(Harness::catalog_request(new WP_REST_Request($body),'status')->status===403,'other entitlement blocked');$opts['nenotv_catalog_internal_tests']=['1'=>time()-1];check(Harness::catalog_request(new WP_REST_Request($body),'status')->status===403,'expired internal test blocked');$opts['nenotv_catalog_internal_tests']=[];$mode='live';
  $vault[1][0]['password']='changed';check(Harness::catalog_request(new WP_REST_Request($body),'download')->status===409,'changed credentials reject stale pack');Harness::catalog_sources_saved(1,[]);$vault[1]=[];
  check(Harness::catalog_request(new WP_REST_Request($body),'download')->status===404,'deleted source');
  echo "Catalog package: $checks checks passed\n";

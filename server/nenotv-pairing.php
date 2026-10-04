@@ -59,7 +59,7 @@ trait NenoTV_Pairing {
     }
 
     public static function pairing_request(WP_REST_Request $request,string $action): WP_REST_Response {
-        if(self::mode()!=='live')return self::json(['ok'=>false,'error'=>'pro_not_live'],403);
+        if(self::mode()!=='live'&&!self::catalog_testing_enabled())return self::json(['ok'=>false,'error'=>'pro_not_live'],403);
         if(strlen((string)$request->get_body())>8192)return self::json(['ok'=>false,'error'=>'request_too_large'],413);
         $p=self::clean_app_payload($request);
         if(empty($p['device_id'])||strlen((string)($p['device_key']??''))<32)return self::json(['ok'=>false,'error'=>'invalid_device'],400);
@@ -100,7 +100,7 @@ trait NenoTV_Pairing {
             if($action!=='status')return self::json(['ok'=>false,'error'=>'invalid_action'],400);
             if($session['state']==='pending')return self::json(['ok'=>true,'state'=>'pending'],200);
             $ent=self::find_by_id((int)$session['entitlement_id']);
-            if(!is_array($ent)||!self::entitlement_is_active($ent))return self::json(['ok'=>false,'error'=>'pro_inactive'],403);
+            if(!is_array($ent)||!self::entitlement_is_active($ent)||!self::app_service_live($ent))return self::json(['ok'=>false,'error'=>'pro_inactive'],403);
             // The session carries only a hash; binding uses the proof just received from the app.
             if($session['state']!=='complete'){
                 $p['platform']=substr($session['platform'].' / '.$session['name'],0,100);
@@ -128,7 +128,7 @@ trait NenoTV_Pairing {
         $code=self::pairing_code(is_scalar($_POST['code']??null)?(string)$_POST['code']:'');
         $nonce=is_scalar($_POST['_wpnonce']??null)?(string)$_POST['_wpnonce']:'';
         if($code===''||!wp_verify_nonce($nonce,'nenotv_pair_approve_'.$code))wp_die('Security check failed.');
-        if(self::mode()!=='live')wp_die('NenoTV pairing is not live.');
+        if(!self::app_service_live(self::current_user_entitlement()))wp_die('NenoTV pairing is not live.');
         if(!self::pairing_rate('approve',(string)get_current_user_id(),30,10*MINUTE_IN_SECONDS))wp_die('Please try again later.');
         if(!self::pairing_lock($code))wp_die('Please try again.');
         try{
@@ -170,7 +170,7 @@ trait NenoTV_Pairing {
             delete_transient('nenotv_pair_notice_'.get_current_user_id());
             echo '<p>'.esc_html($s['done']).'</p>';
         }
-        elseif(self::mode()!=='live')echo '<p>'.esc_html($s['inactive']).'</p>';
+        elseif(!self::app_service_live(self::current_user_entitlement()))echo '<p>'.esc_html($s['inactive']).'</p>';
         else{
             $code=self::pairing_code(is_scalar($_GET['code']??null)?(string)$_GET['code']:'');
             if($code===''){

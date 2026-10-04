@@ -1106,11 +1106,12 @@ final class NenoTV_Entitlement_Core {
     }
 
     public static function app_sources(WP_REST_Request $request, string $action): WP_REST_Response {
-        if (self::mode()!=='live') return self::json(['ok'=>false,'error'=>'pro_not_live','message'=>'NenoTV Pro source sync is not live yet.'],403);
+        if (self::mode()!=='live'&&!self::catalog_testing_enabled()) return self::json(['ok'=>false,'error'=>'pro_not_live','message'=>'NenoTV Pro source sync is not live yet.'],403);
         if(strlen((string)$request->get_body())>1048576)return self::json(['ok'=>false,'error'=>'request_too_large'],413);
         $raw=$request->get_json_params(); if(!is_array($raw))$raw=[];
         $auth=self::source_device_auth($raw); if(is_wp_error($auth))return self::wp_error_json($auth);
         $ent=(array)$auth['entitlement'];
+        if(!self::app_service_live($ent))return self::json(['ok'=>false,'error'=>'pro_not_live'],403);
         $entitlement_id=(int)$ent['id'];
         $scope=$raw['account_scope']??null;
         if(!is_string($scope)||!hash_equals(self::email_hash((string)$ent['email']),$scope))return self::json(['ok'=>false,'error'=>'source_account_changed'],409);

@@ -13,9 +13,14 @@ public final class CatalogPackageChecks {
     static JSONObject manifest(File f,int count)throws Exception{return new JSONObject().put("schema",1).put("source_id","s").put("fingerprint","f").put("bytes",f.length()).put("sha256",CatalogPackageImporter.sha256(f)).put("counts",new JSONObject().put("live",count).put("vod",0).put("series",0));}
     static String header()throws Exception{return new JSONObject().put("kind","header").put("schema",1).put("source_id","s").put("fingerprint","f").toString()+"\n";}
     static String end(int n)throws Exception{return new JSONObject().put("kind","end").put("counts",new JSONObject().put("live",n).put("vod",0).put("series",0)).put("categories",new JSONObject().put("live",1).put("vod",0).put("series",0))+"\n";}
-    public static void run(Context c)throws Exception {
+    public static void run(Context c,Context fixtureContext)throws Exception {
         File f=File.createTempFile("catalog-qa", ".gz",c.getCacheDir());String key="package-qa-"+System.nanoTime();SearchIndexStore index=new SearchIndexStore(c);
         try{
+            try(InputStream in=fixtureContext.getAssets().open("catalog-fixture.gz");OutputStream out=new FileOutputStream(f)){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)out.write(b,0,n);}
+            ByteArrayOutputStream meta=new ByteArrayOutputStream();try(InputStream in=fixtureContext.getAssets().open("catalog-fixture.json")){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)meta.write(b,0,n);}
+            JSONObject serverManifest=new JSONObject(meta.toString("UTF-8"));
+            check(CatalogPackageImporter.importFile(f,serverManifest,index,key,n->{},()->{})==3,"PHP to Android package");
+            check(index.countSection(key,"live")==1&&index.countSection(key,"vod")==1&&index.countSection(key,"series")==1,"PHP full catalog sections");
             String category=new JSONObject().put("kind","category").put("type","live").put("id","c").put("name","NL")+"\n";
             StringBuilder items=new StringBuilder();for(int i=0;i<1000;i++)items.append(new JSONObject().put("kind","item").put("entry",entry("id"+i,"live"))).append('\n');
             // Concatenated gzip members exactly match the server's staged single download.

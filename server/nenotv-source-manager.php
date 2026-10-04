@@ -63,7 +63,7 @@ trait NenoTV_Source_Manager {
         $s=self::source_strings($lang);
         $guide=$lang==='nl'?'/language/nl/installatie/qr-koppeling/':($lang==='de'?'/language/de/einrichtung/qr-kopplung/':'/setup/qr-pairing/');
         $h='<div class="nv-account-notice"><strong>'.esc_html($s['pair']).'</strong><p>';
-        if (self::mode()==='live' && is_array($ent) && self::entitlement_is_active($ent)) {
+        if (is_array($ent) && self::app_service_live($ent) && self::entitlement_is_active($ent)) {
             $h.='<a class="button" href="'.esc_url(add_query_arg('lang',$lang,home_url('/nenotv-pair/'))).'">'.esc_html($s['pair']).'</a>';
         } else $h.=esc_html(self::mode()==='live'?$s['inactive']:$s['pending']);
         return $h.'</p><a href="'.esc_url(home_url($guide)).'">'.esc_html($s['guide']).'</a></div>';
@@ -71,7 +71,7 @@ trait NenoTV_Source_Manager {
 
     private static function source_account_panel(array $ent, string $lang): string {
         $s=self::source_strings($lang);
-        $canEdit=self::mode()==='live' && self::entitlement_is_active($ent);
+        $canEdit=self::app_service_live($ent) && self::entitlement_is_active($ent);
         $h='<div class="nv-source-vault"><h3>'.esc_html($s['title']).'</h3><p>'.esc_html($s['help']).'</p>';
         try {$vault=self::load_source_vault((int)$ent['id']);}
         catch (RuntimeException $e) {return $h.'<p role="alert">'.esc_html($s['storage']).'</p></div>';}
@@ -101,7 +101,7 @@ trait NenoTV_Source_Manager {
         $sid=$action==='add'?'':trim(self::source_post('source_id',80));
         if ($action!=='add' && $sid==='') self::source_fail('invalid');
         check_admin_referer('nenotv_source_'.$action.'_'.(int)$ent['id'].($action==='add'?'':'_'.$sid));
-        if ($action!=='delete' && (self::mode()!=='live' || !self::entitlement_is_active($ent))) self::source_fail('inactive',403);
+        if ($action!=='delete' && (!self::app_service_live($ent) || !self::entitlement_is_active($ent))) self::source_fail('inactive',403);
         $base=self::source_post('base_revision',18);
         if ($base==='' || !ctype_digit($base)) self::source_fail('conflict',409);
         try {$vault=self::load_source_vault((int)$ent['id']);}

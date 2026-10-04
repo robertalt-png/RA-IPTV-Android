@@ -18,7 +18,14 @@ public final class EntitlementClient {
     public EntitlementClient(Context c){this(c,"https://nenotv.com");}
     EntitlementClient(Context c,String base){store=new EntitlementStore(c);this.base=base;}
 
-    public JSONObject refresh() throws Exception {return post("entitlement/refresh",new JSONObject());}
+    public JSONObject refresh() throws Exception {
+        if(store.isPro()&&!store.cloudAccountScope().isEmpty()){
+            try{return post("catalog/access",new JSONObject().put("account_scope",store.cloudAccountScope()));}
+            catch(ServiceException e){if(!java.util.Arrays.asList("pro_not_live","device_not_linked","pro_inactive","source_account_changed").contains(e.code))throw e;}
+            catch(MissingRoute e){/* Older websites continue through the original bridge. */}
+        }
+        return post("entitlement/refresh",new JSONObject());
+    }
     public JSONObject startTrial(String email) throws Exception {
         JSONObject body=new JSONObject();
         body.put("email",email==null?"":email.trim());

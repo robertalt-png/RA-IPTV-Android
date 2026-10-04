@@ -10,7 +10,29 @@ trait NenoTV_Catalog_Package {
         add_action(self::CRON,[__CLASS__,'catalog_cleanup']);
     }
     public static function catalog_routes(): void {
-        foreach(['status','download','ack'] as $action)register_rest_route(self::APP_NS,'/catalog/'.$action,['methods'=>'POST','permission_callback'=>'__return_true','callback'=>static fn($r)=>self::catalog_request($r,$action)]);
+        register_rest_route(self::NS,'/catalog/internal-test',['methods'=>'POST','permission_callback'=>static fn()=>current_user_can('manage_options'),'callback'=>[__CLASS__,'catalog_enable_internal_test']]);
+        foreach(['status','download','ack','access'] as $action)register_rest_route(self::APP_NS,'/catalog/'.$action,['methods'=>'POST','permission_callback'=>'__return_true','callback'=>static fn($r)=>self::catalog_request($r,$action)]);
+    }
+    private static function catalog_testing_enabled(?array $ent=null): bool {
+        $tests=get_option('nenotv_catalog_internal_tests',[]);if(!is_array($tests))return false;
+        if($ent!==null)return ($ent['source']??'')==='internal_catalog_test' && ($tests[(string)$ent['id']]??0)>time() && self::entitlement_is_active($ent);
+        foreach($tests as $expires)if(is_int($expires)&&$expires>time())return true;return false;
+    }
+    private static function app_service_live(?array $ent): bool {return self::mode()==='live'||($ent!==null&&self::catalog_testing_enabled($ent));}
+    public static function catalog_enable_internal_test(): WP_REST_Response {
+        if(!current_user_can('manage_options')||!is_user_logged_in())return self::json(['ok'=>false,'error'=>'forbidden'],403);
+        global $wpdb;$user=wp_get_current_user();$email=self::normalize_email((string)$user->user_email);
+        if(!is_email($email))return self::json(['ok'=>false,'error'=>'invalid_account'],400);
+        $existing=self::current_user_entitlement();
+        if($existing&&self::entitlement_is_active($existing)&&($existing['source']??'')!=='internal_catalog_test')return self::json(['ok'=>false,'error'=>'existing_access_use_live_service'],409);
+        $now=self::now_mysql();$expires=time()+7*DAY_IN_SECONDS;$ref='admin:'.get_current_user_id();$ent=self::find_by_source('internal_catalog_test',$ref);
+        $values=['email'=>$email,'email_hash'=>self::email_hash($email),'level'=>'pro','plan'=>'annual','status'=>'active','max_devices'=>5,'source'=>'internal_catalog_test','source_ref'=>$ref,'payment_mode'=>'internal_test','language'=>self::account_language(),'starts_at'=>$now,'expires_at'=>gmdate('Y-m-d H:i:s',$expires),'updated_at'=>$now];
+        if($ent){$written=$wpdb->update(self::ent_table(),$values,['id'=>(int)$ent['id']]);$id=(int)$ent['id'];}
+        else{$values['reference']=self::ref();$values['created_at']=$now;$values['activation_hash']='';$values['activation_expires_at']=null;$written=$wpdb->insert(self::ent_table(),$values);$id=(int)$wpdb->insert_id;}
+        if($written===false||!$id)return self::json(['ok'=>false,'error'=>'test_access_failed'],503);
+        $tests=get_option('nenotv_catalog_internal_tests',[]);if(!is_array($tests))$tests=[];$tests[(string)$id]=$expires;update_option('nenotv_catalog_internal_tests',$tests,false);
+        self::log_event('internal_catalog_test',(string)($ent['reference']??$values['reference']),$ref,'success','Seven-day catalog test enabled for the requesting administrator only. Commerce remains unchanged.');
+        return self::json(['ok'=>true,'internal_test'=>true,'expires_at'=>gmdate('c',$expires),'max_devices'=>5],200);
     }
     private static function catalog_key(int $ent,string $id): string {return 'nenotv_catalog_'.hash('sha256',$ent.'|'.$id);}
     private static function catalog_fingerprint(array $s): string {
@@ -67,6 +89,7 @@ trait NenoTV_Catalog_Package {
         if(!is_array($job)||($job['fingerprint']??'')!==$fp||!in_array($job['state']??'',['queued','building'],true))return;
         $lock=null;$raw='';$plain='';
         try{
+            $access=self::find_by_id($ent);if(!$access||!self::app_service_live($access)||!self::entitlement_is_active($access))return;
             $source=self::catalog_source($ent,$id);if(!$source||!$source['enabled']||self::catalog_fingerprint($source)!==$fp)return;
             $dir=self::catalog_dir();$lock=fopen($dir.'/'.$job['token'].'.lock','c');if(!$lock||!flock($lock,LOCK_EX|LOCK_NB))return;
             // Re-read after lock: an overlapping task may already have advanced the stage.
@@ -104,11 +127,12 @@ trait NenoTV_Catalog_Package {
         finally{if($raw&&is_file($raw))unlink($raw);if($plain&&is_file($plain))unlink($plain);if(is_resource($lock)){flock($lock,LOCK_UN);fclose($lock);}}
     }
     public static function catalog_request(WP_REST_Request $r,string $action): WP_REST_Response {
-        if(self::mode()!=='live')return self::json(['ok'=>false,'error'=>'pro_not_live'],403);
+        if(self::mode()!=='live'&&!self::catalog_testing_enabled())return self::json(['ok'=>false,'error'=>'pro_not_live'],403);
         if(strlen($r->get_body())>8192)return self::json(['ok'=>false,'error'=>'request_too_large'],413);
         $p=$r->get_json_params();if(!is_array($p))$p=[];$auth=self::source_device_auth($p);if(is_wp_error($auth))return self::wp_error_json($auth);
-        $ent=(array)$auth['entitlement'];$scope=$p['account_scope']??null;
+        $ent=(array)$auth['entitlement'];if(!self::app_service_live($ent))return self::json(['ok'=>false,'error'=>'pro_not_live'],403);$scope=$p['account_scope']??null;
         if(!is_string($scope)||!hash_equals(self::email_hash((string)$ent['email']),$scope))return self::json(['ok'=>false,'error'=>'source_account_changed'],409);
+        if($action==='access')return self::json(['ok'=>true,'entitlement'=>self::pro_payload($ent),'internal_test'=>self::catalog_testing_enabled($ent)],200);
         $id=$p['source_id']??null;if(!is_string($id)||strlen($id)>80)return self::json(['ok'=>false,'error'=>'invalid_source'],400);
         try{
             $source=self::catalog_source((int)$ent['id'],$id);if(!$source||!$source['enabled'])return self::json(['ok'=>false,'error'=>'source_unavailable'],404);
