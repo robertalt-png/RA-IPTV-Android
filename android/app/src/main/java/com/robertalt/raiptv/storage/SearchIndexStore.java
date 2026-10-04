@@ -12,7 +12,7 @@ import java.util.*;
 
 public class SearchIndexStore extends SQLiteOpenHelper {
     private static final String DB="nenotv_search.db";
-    private static final int VERSION=3;
+    private static final int VERSION=4;
 
     public SearchIndexStore(Context c){ super(c,DB,null,VERSION); try{setWriteAheadLoggingEnabled(true);}catch(Exception ignored){} }
 
@@ -34,6 +34,32 @@ public class SearchIndexStore extends SQLiteOpenHelper {
         if(oldV<3){
             db.execSQL("CREATE TABLE IF NOT EXISTS category_cache(profile TEXT NOT NULL, section TEXT NOT NULL, category_id TEXT NOT NULL, name TEXT NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY(profile,section,category_id))");
             db.execSQL("CREATE TABLE IF NOT EXISTS import_progress(profile TEXT NOT NULL, section TEXT NOT NULL, session TEXT NOT NULL, cursor TEXT NOT NULL DEFAULT '', item_count INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL, PRIMARY KEY(profile,section))");
+        }
+        if(oldV<4){
+            migrateSourceKeys(db,"entries");
+            try(Cursor tables=db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='import_entries'",null)){
+                if(tables.moveToFirst())migrateSourceKeys(db,"import_entries");
+            }
+        }
+    }
+
+    private void migrateSourceKeys(SQLiteDatabase db,String table){
+        long after=0;
+        while(true){
+            ArrayList<Long> rows=new ArrayList<>();ArrayList<String> keys=new ArrayList<>();
+            int scanned=0;
+            try(Cursor c=db.rawQuery("SELECT rowid,item_key,payload FROM "+table+" WHERE rowid>? ORDER BY rowid LIMIT 256",new String[]{Long.toString(after)})){
+                while(c.moveToNext()){
+                    scanned++;after=c.getLong(0);MediaEntry entry=decode(c.getString(2));
+                    if(entry!=null&&!c.getString(1).equals(entry.uniqueKey())){rows.add(after);keys.add(entry.uniqueKey());}
+                }
+            }
+            if(scanned==0)break;
+            for(int i=0;i<rows.size();i++){
+                ContentValues v=new ContentValues();v.put("item_key",keys.get(i));
+                // A collision must roll back the upgrade, never silently discard a cached item.
+                db.update(table,v,"rowid=?",new String[]{Long.toString(rows.get(i))});
+            }
         }
     }
 

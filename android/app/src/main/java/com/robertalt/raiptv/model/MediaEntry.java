@@ -8,7 +8,11 @@ public class MediaEntry implements Serializable {
     public int season=0, episode=0, catchupDays=0;
     public boolean catchup=false;
     public ArrayList<String> candidates = new ArrayList<>();
-    public String uniqueKey(){ return type+":"+(id.isEmpty()?url:id); }
+    public String uniqueKey(){
+        String legacy=type+":"+(id.isEmpty()?url:id);
+        // Untagged primary entries retain existing favorites and playback progress.
+        return sourceId==null||sourceId.isEmpty()?legacy:"source:"+sourceId.length()+":"+sourceId+"|"+legacy;
+    }
     public String displayYear(){if(year==null)return "";java.util.regex.Matcher m=java.util.regex.Pattern.compile("(?:19|20)\\d{2}").matcher(year);return m.find()?m.group():year.trim();}
     public static String formatRating(String value){
         if(value==null)return "";
