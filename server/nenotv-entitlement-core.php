@@ -2,7 +2,7 @@
 /**
  * Plugin Name: NenoTV Entitlement Core
  * Description: Central NenoTV entitlement control plane for payment grants, refunds, device claims and the app bridge. Defaults to safe shadow mode until commercial launch.
- * Version: 0.1.18
+ * Version: 0.1.19
  * Author: NenoTV
  * Requires at least: 6.6
  * Requires PHP: 8.0
@@ -11,10 +11,12 @@
 if (!defined('ABSPATH')) exit;
 
 require_once __DIR__ . '/nenotv-pairing.php';
+require_once __DIR__ . '/nenotv-source-manager.php';
 
 final class NenoTV_Entitlement_Core {
     use NenoTV_Pairing;
-    const VERSION = '0.1.18';
+    use NenoTV_Source_Manager;
+    const VERSION = '0.1.19';
     const DB_VERSION = '5';
     const NS = 'nenotv-backend/v1';
     const APP_NS = 'nenotv/v1';
@@ -56,6 +58,7 @@ final class NenoTV_Entitlement_Core {
         add_action('admin_post_nenotv_upgrade_multi', [__CLASS__, 'handle_upgrade_multi']);
         add_action('admin_post_nenotv_source_add', [__CLASS__, 'handle_source_add']);
         add_action('admin_post_nenotv_source_delete', [__CLASS__, 'handle_source_delete']);
+        add_action('admin_post_nenotv_source_edit', [__CLASS__, 'handle_source_edit']);
         add_action(self::CRON, [__CLASS__, 'daily_maintenance']);
         add_filter('woocommerce_is_purchasable', [__CLASS__, 'upgrade_product_purchasable'], 20, 2);
         add_action('woocommerce_before_calculate_totals', [__CLASS__, 'price_upgrade_cart'], 20, 1);
@@ -1580,6 +1583,8 @@ final class NenoTV_Entitlement_Core {
         $html .= '<div class="nv-pro-account-head"><div><span class="nv-commerce-kicker">' . esc_html($s['kicker']) . '</span><h2>' . esc_html($s['title']) . '</h2></div>';
         $html .= '<img src="' . esc_url(get_template_directory_uri() . '/assets/brand/nenotv-mark.svg') . '" width="72" height="72" alt=""></div>';
 
+        $html .= self::source_account_notice($ent, $lang);
+
         if (!empty($_GET['device_removed'])) {
             $html .= '<div class="nv-account-notice">' . esc_html($s['removed']) . '</div>';
         }
@@ -1691,34 +1696,7 @@ final class NenoTV_Entitlement_Core {
         }
 
         if (self::mode() === 'live' && self::entitlement_is_active($ent)) {
-            $vault=self::load_source_vault((int)$ent['id']);
-            $source_title=$lang==='nl'?'Mijn bronnen':($lang==='de'?'Meine Quellen':'My sources');
-            $source_help=$lang==='nl'?'Beheer hier je Pro-bronnen. Inloggegevens worden versleuteld opgeslagen en nooit opnieuw volledig getoond.':($lang==='de'?'Verwalte hier deine Pro-Quellen. Zugangsdaten werden verschlüsselt gespeichert und nie vollständig angezeigt.':'Manage your Pro sources here. Credentials are encrypted at rest and are never shown back in full.');
-            $html .= '<div class="nv-source-vault"><h3>'.esc_html($source_title).'</h3><p>'.esc_html($source_help).'</p>';
-            if (!empty($_GET['source_saved'])) $html.='<div class="nv-account-notice">'.esc_html($lang==='nl'?'Bron opgeslagen.':($lang==='de'?'Quelle gespeichert.':'Source saved.')).'</div>';
-            if (!empty($_GET['source_deleted'])) $html.='<div class="nv-account-notice">'.esc_html($lang==='nl'?'Bron verwijderd.':($lang==='de'?'Quelle gelöscht.':'Source removed.')).'</div>';
-            if (!empty($vault['sources'])) {
-                $html.='<div class="nv-device-grid">';
-                foreach ($vault['sources'] as $source) {
-                    $type=(string)($source['type']??'M3U');$name=(string)($source['name']??'TV source');$sid=(string)($source['id']??'');
-                    $html.='<article class="nv-device-card"><div class="nv-device-icon" aria-hidden="true">≡</div><div class="nv-device-copy"><h3>'.esc_html($name).'</h3><p><strong>'.esc_html($type).'</strong></p></div>';
-                    $html.='<form class="nv-device-remove" method="post" action="'.esc_url(admin_url('admin-post.php')).'"><input type="hidden" name="action" value="nenotv_source_delete"><input type="hidden" name="source_id" value="'.esc_attr($sid).'">';
-                    $html.=wp_nonce_field('nenotv_source_delete_'.(int)$ent['id'].'_'.$sid,'_wpnonce',true,false);
-                    $html.='<button type="submit">'.esc_html($lang==='nl'?'Verwijderen':($lang==='de'?'Löschen':'Delete')).'</button></form></article>';
-                }
-                $html.='</div>';
-            }
-            $html.='<details class="nv-source-add"><summary>'.esc_html($lang==='nl'?'Bron toevoegen':($lang==='de'?'Quelle hinzufügen':'Add source')).'</summary>';
-            $html.='<form method="post" action="'.esc_url(admin_url('admin-post.php')).'"><input type="hidden" name="action" value="nenotv_source_add">';
-            $html.=wp_nonce_field('nenotv_source_add_'.(int)$ent['id'],'_wpnonce',true,false);
-            $html.='<p><label>'.esc_html($lang==='nl'?'Naam':($lang==='de'?'Name':'Name')).'<br><input required maxlength="120" name="source_name" type="text"></label></p>';
-            $html.='<p><label>Type<br><select name="source_type"><option value="XTREAM">Xtream</option><option value="M3U">M3U</option></select></label></p>';
-            $html.='<p><label>Server<br><input name="source_server" type="url" autocomplete="off"></label></p>';
-            $html.='<p><label>'.esc_html($lang==='nl'?'Gebruikersnaam':($lang==='de'?'Benutzername':'Username')).'<br><input name="source_username" type="text" autocomplete="off"></label></p>';
-            $html.='<p><label>'.esc_html($lang==='nl'?'Wachtwoord':($lang==='de'?'Passwort':'Password')).'<br><input name="source_password" type="password" autocomplete="new-password"></label></p>';
-            $html.='<p><label>M3U URL<br><input name="source_m3u" type="url" autocomplete="off"></label></p>';
-            $html.='<p><label>EPG URL<br><input name="source_epg" type="url" autocomplete="off"></label></p>';
-            $html.='<button type="submit">'.esc_html($lang==='nl'?'Opslaan':($lang==='de'?'Speichern':'Save')).'</button></form></details></div>';
+            $html .= self::source_account_panel($ent, $lang);
         }
 
         $support = $lang === 'nl' ? home_url('/language/nl/contact-nl/') : ($lang === 'de' ? home_url('/language/de/kontakt/') : home_url('/contact/'));
@@ -1727,49 +1705,9 @@ final class NenoTV_Entitlement_Core {
         return $html;
     }
 
-    public static function handle_source_add(): void {
-        if (!is_user_logged_in()) auth_redirect();
-        $ent=self::current_user_entitlement();
-        if (!is_array($ent) || !self::user_owns_entitlement($ent)) wp_die('Invalid NenoTV entitlement.');
-        check_admin_referer('nenotv_source_add_'.(int)$ent['id']);
-        if (self::mode()!=='live' || !self::entitlement_is_active($ent)) wp_die('NenoTV Pro source sync is not active.');
-        $type=strtoupper(sanitize_key((string)($_POST['source_type']??'M3U')));
-        if (!in_array($type,['M3U','XTREAM'],true)) $type='M3U';
-        $vault=self::load_source_vault((int)$ent['id']);
-        $sources=(array)$vault['sources'];
-        if(count($sources)>=20)wp_die('The maximum of 20 sources has been reached.');
-        $sources[]=[
-            'id'=>wp_generate_uuid4(),
-            'type'=>$type,
-            'name'=>sanitize_text_field(substr((string)($_POST['source_name']??'TV source'),0,120)),
-            'server'=>substr(trim((string)($_POST['source_server']??'')),0,1000),
-            'username'=>substr(trim((string)($_POST['source_username']??'')),0,500),
-            'password'=>substr((string)($_POST['source_password']??''),0,500),
-            'm3u'=>substr(trim((string)($_POST['source_m3u']??'')),0,2000),
-            'epg'=>substr(trim((string)($_POST['source_epg']??'')),0,2000),
-            'enabled'=>true,
-            'priority'=>count($sources),
-            'updated_at'=>time()*1000,
-        ];
-        try{self::save_source_vault((int)$ent['id'],$sources,(int)$vault['revision']);}
-        catch(UnexpectedValueException $e){wp_die('Sources changed on another device. Reload My NenoTV and retry.');}
-        $url=wp_get_referer() ?: home_url('/my-account/');
-        wp_safe_redirect(add_query_arg('source_saved','1',$url)); exit;
-    }
+    public static function handle_source_add(): void {self::handle_source_action('add');}
 
-    public static function handle_source_delete(): void {
-        if (!is_user_logged_in()) auth_redirect();
-        $ent=self::current_user_entitlement();
-        if (!is_array($ent) || !self::user_owns_entitlement($ent)) wp_die('Invalid NenoTV entitlement.');
-        $sid=sanitize_text_field((string)($_POST['source_id']??''));
-        check_admin_referer('nenotv_source_delete_'.(int)$ent['id'].'_'.$sid);
-        $vault=self::load_source_vault((int)$ent['id']);
-        $sources=array_values(array_filter((array)$vault['sources'],static fn($s)=>(string)($s['id']??'')!==$sid));
-        try{self::save_source_vault((int)$ent['id'],$sources,(int)$vault['revision']);}
-        catch(UnexpectedValueException $e){wp_die('Sources changed on another device. Reload My NenoTV and retry.');}
-        $url=wp_get_referer() ?: home_url('/my-account/');
-        wp_safe_redirect(add_query_arg('source_deleted','1',$url)); exit;
-    }
+    public static function handle_source_delete(): void {self::handle_source_action('delete');}
 
     public static function handle_device_rename(): void {
         if (!is_user_logged_in()) auth_redirect();
@@ -2187,4 +2125,5 @@ final class NenoTV_Entitlement_Core {
 register_activation_hook(__FILE__, ['NenoTV_Entitlement_Core','activate']);
 register_deactivation_hook(__FILE__, ['NenoTV_Entitlement_Core','deactivate']);
 add_action('plugins_loaded', ['NenoTV_Entitlement_Core','init']);
+
 

@@ -15,4 +15,5 @@ jobs:
           php -l server/nenotv-entitlement-core.php
           php -l server/nenotv-pairing.php
           php -l website-qa/theme-functions.php
-          php tools/tests/pairing-backend.php
+          php -l server/nenotv-source-manager.php
+          php tools/tests/source-manager-test.php
