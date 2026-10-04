@@ -250,6 +250,26 @@ public class SearchIndexStore extends SQLiteOpenHelper {
         } finally {db.endTransaction();}
     }
 
+    public static MediaEntry decodePackageEntry(String raw){return decodePlain(raw);}
+
+    public synchronized void finishCatalogImport(String session,String profile,Map<String,Integer> counts,Map<String,List<Category>> categories,Runnable guard) throws java.io.InterruptedIOException {
+        com.nenotv.player.net.StreamingJsonArray.checkCancelled();
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        try{
+            for(String section:new String[]{"live","vod","series"}){
+                if(importCount(session,profile,section)!=counts.get(section))throw new IllegalStateException("catalog_duplicate_or_missing_items");
+                db.delete("entries","profile=? AND type=?",new String[]{profile,section});
+                db.execSQL("INSERT INTO entries(profile,item_key,type,name,name_norm,hay_norm,lang_tag,lang_scanned,payload) SELECT profile,item_key,type,name,name_norm,hay_norm,lang_tag,lang_scanned,payload FROM import_entries WHERE session=? AND profile=? AND type=?",new Object[]{session,profile,section});
+                ContentValues m=new ContentValues();m.put("profile",profile);m.put("section",section);m.put("updated",System.currentTimeMillis());m.put("item_count",counts.get(section));
+                if(db.insertWithOnConflict("meta",null,m,SQLiteDatabase.CONFLICT_REPLACE)<0)throw new IllegalStateException("catalog_meta_write");
+                replaceCategories(profile,section,categories.get(section));
+                db.delete("import_progress","profile=? AND section=?",new String[]{profile,section});
+            }
+            db.delete("import_entries","session=?",new String[]{session});
+            com.nenotv.player.net.StreamingJsonArray.checkCancelled();guard.run();db.setTransactionSuccessful();
+        }finally{db.endTransaction();}
+    }
+
     public void abortSectionImport(String session) {
         if(session!=null)getWritableDatabase().delete("import_entries","session=?",new String[]{session});
     }
@@ -373,4 +393,5 @@ public class SearchIndexStore extends SQLiteOpenHelper {
     private static String metadata(String s){return safe(s).replaceAll("(?i)(?:https?|rtsp|rtmp)://\\S+","");}
     private static String norm(String s){return safe(s).toLowerCase(Locale.ROOT).replace('|',' ').replaceAll("\\s+"," ").trim();}
 }
+
 

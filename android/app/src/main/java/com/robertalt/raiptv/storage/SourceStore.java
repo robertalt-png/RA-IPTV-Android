@@ -209,6 +209,8 @@ public final class SourceStore {
         if(!active.isEmpty()){if(!setActive(active))clearActiveProfile();}else clearActiveProfile();
     }
 
+    public synchronized long localRevision(){return prefs.getLong("local_revision",0L);}
+
     public synchronized boolean syncDirty(){return prefs.getBoolean(KEY_DIRTY,false);}
     public void bindCloudAccount(String scope){synchronized(SYNC_LOCK){
         if(scope==null||!scope.matches("[a-f0-9]{64}"))throw new IllegalArgumentException("ACCOUNT_SCOPE_REQUIRED");

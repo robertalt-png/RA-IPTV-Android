@@ -6,7 +6,7 @@ import java.util.concurrent.*;
 
 public class ProfileActivity extends Activity {
     EditText name,server,user,pass,m3u,epg; RadioButton xtream,m3uRadio,demoRadio; TextView status;
-    LinearLayout xtreamFields,m3uFields,advancedFields; SecureProfileStore store; SourceStore sources; String sourceId=""; boolean newSource=false; Profile editingProfile; ExecutorService exec=Executors.newSingleThreadExecutor();
+    LinearLayout xtreamFields,m3uFields,advancedFields; SecureProfileStore store; SourceStore sources; String sourceId=""; boolean newSource=false,websiteSetup=false; Profile editingProfile; ExecutorService exec=Executors.newSingleThreadExecutor();
 
     String T(String en,String nl,String de){
         String l=SettingsStore.language(this); if("nl".equals(l))return nl; if("de".equals(l))return de; return en;
@@ -19,11 +19,26 @@ public class ProfileActivity extends Activity {
         m3u=findViewById(R.id.m3uField); epg=findViewById(R.id.epgField); xtream=findViewById(R.id.xtreamRadio); m3uRadio=findViewById(R.id.m3uRadio);
         demoRadio=findViewById(R.id.demoRadio); status=findViewById(R.id.profileStatus); xtreamFields=findViewById(R.id.xtreamFields);
         m3uFields=findViewById(R.id.m3uFields); advancedFields=findViewById(R.id.advancedFields);
+        websiteSetup=!store.exists();
         applyLanguage(); load(); updateMode();
+        Button website=new Button(this);website.setText(T("Set up via My NenoTV","Instellen via Mijn NenoTV","Über Mein NenoTV einrichten"));website.setAllCaps(false);website.setTextColor(0xFF07090D);website.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));
+        website.setOnClickListener(v->{websiteSetup=true;startActivity(new android.content.Intent(this,PairingActivity.class));});
+        LinearLayout container=(LinearLayout)findViewById(R.id.profileIntro).getParent();container.addView(website,2);
+
         findViewById(R.id.typeGroup).setOnClickListener(v->updateMode());
         xtream.setOnClickListener(v->updateMode()); m3uRadio.setOnClickListener(v->updateMode()); demoRadio.setOnClickListener(v->{updateMode();if(demoRadio.isEnabled())connectAndSave();});
         findViewById(R.id.advancedButton).setOnClickListener(v->advancedFields.setVisibility(advancedFields.getVisibility()==View.VISIBLE?View.GONE:View.VISIBLE));
         findViewById(R.id.saveButton).setOnClickListener(v->connectAndSave());
+    }
+
+    @Override protected void onResume(){
+        super.onResume();
+        if(new EntitlementStore(this).isPro()&&websiteSetup&&!newSource&&sourceId.isEmpty()){
+            com.nenotv.player.entitlement.AutomaticSourceDownload.check(this,()->runOnUiThread(()->{
+                if(!isFinishing()&&!isDestroyed()&&store.exists()){setResult(RESULT_OK);finish();}
+            }));
+            if(store.exists()&&new SourceStore(this).cloudRevision()>0&&!new SourceStore(this).syncDirty()){setResult(RESULT_OK);finish();}
+        }
     }
 
     void applyLanguage(){

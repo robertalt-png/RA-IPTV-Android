@@ -109,6 +109,9 @@ public final class PairingActivity extends Activity {
         worker.execute(()->{
             try{
                 String state=client.status(active);
+                if("complete".equals(state)&&new com.nenotv.player.storage.EntitlementStore(this).isPro()){
+                    try{new com.nenotv.player.entitlement.SourceSyncClient(this).pull();}catch(Exception ignored){/* Source retrieval can retry when the source screen resumes. */}
+                }
                 runOnUiThread(()->{
                     if(destroyed||current!=generation)return;
                     busy=false;retry.setEnabled(true);

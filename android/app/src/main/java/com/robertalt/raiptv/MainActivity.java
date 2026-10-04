@@ -225,7 +225,17 @@ void scheduleBackgroundIndex(){
         Future<?> previousIndex=indexFuture;if(previousIndex!=null)previousIndex.cancel(true);
         int token=nextRequest();smartProviders.clear();smartMergeKey="";profile=profiles.load();title.setText("NenoTV");setHeroDefault(profile.name==null||profile.name.trim().isEmpty()?T("welcome"):profile.name,T("connecting"));provider=newProvider(profile);latestSearchQuery="";busy(true,T("connecting"));
         final Provider connectingProvider=provider;
-        exec.execute(()->{try{searchIndex.getWritableDatabase();migrateSearchIndexIfNeeded();connectingProvider.authenticate();String activeSource=new SourceStore(this).activeId();if(activeSource!=null&&!activeSource.isEmpty())smartProviders.put(activeSource,connectingProvider);runOnUiThread(()->{if(current(token)){profileReady=true;EpgRequests requests=epgRequests();adapter.setEpg(requests);gridAdapter.setEpg(requests);epgAdapter.configure(requests);openStart();autoReindexAfterConnect=false;ui.postDelayed(()->{if(provider!=null&&!indexRefreshRunning&&!isFinishing()&&!isDestroyed())refreshSearchIndex(false);},1500);}});}catch(Exception e){runOnUiThread(()->{if(current(token))busy(false,T("login_failed_prefix")+": "+friendly(e));});}});
+        exec.execute(()->{try{searchIndex.getWritableDatabase();migrateSearchIndexIfNeeded();
+            boolean packaged=new com.nenotv.player.entitlement.CatalogPackageClient(this).bootstrap(searchIndex,profileKey(),profile,items->runOnUiThread(()->{if(current(token))busy(true,catalogText("importing")+" · "+items);}));
+            if(!packaged)connectingProvider.authenticate();String activeSource=new SourceStore(this).activeId();if(activeSource!=null&&!activeSource.isEmpty())smartProviders.put(activeSource,connectingProvider);runOnUiThread(()->{if(current(token)){profileReady=true;EpgRequests requests=epgRequests();adapter.setEpg(requests);gridAdapter.setEpg(requests);epgAdapter.configure(requests);openStart();autoReindexAfterConnect=false;ui.postDelayed(()->{if(provider!=null&&!indexRefreshRunning&&!isFinishing()&&!isDestroyed())refreshSearchIndex(false);},1500);}});}catch(com.nenotv.player.entitlement.CatalogPackageClient.Pending pending){runOnUiThread(()->{if(current(token)){busy(true,catalogText("preparing"));ui.postDelayed(()->{if(current(token)&&isUiAlive())openProfile();},10000);}});}catch(Exception e){runOnUiThread(()->{if(current(token)){busy(false,T("login_failed_prefix")+": "+friendly(e));new AlertDialog.Builder(this).setMessage(catalogText("failed")).setPositiveButton(catalogText("retry"),(d,w)->openProfile()).setNegativeButton(T("close"),null).show();}});}});
+    }
+
+    String catalogText(String key){
+        String l=SettingsStore.language(this);
+        if("preparing".equals(key))return "nl".equals(l)?"Mijn NenoTV bereidt je mediapakket voor…":"de".equals(l)?"Mein NenoTV bereitet dein Medienpaket vor…":"My NenoTV is preparing your media package…";
+        if("importing".equals(key))return "nl".equals(l)?"Mediapakket importeren":"de".equals(l)?"Medienpaket importieren":"Importing media package";
+        if("retry".equals(key))return "nl".equals(l)?"Opnieuw proberen":"de".equals(l)?"Erneut versuchen":"Try again";
+        return "nl".equals(l)?"Je bibliotheek kon niet worden geopend. Probeer opnieuw; je bestaande lijst blijft behouden.":"de".equals(l)?"Deine Bibliothek konnte nicht geöffnet werden. Versuche es erneut; die vorhandene Liste bleibt erhalten.":"Your library could not be opened. Try again; your existing list is preserved.";
     }
 
     void openStart(){String x=SettingsStore.startScreen(this);if("last".equals(x))x=SettingsStore.lastSection(this);if("live".equals(x))loadSection("live");else if("epg".equals(x))loadEpg();else if("vod".equals(x))loadSection("vod");else if("series".equals(x))loadSection("series");else loadHome();}
@@ -608,7 +618,11 @@ void scheduleBackgroundIndex(){
                       .putInt("first_sync_done_count_"+key,0).putInt("first_sync_total_count_"+key,0).putInt("first_sync_titles_"+key,0).apply();
                 }
                 if(indexProvider instanceof M3uProvider){
-                    List<MediaEntry>x=indexProvider.items("live","all");searchIndex.replaceSection(key,"live",x);
+                    if(requestedForce||!searchIndex.isFresh(key,"live",SEARCH_INDEX_TTL_MS)){
+                        indexProvider.authenticate();
+                        List<MediaEntry>x=indexProvider.items("live","all");if(x.isEmpty())throw new IllegalStateException("EMPTY_PLAYLIST");searchIndex.replaceSection(key,"live",x);
+                        searchIndex.replaceCategories(key,"live",indexProvider.categories("live"));
+                    }
                     allComplete=true;
                 }else{
                     final String[] baseTypes={"live","vod","series"};
@@ -971,4 +985,5 @@ TextView addInfoBlock(LinearLayout b,String l,String x){TextView h=new TextView(
     }
     int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
 }
+
 

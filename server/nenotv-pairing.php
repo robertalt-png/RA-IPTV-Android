@@ -193,3 +193,4 @@ trait NenoTV_Pairing {
         echo '</main>';get_footer();exit;
     }
 }
+
