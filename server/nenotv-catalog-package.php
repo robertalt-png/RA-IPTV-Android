@@ -21,6 +21,7 @@ trait NenoTV_Catalog_Package {
     private static function app_service_live(?array $ent): bool {return self::mode()==='live'||($ent!==null&&self::catalog_testing_enabled($ent));}
     public static function catalog_enable_internal_test(): WP_REST_Response {
         if(!current_user_can('manage_options')||!is_user_logged_in())return self::json(['ok'=>false,'error'=>'forbidden'],403);
+        try{self::catalog_dir();}catch(Throwable $e){return self::json(['ok'=>false,'error'=>'catalog_storage_unavailable'],503);}
         global $wpdb;$user=wp_get_current_user();$email=self::normalize_email((string)$user->user_email);
         if(!is_email($email))return self::json(['ok'=>false,'error'=>'invalid_account'],400);
         $existing=self::current_user_entitlement();

@@ -27,6 +27,9 @@ public final class CatalogPackageChecks {
             try(OutputStream out=new FileOutputStream(f)){out.write(gzip(header()+category));out.write(gzip(items.toString()));out.write(gzip(end(1000)));}
             JSONObject m=manifest(f,1000);check(CatalogPackageImporter.importFile(f,m,index,key,n->{},()->{})==1000,"package import count");
             check(index.countSection(key,"live")==1000&&index.isComplete(key,"vod")&&index.isComplete(key,"series"),"all sections committed including empty");check(index.cachedCategories(key,"live").size()==1,"categories committed");
+            com.nenotv.player.model.Profile profile=new com.nenotv.player.model.Profile();profile.type=com.nenotv.player.model.Profile.Type.M3U;profile.m3uUrl="https://provider.invalid/never-requested";
+            com.nenotv.player.provider.CatalogM3uProvider cachedProvider=new com.nenotv.player.provider.CatalogM3uProvider(profile,"nl",index,key);
+            check(cachedProvider.items("live","all").size()==1000,"packaged M3U opens without provider authentication");check(cachedProvider.items("vod","all").isEmpty(),"empty packaged section");check(cachedProvider.categories("live").size()==1,"packaged M3U categories");
             m.put("sha256",String.join("",Collections.nCopies(64,"0")));try{CatalogPackageImporter.importFile(f,m,index,key,n->{},()->{});throw new AssertionError("checksum accepted");}catch(IOException expected){}check(index.countSection(key,"live")==1000,"checksum preserved old library");
             try(OutputStream out=new FileOutputStream(f)){out.write(gzip(header()+category+new JSONObject().put("kind","item").put("entry",entry("new","live"))+"\n"+end(2)));}
             try{CatalogPackageImporter.importFile(f,manifest(f,2),index,key,n->{},()->{});throw new AssertionError("wrong counts accepted");}catch(IOException expected){}check(index.countSection(key,"live")==1000,"bad counts preserved library");

@@ -21,7 +21,7 @@ public final class EntitlementClient {
     public JSONObject refresh() throws Exception {
         if(store.isPro()&&!store.cloudAccountScope().isEmpty()){
             try{return post("catalog/access",new JSONObject().put("account_scope",store.cloudAccountScope()));}
-            catch(ServiceException e){if(!java.util.Arrays.asList("pro_not_live","device_not_linked","pro_inactive","source_account_changed").contains(e.code))throw e;}
+            catch(ServiceException e){if(!java.util.Arrays.asList("pro_not_live","device_not_linked","pro_inactive","source_account_changed","device_key_mismatch","invalid_device").contains(e.code))throw e;}
             catch(MissingRoute e){/* Older websites continue through the original bridge. */}
         }
         return post("entitlement/refresh",new JSONObject());
