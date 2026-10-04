@@ -29,7 +29,7 @@ class Harness {
 }
 $dir=sys_get_temp_dir().'/nenotv-format-test-'.bin2hex(random_bytes(6));mkdir($dir,0700);
 try{
- $file=$dir.'/input';file_put_contents($file,'[{"x":"a } \\\" b","n":{"a":[1,2]}},{"id":2}]');$rows=[];
+ $file=$dir.'/input';file_put_contents($file,json_encode([['x'=>'a } " b','n'=>['a'=>[1,2]]],['id'=>2]]));$rows=[];
  check(NenoTV_Catalog_Format::json_array($file,function($x)use(&$rows){$rows[]=$x;})===2,'stream parser');check($rows[1]['id']===2,'nested records');
  foreach(['','{}','[{},]','[{}','[{}]garbage','[null]','[{"x":bad}]'] as $bad){file_put_contents($file,$bad);fails(fn()=>NenoTV_Catalog_Format::json_array($file,fn($x)=>null),'reject malformed array');}
  file_put_contents($file,gzencode('[{"id":3}]'));check(NenoTV_Catalog_Format::json_array($file,fn($x)=>check($x['id']===3,'gzip provider data'))===1,'gzip input');
@@ -44,6 +44,7 @@ try{
  $body=['source_id'=>'qa-source','account_scope'=>hash('sha256','qa@example.test')];$r=Harness::catalog_request(new WP_REST_Request($body),'status');check($r->status===200&&$r->data['state']==='ready','six-stage package ready');check(array_sum($r->data['counts'])===3,'catalog totals');check(!isset($r->data['parts'])&&!isset($r->data['token']),'no private paths');
  $manifest=$r->data;$body['fingerprint']=$manifest['fingerprint'];$r=Harness::catalog_request(new WP_REST_Request($body),'download');check($r->status===200&&$r->headers['Content-Length']==$manifest['bytes'],'binary response');ob_start();Harness::catalog_serve(false,$r,new WP_REST_Request($body),null);$package=ob_get_clean();check(hash('sha256',$package)===$manifest['sha256'],'whole package checksum');file_put_contents($dir.'/package.gz',$package);
  $gz=gzopen($dir.'/package.gz','rb');$plain='';while(!gzeof($gz))$plain.=gzread($gz,65536);gzclose($gz);$records=array_map(fn($l)=>json_decode($l,true),explode("\n",trim($plain)));check($records[0]['kind']==='header'&&end($records)['kind']==='end','concatenated gzip valid');check(count(array_filter($records,fn($r)=>$r['kind']==='item'))===3,'complete catalog');
+ if(getenv('NENOTV_EXPORT_FIXTURE')){mkdir('android/app/src/androidTest/assets',0777,true);file_put_contents('android/app/src/androidTest/assets/catalog-fixture.gz',$package);file_put_contents('android/app/src/androidTest/assets/catalog-fixture.json',json_encode($manifest));}
  $body['sha256']=$manifest['sha256'];check(Harness::catalog_request(new WP_REST_Request($body),'ack')->status===200,'device ack');$body['sha256']='wrong';check(Harness::catalog_request(new WP_REST_Request($body),'ack')->status===400,'ack checksum');
  $bad=$body;$bad['account_scope']='another';check(Harness::catalog_request(new WP_REST_Request($bad),'download')->status===409,'account mismatch');$bad=$body;$bad['source_id']='other';check(Harness::catalog_request(new WP_REST_Request($bad),'download')->status===404,'source ownership');$bad=$body;$bad['fingerprint']='old';check(Harness::catalog_request(new WP_REST_Request($bad),'download')->status===409,'stale version');
  $allowed=false;check(Harness::catalog_request(new WP_REST_Request($body),'download')->status===403,'unlinked device');$allowed=true;$mode='shadow';check(Harness::catalog_request(new WP_REST_Request($body),'status')->status===403,'prelaunch remains blocked');$mode='live';

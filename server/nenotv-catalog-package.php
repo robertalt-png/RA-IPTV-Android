@@ -37,7 +37,12 @@ trait NenoTV_Catalog_Package {
     }
     private static function catalog_queue_source(int $ent,array $s): array {
         $key=self::catalog_key($ent,$s['id']);$old=get_option($key,[]);$fp=self::catalog_fingerprint($s);
-        if(is_array($old)&&($old['fingerprint']??'')===$fp&&in_array($old['state']??'',['queued','building','ready'],true)&&($old['updated']??0)>time()-86400)return $old;
+        if(is_array($old)&&($old['fingerprint']??'')===$fp){
+            $state=$old['state']??'';$recent=($old['updated']??0)>time()-900;
+            if($state==='failed'&&($old['updated']??0)>time()-120)return $old;
+            if(in_array($state,['queued','building'],true)&&$recent)return $old;
+            if($state==='ready'&&($old['updated']??0)>time()-86400){$present=true;foreach($old['parts'] as $p)if(!is_file(self::catalog_dir().'/'.$p['name']))$present=false;if($present)return $old;}
+        }
         if(is_array($old))self::catalog_remove_files($old);
         $job=['state'=>'queued','fingerprint'=>$fp,'token'=>bin2hex(random_bytes(16)),'step'=>0,'counts'=>['live'=>0,'vod'=>0,'series'=>0],'categories'=>['live'=>0,'vod'=>0,'series'=>0],'parts'=>[],'updated'=>time()];
         update_option($key,$job,false);self::catalog_schedule($ent,$s['id'],$fp);return $job;

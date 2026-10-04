@@ -37,6 +37,7 @@ public final class CatalogPackageClient {
         EntitlementClient transport=new EntitlementClient(context);
         JSONObject body=new JSONObject().put("source_id",active.id).put("account_scope",scope);
         JSONObject manifest=transport.request("catalog/status",body,16384);guard(active.id,revision);
+        if("failed".equals(manifest.optString("state")))throw new IOException("CATALOG_PREPARATION_FAILED");
         if(!"ready".equals(manifest.optString("state")))throw new Pending();
         if(manifest.getInt("schema")!=1||!active.id.equals(manifest.getString("source_id"))||!manifest.getString("fingerprint").matches("[a-f0-9]{64}"))throw new IOException("CATALOG_MANIFEST");
         File temp=File.createTempFile("nenotv-catalog-",".gz",context.getCacheDir());

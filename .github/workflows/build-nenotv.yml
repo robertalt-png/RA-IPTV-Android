@@ -44,7 +44,7 @@ jobs:
           php -l server/nenotv-entitlement-core.php
           php -l server/nenotv-catalog-package.php
           php -l server/nenotv-catalog-format.php
-          php tools/tests/catalog-package-test.php
+          NENOTV_EXPORT_FIXTURE=1 php tools/tests/catalog-package-test.php
           php tools/tests/source-manager-test.php
       - name: Build the single app source
         working-directory: android
