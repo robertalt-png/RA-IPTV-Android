@@ -16,7 +16,7 @@ public final class CatalogPackageChecks {
     public static void run(Context c,Context fixtureContext)throws Exception {
         File f=File.createTempFile("catalog-qa", ".gz",c.getCacheDir());String key="package-qa-"+System.nanoTime();SearchIndexStore index=new SearchIndexStore(c);
         try{
-            try(InputStream in=fixtureContext.getAssets().open("catalog-fixture.gz");OutputStream out=new FileOutputStream(f)){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)out.write(b,0,n);}
+            try(InputStream in=fixtureContext.getAssets().open("catalog-fixture.bin");OutputStream out=new FileOutputStream(f)){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)out.write(b,0,n);}
             ByteArrayOutputStream meta=new ByteArrayOutputStream();try(InputStream in=fixtureContext.getAssets().open("catalog-fixture.json")){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)meta.write(b,0,n);}
             JSONObject serverManifest=new JSONObject(meta.toString("UTF-8"));
             check(CatalogPackageImporter.importFile(f,serverManifest,index,key,n->{},()->{})==3,"PHP to Android package");
