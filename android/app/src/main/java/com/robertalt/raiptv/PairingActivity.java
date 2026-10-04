@@ -69,7 +69,7 @@ public final class PairingActivity extends Activity {
         if(session!=null)handler.post(poll);
         else if(!busy)startPairing();
     }
-    @Override protected void onPause(){resumed=false;handler.removeCallbacks(poll);super.onPause();}
+    @Override protected void onPause(){resumed=false;if(!getIntent().getBooleanExtra("auto_web",false))handler.removeCallbacks(poll);super.onPause();}
 
     static Bitmap qrBitmap(String url)throws Exception{
         BitMatrix matrix=new QRCodeWriter().encode(url,BarcodeFormat.QR_CODE,512,512,Collections.singletonMap(EncodeHintType.MARGIN,4));
@@ -105,7 +105,7 @@ public final class PairingActivity extends Activity {
     }
 
     void pollStatus(){
-        if(!resumed||destroyed||busy||complete||session==null)return;
+        if((!resumed&&!getIntent().getBooleanExtra("auto_web",false))||destroyed||busy||complete||session==null)return;
         PairingClient.Session active=session;int current=generation;
         if(active.expired()){expire();return;}
         busy=true;retry.setEnabled(false);
@@ -130,7 +130,7 @@ public final class PairingActivity extends Activity {
             });}
         });
     }
-    void schedule(PairingClient.Session active){if(resumed&&!active.expired())handler.postDelayed(poll,active.pollSeconds*1000L);else if(active.expired())expire();}
+    void schedule(PairingClient.Session active){if((resumed||getIntent().getBooleanExtra("auto_web",false))&&!active.expired())handler.postDelayed(poll,active.pollSeconds*1000L);else if(active.expired())expire();}
     void expire(){busy=false;session=null;clearCode();retry.setEnabled(true);status.setText(text("pair_expired"));}
     String failureMessage(Exception error){
         if(error instanceof EntitlementClient.ServiceException){

@@ -9,6 +9,7 @@ public class ProfileActivity extends Activity {
     LinearLayout xtreamFields,m3uFields,advancedFields; SecureProfileStore store; SourceStore sources; String sourceId=""; boolean newSource=false,websiteSetup=false; Profile editingProfile; ExecutorService exec=Executors.newSingleThreadExecutor();
 
     boolean websiteFirst,foreground,polling,pairLaunched;
+    long setupBackgroundUntil;
     final Handler setupHandler=new Handler(Looper.getMainLooper());
     final Runnable sourcePoll=()->checkWebsiteSource();
     String accountUrl(){String l=SettingsStore.language(this);return "https://nenotv.com"+("nl".equals(l)?"/language/nl/mijn-account/":("de".equals(l)?"/language/de/mein-konto/":"/my-account/"))+"?nenotv_setup=1#nenotv-sources";}
@@ -22,11 +23,11 @@ public class ProfileActivity extends Activity {
             .setNegativeButton(T("This device","Dit apparaat","Dieses Gerät"),(d,w)->{xtream.setChecked(true);updateMode();}).show();
     }
     void checkWebsiteSource(){
-        if(!foreground||polling||connecting||!websiteSetup||!new EntitlementStore(this).isPro())return;
+        if((!foreground&&(!websiteFirst||SystemClock.elapsedRealtime()>=setupBackgroundUntil))||polling||connecting||!websiteSetup||!new EntitlementStore(this).isPro())return;
         polling=true;
         exec.execute(()->{
             try{new com.nenotv.player.entitlement.SourceSyncClient(this).pullAutomatically();}catch(Exception ignored){}
-            runOnUiThread(()->{polling=false;if(isFinishing()||isDestroyed())return;if(store.exists()&&!sources.syncDirty()){setResult(RESULT_OK);finish();}else if(foreground)setupHandler.postDelayed(sourcePoll,5000);});
+            runOnUiThread(()->{polling=false;if(isFinishing()||isDestroyed())return;if(store.exists()&&!sources.syncDirty()){setResult(RESULT_OK);finish();}else if(foreground||(websiteFirst&&SystemClock.elapsedRealtime()<setupBackgroundUntil))setupHandler.postDelayed(sourcePoll,5000);});
         });
     }
 
@@ -58,7 +59,7 @@ public class ProfileActivity extends Activity {
     }
 
     @Override protected void onResume(){super.onResume();foreground=true;if(websiteSetup)setupHandler.post(sourcePoll);}
-    @Override protected void onPause(){foreground=false;setupHandler.removeCallbacks(sourcePoll);super.onPause();}
+    @Override protected void onPause(){foreground=false;setupHandler.removeCallbacks(sourcePoll);if(websiteFirst){setupBackgroundUntil=SystemClock.elapsedRealtime()+300000;setupHandler.postDelayed(sourcePoll,5000);}super.onPause();}
     @Override protected void onActivityResult(int request,int result,android.content.Intent data){super.onActivityResult(request,result,data);if(request==31&&result==RESULT_OK){chooseOffer();setupHandler.post(sourcePoll);}}
 
     void applyLanguage(){
@@ -90,7 +91,7 @@ public class ProfileActivity extends Activity {
         if(p==null&&store.exists())p=store.load();
         if(p==null){if(demoRadio.isEnabled())demoRadio.setChecked(true);else xtream.setChecked(true);return;}
         editingProfile=p;
-        boolean ownDemo=p.type==Profile.Type.M3U&&BuildConfig.NENOTV_DEMO_M3U_URL.equals(p.m3uUrl)&&demoRadio.isEnabled();
+        boolean ownDemo=DemoPolicy.isDemo(p)&&demoRadio.isEnabled();
         if(ownDemo)demoRadio.setChecked(true);else if(p.type==Profile.Type.M3U)m3uRadio.setChecked(true);else xtream.setChecked(true);
         name.setText(p.name); server.setText(p.server); user.setText(p.username); pass.setText(p.password); m3u.setText(p.m3uUrl); epg.setText(p.epgUrl);
     }
@@ -127,6 +128,10 @@ public class ProfileActivity extends Activity {
         if(websiteFirst&&!new EntitlementStore(this).isPro()){startAccountSetup();return;}
         if(new EntitlementStore(this).isPro()){
             final Profile chosen=collect();
+            if(!demoRadio.isChecked()){
+                android.net.Uri address=android.net.Uri.parse(chosen.type==Profile.Type.XTREAM?chosen.server:chosen.m3uUrl);
+                if(!java.util.Arrays.asList("https","http").contains(address.getScheme())||address.getHost()==null||(chosen.type==Profile.Type.XTREAM&&(chosen.username.trim().isEmpty()||chosen.password.isEmpty()))){status.setText(T("Enter a valid provider URL and login details.","Vul een geldige aanbieder-URL en inloggegevens in.","Gib eine gültige Anbieter-URL und Zugangsdaten ein."));return;}
+            }
             new AlertDialog.Builder(this).setTitle(T("Prepare via My NenoTV","Voorbereiden via Mijn NenoTV","Über Mein NenoTV vorbereiten"))
                 .setMessage(T("Allow My NenoTV to retrieve your list using these details, store them encrypted and prepare the media package for your linked devices?","Mag Mijn NenoTV met deze gegevens uw lijst ophalen, versleuteld opslaan en het mediapakket voor uw gekoppelde apparaten voorbereiden?","Darf Mein NenoTV mit diesen Daten deine Liste abrufen, verschlüsselt speichern und das Medienpaket für deine verbundenen Geräte vorbereiten?"))
                 .setNegativeButton(android.R.string.cancel,null).setPositiveButton(T("Agree and prepare","Akkoord en voorbereiden","Zustimmen und vorbereiten"),(d,w)->submitWebsiteSource(chosen,demoRadio.isChecked())).show();return;

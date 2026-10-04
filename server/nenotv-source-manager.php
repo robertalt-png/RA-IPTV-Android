@@ -78,7 +78,7 @@ trait NenoTV_Source_Manager {
         $h='<div id="nenotv-sources" class="nv-source-vault"><h3>'.esc_html($s['title']).'</h3><p>'.esc_html($s['help']).'</p>';
         try {$vault=self::load_source_vault((int)$ent['id']);}
         catch (RuntimeException $e) {return $h.'<p role="alert">'.esc_html($s['storage']).'</p></div>';}
-        if (!empty($_GET['source_saved'])) $h.='<p class="nv-account-notice" role="status">'.esc_html($s['saved']).'</p>';
+        if (!empty($_GET['source_saved'])) $h.='<p class="nv-account-notice" role="status">'.esc_html($s['saved']).'</p><a class="button" href="nenotv://setup?entry=device">'.esc_html($lang==='nl'?'Open NenoTV en ontvang uw mediapakket':($lang==='de'?'NenoTV öffnen und Medienpaket empfangen':'Open NenoTV and receive your media package')).'</a>';
         if (!empty($_GET['source_deleted'])) $h.='<p class="nv-account-notice" role="status">'.esc_html($s['deleted']).'</p>';
         if (!$canEdit) $h.='<p>'.esc_html($s['inactive']).'</p>';
         if ($canEdit && !empty($_GET['nenotv_setup'])) {
