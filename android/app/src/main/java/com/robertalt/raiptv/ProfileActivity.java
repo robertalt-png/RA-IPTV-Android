@@ -14,7 +14,7 @@ public class ProfileActivity extends Activity {
     final Runnable sourcePoll=()->checkWebsiteSource();
     String accountUrl(){String l=SettingsStore.language(this);return "https://nenotv.com"+("nl".equals(l)?"/language/nl/mijn-account/":("de".equals(l)?"/language/de/mein-konto/":"/my-account/"))+"?nenotv_setup=1#nenotv-sources";}
     void openWebsite(){try{startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(accountUrl())));}catch(Exception ignored){status.setText(T("Open My NenoTV on your phone or computer.","Open Mijn NenoTV op uw telefoon of computer.","Öffne Mein NenoTV auf deinem Telefon oder Computer."));}}
-    void startAccountSetup(){pairLaunched=true;startActivityForResult(new android.content.Intent(this,PairingActivity.class).putExtra("auto_web",true).putExtra("setup",true),31);}
+    void startAccountSetup(){if(pairLaunched)return;pairLaunched=true;startActivityForResult(new android.content.Intent(this,PairingActivity.class).putExtra("auto_web",true).putExtra("setup",true),31);}
     void chooseOffer(){
         if(store.exists())return;
         new AlertDialog.Builder(this).setTitle(T("Choose your TV source","Kies uw tv-aanbod","TV-Angebot auswählen"))
@@ -60,7 +60,7 @@ public class ProfileActivity extends Activity {
 
     @Override protected void onResume(){super.onResume();foreground=true;if(websiteSetup)setupHandler.post(sourcePoll);}
     @Override protected void onPause(){foreground=false;setupHandler.removeCallbacks(sourcePoll);if(websiteFirst){setupBackgroundUntil=SystemClock.elapsedRealtime()+300000;setupHandler.postDelayed(sourcePoll,5000);}super.onPause();}
-    @Override protected void onActivityResult(int request,int result,android.content.Intent data){super.onActivityResult(request,result,data);if(request==31&&result==RESULT_OK){chooseOffer();setupHandler.post(sourcePoll);}}
+    @Override protected void onActivityResult(int request,int result,android.content.Intent data){super.onActivityResult(request,result,data);if(request==31){pairLaunched=false;if(result==RESULT_OK){chooseOffer();setupHandler.post(sourcePoll);}}}
 
     void applyLanguage(){
         ((TextView)findViewById(R.id.profileTitle)).setText("NenoTV");
@@ -121,11 +121,10 @@ public class ProfileActivity extends Activity {
     }
 
     String valueOr(EditText e,String fallback){String x=e.getText().toString().trim();return x.isEmpty()?fallback:x;}
-    Provider provider(Profile p){return p.type==Profile.Type.XTREAM?new XtreamProvider(p):new M3uProvider(p,SettingsStore.primaryLanguage(this));}
 
     boolean connecting=false;
     void connectAndSave(){
-        if(websiteFirst&&!new EntitlementStore(this).isPro()){startAccountSetup();return;}
+        if(!new EntitlementStore(this).isPro()){startAccountSetup();return;}
         if(new EntitlementStore(this).isPro()){
             final Profile chosen=collect();
             if(!demoRadio.isChecked()){
@@ -136,7 +135,7 @@ public class ProfileActivity extends Activity {
                 .setMessage(T("Allow My NenoTV to retrieve your list using these details, store them encrypted and prepare the media package for your linked devices?","Mag Mijn NenoTV met deze gegevens uw lijst ophalen, versleuteld opslaan en het mediapakket voor uw gekoppelde apparaten voorbereiden?","Darf Mein NenoTV mit diesen Daten deine Liste abrufen, verschlüsselt speichern und das Medienpaket für deine verbundenen Geräte vorbereiten?"))
                 .setNegativeButton(android.R.string.cancel,null).setPositiveButton(T("Agree and prepare","Akkoord en voorbereiden","Zustimmen und vorbereiten"),(d,w)->submitWebsiteSource(chosen,demoRadio.isChecked())).show();return;
         }
-        connectLocalLegacy();
+
     }
     void submitWebsiteSource(Profile profile,boolean demo){
         if(connecting)return;
@@ -150,31 +149,5 @@ public class ProfileActivity extends Activity {
             runOnUiThread(()->{setResult(RESULT_OK);finish();});
         }catch(Exception error){runOnUiThread(()->{connecting=false;findViewById(R.id.saveButton).setEnabled(true);status.setText(T("Could not prepare. Your previous library is kept.","Voorbereiden niet gelukt. Uw bestaande bibliotheek is behouden.","Vorbereitung fehlgeschlagen. Deine bisherige Bibliothek bleibt erhalten."));});}});
     }
-    void connectLocalLegacy(){
-        if(connecting)return;
-        final boolean demoSelected=demoRadio.isChecked();
-        final Profile p=collect();
-        if(demoRadio.isChecked()&&(p.m3uUrl==null||p.m3uUrl.trim().isEmpty())){status.setText(T("Demo source is not configured yet.","Demo-bron is nog niet geconfigureerd.","Demo-Quelle ist noch nicht eingerichtet."));return;}
-        if(demoRadio.isChecked()&&DemoPolicy.expired(this)){status.setText(T("Your 30-day demo has ended. Add your own M3U or Xtream source.","Uw 30 dagen demo is afgelopen. Voeg uw eigen M3U- of Xtream-bron toe.","Ihre 30-Tage-Demo ist beendet. Fügen Sie eine eigene M3U- oder Xtream-Quelle hinzu."));return;}
-        status.setText(T("Connecting…","Verbinden…","Verbindung wird hergestellt…"));
-        connecting=true;xtream.setEnabled(false);m3uRadio.setEnabled(false);demoRadio.setEnabled(false);
-        findViewById(R.id.saveButton).setEnabled(false);
-        exec.execute(()->{
-            try{
-                provider(p).authenticate();
-                if(demoSelected){
-                    long expiry=DemoPolicy.startOrKeep(this,System.currentTimeMillis());
-                    if(expiry<0L)throw new IllegalStateException(T("Your 30-day demo has ended.","Uw 30 dagen demo is afgelopen.","Ihre 30-Tage-Demo ist beendet."));
-                }
-                store.save(p);
-                sourceId=sources.upsert(sourceId,p,true);
-                runOnUiThread(()->{setResult(RESULT_OK);finish();});
-            }catch(Exception e){
-                runOnUiThread(()->{connecting=false;xtream.setEnabled(true);m3uRadio.setEnabled(true);applyLanguage();updateMode();findViewById(R.id.saveButton).setEnabled(true);status.setText(T("Could not connect: ","Kan geen verbinding maken: ","Verbindung fehlgeschlagen: ")+friendly(e));});
-            }
-        });
-    }
-
-    String friendly(Exception e){String m=e.getMessage();return m==null||m.trim().isEmpty()?T("Unknown error","Onbekende fout","Unbekannter Fehler"):m.replace("LOGIN_FAILED",T("Login failed","Inloggen mislukt","Anmeldung fehlgeschlagen"));}
     @Override protected void onDestroy(){super.onDestroy();setupHandler.removeCallbacksAndMessages(null);exec.shutdownNow();}
 }

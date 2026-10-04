@@ -226,6 +226,23 @@ public final class UiInstrumentation extends ImportInstrumentation {
             public void cancel(com.nenotv.player.entitlement.PairingClient.Session session){}
         };
         try{
+            com.nenotv.player.storage.SecureProfileStore savedProfiles=new com.nenotv.player.storage.SecureProfileStore(getTargetContext());
+            com.nenotv.player.model.Profile previousProfile=savedProfiles.exists()?savedProfiles.load():null;
+            android.content.SharedPreferences entitlementPrefs=getTargetContext().getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE);
+            String oldLevel=entitlementPrefs.getString("level","FREE");
+            savedProfiles.clear();entitlementPrefs.edit().putString("level","FREE").commit();
+            android.app.Instrumentation.ActivityMonitor pairingMonitor=addMonitor(PairingActivity.class.getName(),null,false);
+            ProfileActivity input=(ProfileActivity)startActivitySync(new Intent(getTargetContext(),ProfileActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            try{
+                runOnMainSync(()->{input.xtream.setChecked(true);input.server.setText("https://provider.example.invalid");input.user.setText("qa-user");input.pass.setText("qa-password");input.connectAndSave();input.connectAndSave();});
+                long until=SystemClock.elapsedRealtime()+5000;while(opened.get()==0&&SystemClock.elapsedRealtime()<until)Thread.sleep(50);
+                check(opened.get()==1&&!savedProfiles.exists(),"Unpaired input imported locally or opened duplicate pairing sessions");
+                android.app.Activity top=waitForMonitorWithTimeout(pairingMonitor,1000);
+                if(top!=null)runOnMainSync(top::finish);
+            }finally{
+                removeMonitor(pairingMonitor);runOnMainSync(input::finish);entitlementPrefs.edit().putString("level",oldLevel).commit();
+                if(previousProfile!=null)savedProfiles.save(previousProfile);
+            }
             for(String language:new String[]{"nl","en","de"}){
                 SettingsStore.setPrimaryLanguage(getTargetContext(),language);state.set("pending");
                 PairingActivity a=(PairingActivity)startActivitySync(new Intent(getTargetContext(),PairingActivity.class).putExtra("auto_web",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));

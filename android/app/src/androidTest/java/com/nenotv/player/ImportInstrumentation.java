@@ -185,17 +185,9 @@ public class ImportInstrumentation extends Instrumentation {
         profiles.clear();
         SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_started_at").remove("demo_expires_at").putString("language","nl").commit();
         require(DemoSource.URL.equals(BuildConfig.NENOTV_DEMO_M3U_URL),"Build uses an unreviewed demo source");
-        ProfileActivity activity=(ProfileActivity)startActivitySync(new Intent(c,ProfileActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-        waitForIdleSync();
-        runOnMainSync(()->{
-            require(activity.demoRadio.isEnabled(),"Demo button disabled");
-            activity.demoRadio.performClick();
-            activity.demoRadio.performClick();
-        });
-        long deadline=android.os.SystemClock.elapsedRealtime()+15000;
-        while(!profiles.exists()&&android.os.SystemClock.elapsedRealtime()<deadline)Thread.sleep(100);
-        require(profiles.exists(),"One-tap demo did not save profile");
-        com.nenotv.player.model.Profile p=profiles.load();
+        com.nenotv.player.model.Profile p=new com.nenotv.player.model.Profile();
+        p.type=com.nenotv.player.model.Profile.Type.M3U;p.name="Existing demo";p.m3uUrl=DemoSource.URL;
+        profiles.save(p);DemoPolicy.startOrKeep(c,System.currentTimeMillis());
         require(DemoPolicy.isDemo(p),"Saved profile is not demo");
         long expiry=DemoPolicy.expiresAt(c);
         require(expiry>System.currentTimeMillis(),"Demo did not start");
