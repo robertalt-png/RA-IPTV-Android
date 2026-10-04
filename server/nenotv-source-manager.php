@@ -11,8 +11,13 @@ trait NenoTV_Source_Manager {
         return $all[$lang] ?? $all['en'];
     }
 
+    private static function source_language(): string {
+        $lang=$_POST['lang']??null;
+        return is_string($lang) && in_array($lang,['en','nl','de'],true) ? $lang : self::account_language();
+    }
+
     private static function source_fail(string $key, int $status=400): void {
-        $s=self::source_strings(self::account_language());
+        $s=self::source_strings(self::source_language());
         wp_die(esc_html($s[$key]), 'NenoTV', ['response'=>$status]);
     }
 
@@ -132,7 +137,7 @@ trait NenoTV_Source_Manager {
         try {self::save_source_vault((int)$ent['id'],$sources,(int)$base);}
         catch (UnexpectedValueException $e) {self::source_fail('conflict',409);}
         catch (RuntimeException $e) {self::source_fail('storage',503);}
-        $lang=self::account_language();
+        $lang=self::source_language();
         $url=$lang==='nl'?'/language/nl/mijn-account/':($lang==='de'?'/language/de/mein-konto/':'/my-account/');
         wp_safe_redirect(add_query_arg($action==='delete'?'source_deleted':'source_saved','1',home_url($url))); exit;
     }

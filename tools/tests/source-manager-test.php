@@ -65,9 +65,9 @@ $html=$panel->invoke(null,$wpdb->entitlements[1],'en');check(str_contains($html,
 $wpdb->vaults[1]['tag']=$tag;$wpdb->writeFailure=true;source_error('edit',$edit,'could not be read or saved');$wpdb->writeFailure=false;
 post_source('edit',array_merge($edit,['source_password'=>'replacement-password','source_clear_epg'=>'1','source_enabled'=>'1']));
 $after=source_vault();check($after['sources'][0]['password']==='replacement-password'&&$after['sources'][0]['epg']===''&&$after['sources'][0]['epg_extra']===[]&&$after['sources'][0]['enabled'],'Secret replacement, EPG clear or enabling source failed');
-$edit['base_revision']=(string)$after['revision'];$_GET=['lang'=>'nl'];
+$edit['base_revision']=(string)$after['revision'];$edit['lang']='nl';
 check(post_source('edit',$edit)==='https://nenotv.com/language/nl/mijn-account/?source_saved=1','Dutch edit redirected to wrong language');
-$_GET=['lang'=>'en'];$after=source_vault();
+unset($edit['lang']);$_GET=['lang'=>'en'];$after=source_vault();
 post_source('delete',['source_id'=>$saved['id'],'base_revision'=>(string)$after['revision']]);check(source_vault()['sources']===[],'Deleting source did not reach app API');
 $form=array_merge($form,['source_type'=>'M3U','source_m3u'=>'https://playlist.example.invalid/list.m3u','base_revision'=>(string)source_vault()['revision']]);
 post_source('add',$form);$after=source_vault();$saved=$after['sources'][0];
