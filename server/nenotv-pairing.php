@@ -21,7 +21,7 @@ trait NenoTV_Pairing {
 
     private static function pairing_code(string $value): string {
         $value=strtoupper(str_replace(['-',' '],'',trim($value)));
-        return preg_match('/^[A-F0-9]{10}$/D',$value) ? $value : '';
+        return preg_match('/^(?:[A-Z2-9]{4}|[A-F0-9]{10})$/D',$value) ? $value : '';
     }
 
     private static function pairing_rate(string $kind,string $identity,int $limit,int $seconds): bool {
@@ -81,12 +81,13 @@ trait NenoTV_Pairing {
             $code='';
             for($i=0;$i<5;$i++){
                 $candidate=strtoupper(bin2hex(random_bytes(5)));
+                if((int)($raw['pairing_version']??1)>=2){$alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';$candidate='';for($j=0;$j<4;$j++)$candidate.=$alphabet[random_int(0,strlen($alphabet)-1)];}
                 if(add_option('nenotv_pair_'.$candidate,$session,'',false)){$code=$candidate;break;}
             }
             if($code==='')return self::json(['ok'=>false,'error'=>'pairing_unavailable'],503);
             wp_schedule_single_event($session['expires']+60,'nenotv_pair_cleanup',[$code]);
             return self::json(['ok'=>true,'code'=>$code,'poll_token'=>$token,'expires_in'=>300,'poll_interval'=>5,
-                'verification_url'=>home_url('/nenotv-pair/?code='.$code)],200);
+                'verification_url'=>home_url('/nenotv-pair/?code='.$code.'&lang='.(in_array($raw['lang']??'',['nl','en','de'],true)?$raw['lang']:'en'))],200);
         }
         $code=self::pairing_code(is_scalar($raw['code']??null)?(string)$raw['code']:'');
         $token=is_scalar($raw['poll_token']??null)?(string)$raw['poll_token']:'';
@@ -143,6 +144,14 @@ trait NenoTV_Pairing {
         wp_safe_redirect(home_url('/nenotv-pair/?approved=1'));exit;
     }
 
+    private static function pairing_qr(string $url): string {
+        static $loaded=false;
+        $id='nv-qr-'.substr(hash('sha256',$url),0,12);
+        $html='<div id="'.$id.'" aria-label="QR code" style="width:220px;max-width:100%;background:white;padding:8px;margin:12px 0"></div>';
+        if(!$loaded){$html.='<script src="'.esc_url(plugins_url('qrcode.js',__FILE__)).'"></script>';$loaded=true;}
+        return $html.'<script>(function(){if(typeof qrcode!=="function")return;var q=qrcode(0,"M");q.addData('.wp_json_encode($url,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT).');q.make();document.getElementById("'.$id.'").innerHTML=q.createSvgTag({cellSize:4,margin:16,scalable:true});})();</script>';
+    }
+
     public static function pairing_page(): void {
         if(trim((string)parse_url($_SERVER['REQUEST_URI']??'',PHP_URL_PATH),'/')!=='nenotv-pair')return;
         nocache_headers();header('X-Robots-Tag: noindex, nofollow');
@@ -150,7 +159,7 @@ trait NenoTV_Pairing {
         if(!is_user_logged_in())auth_redirect();
         status_header(200);
         if(isset($GLOBALS['wp_query']))$GLOBALS['wp_query']->is_404=false;
-        $lang=self::account_language();
+        $lang=is_string($_GET['lang']??null)&&in_array($_GET['lang'],['nl','en','de'],true)?$_GET['lang']:self::account_language();
         $s=$lang==='nl'?[
             'title'=>'Apparaat koppelen','code'=>'Koppelcode','find'=>'Doorgaan','approve'=>'Dit apparaat koppelen',
             'expired'=>'De code is verlopen of ongeldig.','pending'=>'Wacht op bevestiging in de app.','done'=>'Bevestigd. Ga terug naar NenoTV op uw apparaat.',
@@ -169,20 +178,25 @@ trait NenoTV_Pairing {
         if(!empty($_GET['approved'])&&get_transient('nenotv_pair_notice_'.get_current_user_id())){
             delete_transient('nenotv_pair_notice_'.get_current_user_id());
             echo '<p>'.esc_html($s['done']).'</p>';
+            $path=$lang==='nl'?'/language/nl/mijn-account/':($lang==='de'?'/language/de/mein-konto/':'/my-account/');
+            $destination=add_query_arg('nenotv_setup','1',home_url($path)).'#nenotv-sources';
+            echo '<a class="button" href="'.esc_url($destination).'">'.esc_html($lang==='nl'?'Kies uw tv-aanbod':($lang==='de'?'TV-Angebot auswählen':'Choose your TV source')).'</a>';
+            echo '<script>location.replace('.wp_json_encode($destination,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT).');</script>';
         }
         elseif(!self::app_service_live(self::current_user_entitlement()))echo '<p>'.esc_html($s['inactive']).'</p>';
         else{
             $code=self::pairing_code(is_scalar($_GET['code']??null)?(string)$_GET['code']:'');
             if($code===''){
                 echo '<form method="get"><label>'.esc_html($s['code']).'<input name="code" maxlength="11" required autocomplete="off"></label><button type="submit">'.esc_html($s['find']).'</button></form>';
-            }elseif(!self::pairing_rate('lookup',(string)get_current_user_id(),30,10*MINUTE_IN_SECONDS)){
+            }elseif(!self::pairing_rate('lookup',(string)get_current_user_id(),5,5*MINUTE_IN_SECONDS)||!self::pairing_rate('web_lookup',(string)($_SERVER['REMOTE_ADDR']??'unknown'),15,5*MINUTE_IN_SECONDS)){
                 echo '<p>'.esc_html($s['expired']).'</p>';
             }else{
                 $session=self::pairing_load($code);
                 if(!$session)echo '<p>'.esc_html($s['expired']).'</p>';
                 elseif($session['state']!=='pending')echo '<p>'.esc_html($s['pending']).'</p>';
                 else{
-                    echo '<h2>'.esc_html($session['name']).'</h2><p><code>'.esc_html(substr($code,0,5).'-'.substr($code,5)).'</code></p><p>'.esc_html($session['public_device_id']).'</p>';
+                    echo self::pairing_qr(home_url('/nenotv-pair/?code='.$code.'&lang='.$lang));
+                    echo '<h2>'.esc_html($session['name']).'</h2><p><code>'.esc_html(strlen($code)===4?$code:substr($code,0,5).'-'.substr($code,5)).'</code></p><p>'.esc_html($session['public_device_id']).'</p>';
                     echo '<form method="post" action="'.esc_url(admin_url('admin-post.php')).'">';
                     echo '<input type="hidden" name="action" value="nenotv_pair_approve"><input type="hidden" name="code" value="'.esc_attr($code).'">';
                     echo wp_nonce_field('nenotv_pair_approve_'.$code,'_wpnonce',true,false);

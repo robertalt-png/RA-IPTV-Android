@@ -9,7 +9,7 @@ import org.json.JSONObject;
 public final class PairingClientChecks {
     static void check(boolean value,String message){if(!value)throw new AssertionError(message);}
     static JSONObject response()throws Exception{return new JSONObject().put("ok",true).put("code","ABCDEF0123").put("poll_token",String.join("",Collections.nCopies(64,"a"))).put("verification_url","https://nenotv.com/nenotv-pair/?code=ABCDEF0123").put("expires_in",300).put("poll_interval",5);}
-    public static PairingClient.Session fixtureSession()throws Exception{return new PairingClient.Session(response());}
+    public static PairingClient.Session fixtureSession()throws Exception{return new PairingClient.Session(response().put("code","AB23").put("verification_url","https://nenotv.com/nenotv-pair/?code=AB23&lang=nl"));}
     public static void run(Context context)throws Exception{
         SharedPreferences prefs=context.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE);
         Map<String,?> previous=new HashMap<>(prefs.getAll());
@@ -25,6 +25,8 @@ public final class PairingClientChecks {
                 check("PRO".equals(prefs.getString("level","")),"Starting pairing removed existing entitlement");
             }
             PairingClient.Session session=fixtureSession();
+            check("AB23".equals(session.displayCode()),"Four-character pairing code displayed incorrectly");
+            try{new PairingClient.Session(response().put("code","AB2"));throw new AssertionError("Invalid code length accepted");}catch(IOException expected){}
             try(EntitlementClientChecks.Fixture fixture=new EntitlementClientChecks.Fixture(200,"{\"ok\":true,\"state\":\"pending\"}",false)){
                 check("pending".equals(new PairingClient(context,fixture.url()).status(session)),"Pending pairing not retained");
                 check("PRO".equals(prefs.getString("level","")),"Pending pairing changed access");

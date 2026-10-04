@@ -2,7 +2,7 @@
 /**
  * Plugin Name: NenoTV Entitlement Core
  * Description: Central NenoTV entitlement control plane for payment grants, refunds, device claims and the app bridge. Defaults to safe shadow mode until commercial launch.
- * Version: 0.1.20
+ * Version: 0.1.21
  * Author: NenoTV
  * Requires at least: 6.6
  * Requires PHP: 8.0
@@ -18,7 +18,7 @@ final class NenoTV_Entitlement_Core {
     use NenoTV_Pairing;
     use NenoTV_Source_Manager;
     use NenoTV_Catalog_Package;
-    const VERSION = '0.1.20';
+    const VERSION = '0.1.21';
     const DB_VERSION = '5';
     const NS = 'nenotv-backend/v1';
     const APP_NS = 'nenotv/v1';

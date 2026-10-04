@@ -29,7 +29,8 @@ function source_error(string $action,array $values,string $expected): void {
     catch(RuntimeException $e){check(str_contains($e->getMessage(),$expected),'Unexpected error: '.$e->getMessage());}
     check($before===$wpdb->vaults,'Rejected request changed source vault');
 }
-$form=['source_type'=>'XTREAM','source_name'=>'Household','source_server'=>'https://provider.example.invalid','source_username'=>'fixture-user','source_password'=>'fixture-password','source_epg'=>'https://guide.example.invalid/xmltv','source_enabled'=>'1','source_priority'=>'2','base_revision'=>(string)source_vault()['revision']];
+$form=['source_consent'=>'1','source_type'=>'XTREAM','source_name'=>'Household','source_server'=>'https://provider.example.invalid','source_username'=>'fixture-user','source_password'=>'fixture-password','source_epg'=>'https://guide.example.invalid/xmltv','source_enabled'=>'1','source_priority'=>'2','base_revision'=>(string)source_vault()['revision']];
+source_error('add',array_merge($form,['source_consent'=>'']),'Check the source');
 $logged=false;source_error('add',$form,'login');$logged=true;
 $validNonce=false;source_error('add',$form,'fixture-security-error');$validNonce=true;
 $userEmail='unrelated@example.invalid';source_error('add',$form,'cannot manage');$userEmail='owner@example.invalid';
@@ -45,7 +46,7 @@ $url=post_source('add',$form);check($url==='https://nenotv.com/my-account/?sourc
 check($nonceAction==='nenotv_source_add_1','Add nonce was not account scoped');
 $vault=source_vault();$saved=$vault['sources'][0];check($saved['password']==='fixture-password'&&$saved['priority']===2&&$saved['enabled'],'Added source config incorrect');
 check(!str_contains(json_encode($wpdb->vaults),$saved['password']),'Added secret stored in plaintext');
-$edit=['source_id'=>$saved['id'],'source_name'=>'Updated name','source_priority'=>'1','base_revision'=>(string)$vault['revision']];
+$edit=['source_consent'=>'1','source_id'=>$saved['id'],'source_name'=>'Updated name','source_priority'=>'1','base_revision'=>(string)$vault['revision']];
 $fields=new ReflectionMethod(NenoTV_Entitlement_Core::class,'source_form_fields');
 $html=$fields->invoke(null,$wpdb->entitlements[1],$vault['revision'],'en',$saved);
 foreach(['fixture-password','fixture-user','https://provider.example.invalid','https://guide.example.invalid'] as $secret)check(!str_contains($html,$secret),'Edit form leaked source credentials');
@@ -72,7 +73,7 @@ post_source('delete',['source_id'=>$saved['id'],'base_revision'=>(string)$after[
 $form=array_merge($form,['source_type'=>'M3U','source_m3u'=>'https://playlist.example.invalid/list.m3u','base_revision'=>(string)source_vault()['revision']]);
 post_source('add',$form);$after=source_vault();$saved=$after['sources'][0];
 check($saved['m3u']===$form['source_m3u']&&$saved['password']===''&&$saved['server']==='','M3U kept unrelated Xtream credentials');
-$edit=['source_id'=>$saved['id'],'source_name'=>'M3U updated','source_priority'=>'0','source_enabled'=>'1','base_revision'=>(string)$after['revision']];
+$edit=['source_consent'=>'1','source_id'=>$saved['id'],'source_name'=>'M3U updated','source_priority'=>'0','source_enabled'=>'1','base_revision'=>(string)$after['revision']];
 post_source('edit',$edit);check(source_vault()['sources'][0]['m3u']===$saved['m3u'],'Blank edit erased private M3U URL');
 $html=$fields->invoke(null,$wpdb->entitlements[1],source_vault()['revision'],'en',source_vault()['sources'][0]);check(!str_contains($html,$saved['m3u']),'M3U URL appeared in edit HTML');
 class SourceRaceDb extends TestDb {

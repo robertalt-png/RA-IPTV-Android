@@ -56,6 +56,8 @@ trait NenoTV_Source_Manager {
         if ($edit) $h.='<p><label><input name="source_clear_epg" type="checkbox" value="1"> '.esc_html($s['clear']).'</label></p>';
         $h.='<p><label><input name="source_enabled" type="checkbox" value="1"'.(!$edit || !empty($source['enabled'])?' checked':'').'> '.esc_html($s['enabled']).'</label></p>';
         $h.='<p><label>'.esc_html($s['priority']).'<input name="source_priority" type="number" min="0" max="99" value="'.esc_attr((string)($source['priority']??0)).'" required></label></p>';
+        $consent=$lang==='nl'?'Ik geef Mijn NenoTV toestemming om met deze gegevens mijn lijst op te halen, versleuteld op te slaan en als mediapakket beschikbaar te maken voor mijn gekoppelde apparaten.':($lang==='de'?'Mein NenoTV darf mit diesen Daten meine Liste abrufen, verschlüsselt speichern und das Medienpaket meinen verbundenen Geräten bereitstellen.':'I allow My NenoTV to retrieve my list with these details, store them encrypted and make the media package available to my linked devices.');
+        $h.='<p><label><input type="checkbox" name="source_consent" value="1" required> '.esc_html($consent).'</label></p>';
         return $h.'<button type="submit">'.esc_html($s['save']).'</button></form>';
     }
 
@@ -64,6 +66,7 @@ trait NenoTV_Source_Manager {
         $guide=$lang==='nl'?'/language/nl/installatie/qr-koppeling/':($lang==='de'?'/language/de/einrichtung/qr-kopplung/':'/setup/qr-pairing/');
         $h='<div class="nv-account-notice"><strong>'.esc_html($s['pair']).'</strong><p>';
         if (is_array($ent) && self::app_service_live($ent) && self::entitlement_is_active($ent)) {
+            $h.=self::pairing_qr('nenotv://setup');
             $h.='<a class="button" href="'.esc_url(add_query_arg('lang',$lang,home_url('/nenotv-pair/'))).'">'.esc_html($s['pair']).'</a>';
         } else $h.=esc_html(self::mode()==='live'?$s['inactive']:$s['pending']);
         return $h.'</p><a href="'.esc_url(home_url($guide)).'">'.esc_html($s['guide']).'</a></div>';
@@ -72,12 +75,17 @@ trait NenoTV_Source_Manager {
     private static function source_account_panel(array $ent, string $lang): string {
         $s=self::source_strings($lang);
         $canEdit=self::app_service_live($ent) && self::entitlement_is_active($ent);
-        $h='<div class="nv-source-vault"><h3>'.esc_html($s['title']).'</h3><p>'.esc_html($s['help']).'</p>';
+        $h='<div id="nenotv-sources" class="nv-source-vault"><h3>'.esc_html($s['title']).'</h3><p>'.esc_html($s['help']).'</p>';
         try {$vault=self::load_source_vault((int)$ent['id']);}
         catch (RuntimeException $e) {return $h.'<p role="alert">'.esc_html($s['storage']).'</p></div>';}
         if (!empty($_GET['source_saved'])) $h.='<p class="nv-account-notice" role="status">'.esc_html($s['saved']).'</p>';
         if (!empty($_GET['source_deleted'])) $h.='<p class="nv-account-notice" role="status">'.esc_html($s['deleted']).'</p>';
         if (!$canEdit) $h.='<p>'.esc_html($s['inactive']).'</p>';
+        if ($canEdit && !empty($_GET['nenotv_setup'])) {
+            $title=$lang==='nl'?'Kies uw tv-aanbod':($lang==='de'?'TV-Angebot auswählen':'Choose your TV source');
+            $help=$lang==='nl'?'Uw apparaat is gekoppeld. Vul uw aanbieder hieronder in, of voer de gegevens in op uw apparaat. Mijn NenoTV haalt de volledige lijst op, maakt het mediapakket en uw gekoppelde app pakt het automatisch uit.':($lang==='de'?'Dein Gerät ist verbunden. Gib die Anbieterdaten hier oder auf deinem Gerät ein. Mein NenoTV erstellt das Medienpaket; die App lädt und entpackt es automatisch.':'Your device is linked. Enter provider details here or on your device. My NenoTV prepares the media package; your app downloads and imports it automatically.');
+            $h.='<dialog id="nv-offer" style="max-width:540px;border:2px solid #ffd400;border-radius:16px;padding:24px;background:#10141b;color:white"><h2>'.esc_html($title).'</h2><p>'.esc_html($help).'</p><form method="dialog"><button type="submit">'.esc_html($lang==='nl'?'Invullen op de website':($lang==='de'?'Auf der Website eingeben':'Enter on the website')).'</button></form> <a class="button" href="nenotv://setup?entry=device">'.esc_html($lang==='nl'?'Invullen op dit apparaat':($lang==='de'?'Auf diesem Gerät eingeben':'Enter on this device')).'</a></dialog><script>document.getElementById("nv-offer").showModal();</script>';
+        }
         if (!$vault['sources']) $h.='<p>'.esc_html($s['empty']).'</p>';
         foreach ($vault['sources'] as $source) {
             $sid=(string)$source['id'];
@@ -102,6 +110,7 @@ trait NenoTV_Source_Manager {
         if ($action!=='add' && $sid==='') self::source_fail('invalid');
         check_admin_referer('nenotv_source_'.$action.'_'.(int)$ent['id'].($action==='add'?'':'_'.$sid));
         if ($action!=='delete' && (!self::app_service_live($ent) || !self::entitlement_is_active($ent))) self::source_fail('inactive',403);
+        if($action!=='delete' && self::source_post('source_consent',1)!=='1') self::source_fail('invalid');
         $base=self::source_post('base_revision',18);
         if ($base==='' || !ctype_digit($base)) self::source_fail('conflict',409);
         try {$vault=self::load_source_vault((int)$ent['id']);}

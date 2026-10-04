@@ -79,6 +79,30 @@ public final class SourceSyncClient {
         return sources.applyAutomaticCloudSnapshotIfUnchanged(remote,revision,snapshot.localRevision);
     }
 
+    /** Only called after explicit website-preparation consent; no provider fetch on the app. */
+    public String submitInitialSource(com.nenotv.player.model.Profile profile,String requestedId)throws Exception {
+        requirePro();
+        if(sources.accountChangePending()||sources.syncDirty())throw new IOException("LOCAL_SOURCES_CHANGED_RETRY_SYNC");
+        SourceStore.SyncSnapshot snapshot=sources.snapshotForSync();
+        JSONObject remote=post("pull",new JSONObject());
+        JSONArray rows=remote.getJSONArray("sources");validateRows(rows);
+        String id=requestedId==null||requestedId.isEmpty()?java.util.UUID.randomUUID().toString():requestedId;
+        JSONObject row=new JSONObject().put("id",id).put("type",profile.type.name()).put("name",profile.name)
+            .put("server",profile.server).put("username",profile.username).put("password",profile.password)
+            .put("m3u",profile.m3uUrl).put("epg",profile.epgUrl).put("epg_extra",new JSONArray())
+            .put("enabled",true).put("priority",0).put("updated_at",System.currentTimeMillis());
+        boolean replaced=false;
+        for(int i=0;i<rows.length();i++)if(id.equals(rows.getJSONObject(i).getString("id"))){row.put("priority",rows.getJSONObject(i).optInt("priority",0));rows.put(i,row);replaced=true;break;}
+        if(!replaced)rows.put(row);
+        if(rows.length()>20)throw new IOException("SOURCE_LIMIT");
+        if(sources.localRevision()!=snapshot.localRevision)throw new IOException("LOCAL_SOURCES_CHANGED_RETRY_SYNC");
+        JSONObject saved=post("push",new JSONObject().put("sources",rows).put("base_revision",remote.getInt("revision")));
+        JSONArray canonical=saved.getJSONArray("sources");validateRows(canonical);
+        if(!sources.applyCloudSnapshotIfUnchanged(canonical,saved.getInt("revision"),snapshot.localRevision))throw new IOException("LOCAL_SOURCES_CHANGED_RETRY_SYNC");
+        sources.setActive(id);
+        return id;
+    }
+
     public JSONObject push()throws Exception{
         requirePro();
         if(sources.accountChangePending())throw new IOException("SOURCE_ACCOUNT_CHANGED_CONFIRM");

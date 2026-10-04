@@ -8,6 +8,28 @@ public class ProfileActivity extends Activity {
     EditText name,server,user,pass,m3u,epg; RadioButton xtream,m3uRadio,demoRadio; TextView status;
     LinearLayout xtreamFields,m3uFields,advancedFields; SecureProfileStore store; SourceStore sources; String sourceId=""; boolean newSource=false,websiteSetup=false; Profile editingProfile; ExecutorService exec=Executors.newSingleThreadExecutor();
 
+    boolean websiteFirst,foreground,polling,pairLaunched;
+    final Handler setupHandler=new Handler(Looper.getMainLooper());
+    final Runnable sourcePoll=()->checkWebsiteSource();
+    String accountUrl(){String l=SettingsStore.language(this);return "https://nenotv.com"+("nl".equals(l)?"/language/nl/mijn-account/":("de".equals(l)?"/language/de/mein-konto/":"/my-account/"))+"?nenotv_setup=1#nenotv-sources";}
+    void openWebsite(){try{startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(accountUrl())));}catch(Exception ignored){status.setText(T("Open My NenoTV on your phone or computer.","Open Mijn NenoTV op uw telefoon of computer.","Öffne Mein NenoTV auf deinem Telefon oder Computer."));}}
+    void startAccountSetup(){pairLaunched=true;startActivityForResult(new android.content.Intent(this,PairingActivity.class).putExtra("auto_web",true).putExtra("setup",true),31);}
+    void chooseOffer(){
+        if(store.exists())return;
+        new AlertDialog.Builder(this).setTitle(T("Choose your TV source","Kies uw tv-aanbod","TV-Angebot auswählen"))
+            .setMessage(T("My NenoTV prepares your media package. Enter your provider here or on the website.","Mijn NenoTV bereidt uw mediapakket voor. Vul uw aanbieder hier of op de website in.","Mein NenoTV bereitet dein Medienpaket vor. Gib den Anbieter hier oder auf der Website ein."))
+            .setPositiveButton(T("Website","Website","Website"),(d,w)->openWebsite())
+            .setNegativeButton(T("This device","Dit apparaat","Dieses Gerät"),(d,w)->{xtream.setChecked(true);updateMode();}).show();
+    }
+    void checkWebsiteSource(){
+        if(!foreground||polling||connecting||!websiteSetup||!new EntitlementStore(this).isPro())return;
+        polling=true;
+        exec.execute(()->{
+            try{new com.nenotv.player.entitlement.SourceSyncClient(this).pullAutomatically();}catch(Exception ignored){}
+            runOnUiThread(()->{polling=false;if(isFinishing()||isDestroyed())return;if(store.exists()&&!sources.syncDirty()){setResult(RESULT_OK);finish();}else if(foreground)setupHandler.postDelayed(sourcePoll,5000);});
+        });
+    }
+
     String T(String en,String nl,String de){
         String l=SettingsStore.language(this); if("nl".equals(l))return nl; if("de".equals(l))return de; return en;
     }
@@ -19,27 +41,25 @@ public class ProfileActivity extends Activity {
         m3u=findViewById(R.id.m3uField); epg=findViewById(R.id.epgField); xtream=findViewById(R.id.xtreamRadio); m3uRadio=findViewById(R.id.m3uRadio);
         demoRadio=findViewById(R.id.demoRadio); status=findViewById(R.id.profileStatus); xtreamFields=findViewById(R.id.xtreamFields);
         m3uFields=findViewById(R.id.m3uFields); advancedFields=findViewById(R.id.advancedFields);
-        websiteSetup=!store.exists();
+        websiteSetup=!store.exists();websiteFirst=getIntent().getBooleanExtra("website_first",false);
         applyLanguage(); load(); updateMode();
         Button website=new Button(this);website.setText(T("Set up via My NenoTV","Instellen via Mijn NenoTV","Über Mein NenoTV einrichten"));website.setAllCaps(false);website.setTextColor(0xFF07090D);website.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));
-        website.setOnClickListener(v->{websiteSetup=true;startActivity(new android.content.Intent(this,PairingActivity.class));});
+        website.setOnClickListener(v->{websiteSetup=true;if(new EntitlementStore(this).isPro())openWebsite();else startAccountSetup();});
         LinearLayout container=(LinearLayout)findViewById(R.id.profileIntro).getParent();container.addView(website,2);
 
         findViewById(R.id.typeGroup).setOnClickListener(v->updateMode());
         xtream.setOnClickListener(v->updateMode()); m3uRadio.setOnClickListener(v->updateMode()); demoRadio.setOnClickListener(v->{updateMode();if(demoRadio.isEnabled())connectAndSave();});
         findViewById(R.id.advancedButton).setOnClickListener(v->advancedFields.setVisibility(advancedFields.getVisibility()==View.VISIBLE?View.GONE:View.VISIBLE));
         findViewById(R.id.saveButton).setOnClickListener(v->connectAndSave());
-    }
-
-    @Override protected void onResume(){
-        super.onResume();
-        if(new EntitlementStore(this).isPro()&&websiteSetup&&!newSource&&sourceId.isEmpty()){
-            com.nenotv.player.entitlement.AutomaticSourceDownload.check(this,()->runOnUiThread(()->{
-                if(!isFinishing()&&!isDestroyed()&&store.exists()){setResult(RESULT_OK);finish();}
-            }));
-            if(store.exists()&&new SourceStore(this).cloudRevision()>0&&!new SourceStore(this).syncDirty()){setResult(RESULT_OK);finish();}
+        if(websiteFirst&&!store.exists()){
+            if(!new EntitlementStore(this).isPro())startAccountSetup();
+            else if(!getIntent().getBooleanExtra("device_entry",false))openWebsite();
         }
     }
+
+    @Override protected void onResume(){super.onResume();foreground=true;if(websiteSetup)setupHandler.post(sourcePoll);}
+    @Override protected void onPause(){foreground=false;setupHandler.removeCallbacks(sourcePoll);super.onPause();}
+    @Override protected void onActivityResult(int request,int result,android.content.Intent data){super.onActivityResult(request,result,data);if(request==31&&result==RESULT_OK){chooseOffer();setupHandler.post(sourcePoll);}}
 
     void applyLanguage(){
         ((TextView)findViewById(R.id.profileTitle)).setText("NenoTV");
@@ -104,6 +124,28 @@ public class ProfileActivity extends Activity {
 
     boolean connecting=false;
     void connectAndSave(){
+        if(websiteFirst&&!new EntitlementStore(this).isPro()){startAccountSetup();return;}
+        if(new EntitlementStore(this).isPro()){
+            final Profile chosen=collect();
+            new AlertDialog.Builder(this).setTitle(T("Prepare via My NenoTV","Voorbereiden via Mijn NenoTV","Über Mein NenoTV vorbereiten"))
+                .setMessage(T("Allow My NenoTV to retrieve your list using these details, store them encrypted and prepare the media package for your linked devices?","Mag Mijn NenoTV met deze gegevens uw lijst ophalen, versleuteld opslaan en het mediapakket voor uw gekoppelde apparaten voorbereiden?","Darf Mein NenoTV mit diesen Daten deine Liste abrufen, verschlüsselt speichern und das Medienpaket für deine verbundenen Geräte vorbereiten?"))
+                .setNegativeButton(android.R.string.cancel,null).setPositiveButton(T("Agree and prepare","Akkoord en voorbereiden","Zustimmen und vorbereiten"),(d,w)->submitWebsiteSource(chosen,demoRadio.isChecked())).show();return;
+        }
+        connectLocalLegacy();
+    }
+    void submitWebsiteSource(Profile profile,boolean demo){
+        if(connecting)return;
+        if(demo&&DemoPolicy.expired(this)){status.setText(T("Demo ended","Demo afgelopen","Demo beendet"));return;}
+        if(demo)profile.m3uUrl="https://nenotv.com/nenotv-demo.m3u";
+        connecting=true;findViewById(R.id.saveButton).setEnabled(false);
+        status.setText(T("My NenoTV is preparing your media package…","Mijn NenoTV bereidt uw mediapakket voor…","Mein NenoTV bereitet dein Medienpaket vor…"));
+        exec.execute(()->{try{
+            sourceId=new com.nenotv.player.entitlement.SourceSyncClient(this).submitInitialSource(profile,sourceId);
+            if(demo)DemoPolicy.startOrKeep(this,System.currentTimeMillis());
+            runOnUiThread(()->{setResult(RESULT_OK);finish();});
+        }catch(Exception error){runOnUiThread(()->{connecting=false;findViewById(R.id.saveButton).setEnabled(true);status.setText(T("Could not prepare. Your previous library is kept.","Voorbereiden niet gelukt. Uw bestaande bibliotheek is behouden.","Vorbereitung fehlgeschlagen. Deine bisherige Bibliothek bleibt erhalten."));});}});
+    }
+    void connectLocalLegacy(){
         if(connecting)return;
         final boolean demoSelected=demoRadio.isChecked();
         final Profile p=collect();
@@ -129,5 +171,5 @@ public class ProfileActivity extends Activity {
     }
 
     String friendly(Exception e){String m=e.getMessage();return m==null||m.trim().isEmpty()?T("Unknown error","Onbekende fout","Unbekannter Fehler"):m.replace("LOGIN_FAILED",T("Login failed","Inloggen mislukt","Anmeldung fehlgeschlagen"));}
-    @Override protected void onDestroy(){super.onDestroy();exec.shutdownNow();}
+    @Override protected void onDestroy(){super.onDestroy();setupHandler.removeCallbacksAndMessages(null);exec.shutdownNow();}
 }

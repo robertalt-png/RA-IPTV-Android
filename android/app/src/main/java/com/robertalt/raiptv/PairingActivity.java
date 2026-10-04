@@ -23,6 +23,8 @@ public final class PairingActivity extends Activity {
         String status(PairingClient.Session session)throws Exception;
         void cancel(PairingClient.Session session)throws Exception;
     }
+    interface BrowserOpener {void open(Activity activity,String url);}
+    static BrowserOpener browserOpener=(activity,url)->activity.startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));
     interface Factory {Access create(android.content.Context context);}
     static Factory factory=context->{
         PairingClient network=new PairingClient(context);
@@ -36,7 +38,7 @@ public final class PairingActivity extends Activity {
     final ExecutorService worker=Executors.newSingleThreadExecutor();
     Access client;PairingClient.Session session;
     TextView code,status;ImageView qr;Button retry,open;
-    boolean resumed,busy,complete,destroyed;
+    boolean resumed,busy,complete,destroyed,openedWebsite;
     int generation;
     Bitmap bitmap;
     final Runnable poll=()->pollStatus();
@@ -55,7 +57,7 @@ public final class PairingActivity extends Activity {
         LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(dp(220),dp(220));imageParams.topMargin=dp(18);imageParams.bottomMargin=dp(12);box.addView(qr,imageParams);
         code=label("",24);code.setSaveEnabled(false);box.addView(code,new LinearLayout.LayoutParams(-1,-2));
         status=label(text("checking_status"),16);status.setPadding(0,dp(12),0,dp(12));status.setAccessibilityLiveRegion(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE);box.addView(status,new LinearLayout.LayoutParams(-1,-2));
-        open=button("open_my_nenotv");open.setEnabled(false);open.setOnClickListener(v->{if(session!=null)try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(session.url)));}catch(Exception e){status.setText(text("server_unavailable"));}});box.addView(open,new LinearLayout.LayoutParams(-1,-2));
+        open=button("open_my_nenotv");open.setEnabled(false);open.setOnClickListener(v->{if(session!=null)try{browserOpener.open(this,session.url);}catch(Exception e){status.setText(text("server_unavailable"));}});box.addView(open,new LinearLayout.LayoutParams(-1,-2));
         retry=button("pair_new_code");retry.setOnClickListener(v->startPairing());box.addView(retry,new LinearLayout.LayoutParams(-1,-2));
         Button close=button("close");close.setOnClickListener(v->finish());box.addView(close,new LinearLayout.LayoutParams(-1,-2));
         setContentView(scroll);ScreenInsets.browsing(this);UiText.applyDirection(this);
@@ -95,6 +97,7 @@ public final class PairingActivity extends Activity {
                     session=created;bitmap=picture;busy=false;qr.setImageBitmap(picture);qr.setVisibility(android.view.View.VISIBLE);
                     code.setText(created.displayCode());status.setText(text("pair_waiting"));open.setEnabled(true);retry.setEnabled(true);
                     handler.postDelayed(()->{if(!destroyed&&!complete&&current==generation)expire();},Math.max(0,created.deadline-SystemClock.elapsedRealtime()));
+                    if(getIntent().getBooleanExtra("auto_web",false)&&!openedWebsite){openedWebsite=true;try{browserOpener.open(this,created.url);}catch(Exception ignored){/* Android TV retains QR and the short code. */}}
                     if(resumed)handler.postDelayed(poll,created.pollSeconds*1000L);
                 });
             }catch(Exception error){runOnUiThread(()->{if(destroyed||current!=generation)return;busy=false;retry.setEnabled(true);status.setText(failureMessage(error));});}
@@ -115,7 +118,7 @@ public final class PairingActivity extends Activity {
                 runOnUiThread(()->{
                     if(destroyed||current!=generation)return;
                     busy=false;retry.setEnabled(true);
-                    if("complete".equals(state)){complete=true;clearCode();status.setText(text("pair_complete"));retry.setVisibility(android.view.View.GONE);ProModuleInstaller.syncEntitlement(this);}
+                    if("complete".equals(state)){complete=true;clearCode();status.setText(text("pair_complete"));retry.setVisibility(android.view.View.GONE);ProModuleInstaller.syncEntitlement(this);if(getIntent().getBooleanExtra("setup",false)){setResult(RESULT_OK);finish();}else if(!new com.nenotv.player.storage.SecureProfileStore(this).exists()){startActivity(new Intent(this,ProfileActivity.class).putExtra("website_first",true));finish();}}
                     else if("expired".equals(state)||"cancelled".equals(state))expire();
                     else{status.setText(text("pair_waiting"));schedule(active);}
                 });

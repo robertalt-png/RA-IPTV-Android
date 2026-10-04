@@ -4,6 +4,7 @@ require_once __DIR__.'/nenotv-catalog-format.php';
 trait NenoTV_Catalog_Package {
     private static $catalog_stream=null;
     public static function catalog_hooks(): void {
+        add_action('template_redirect',[__CLASS__,'catalog_demo_page'],0);
         add_action('nenotv_catalog_build',[__CLASS__,'catalog_build'],10,3);
         add_action('rest_api_init',[__CLASS__,'catalog_routes']);
         add_filter('rest_pre_serve_request',[__CLASS__,'catalog_serve'],20,4);
@@ -79,9 +80,14 @@ trait NenoTV_Catalog_Package {
             foreach($sources as $s)if($s['enabled'])self::catalog_queue_source($ent,$s);
         }catch(Throwable $e){/* A catalog failure must not undo a saved source. Status can retry. */}
     }
+    public static function catalog_demo_page(): void {
+        if(trim((string)parse_url($_SERVER['REQUEST_URI']??'',PHP_URL_PATH),'/')!=='nenotv-demo.m3u')return;
+        header('Content-Type: application/x-mpegURL; charset=utf-8');header('Cache-Control: public, max-age=3600');
+        readfile(__DIR__.'/nenotv-demo.m3u');exit;
+    }
     private static function catalog_fetch(string $url,string $path): void {
         if(!wp_http_validate_url($url))throw new RuntimeException('catalog_provider_unreachable');
-        $r=wp_safe_remote_get($url,['timeout'=>30,'redirection'=>3,'stream'=>true,'filename'=>$path,'limit_response_size'=>NenoTV_Catalog_Format::MAX_BYTES+1,'headers'=>['Accept-Encoding'=>'identity','User-Agent'=>'NenoTV/0.14.3 Catalog']]);
+        $r=wp_safe_remote_get($url,['timeout'=>30,'redirection'=>3,'stream'=>true,'filename'=>$path,'limit_response_size'=>NenoTV_Catalog_Format::MAX_BYTES+1,'headers'=>['Accept-Encoding'=>'identity','User-Agent'=>'NenoTV/0.14.4 Catalog']]);
         if(is_file($path))chmod($path,0600);
         if(is_wp_error($r)||wp_remote_retrieve_response_code($r)!==200||!is_file($path)||filesize($path)>NenoTV_Catalog_Format::MAX_BYTES)throw new RuntimeException('catalog_provider_unreachable');
     }
@@ -100,7 +106,11 @@ trait NenoTV_Catalog_Package {
             $gz=gzopen($plain,'wb6');if(!$gz)throw new RuntimeException('catalog_storage');chmod($plain,0600);
             try{
                 if($step===0)NenoTV_Catalog_Format::line($gz,['kind'=>'header','schema'=>1,'source_id'=>$id,'fingerprint'=>$fp]);
-                if($source['type']==='M3U'){
+                if($source['type']==='M3U'&&$source['m3u']==='https://nenotv.com/nenotv-demo.m3u'){
+                    $entries=json_decode(file_get_contents(__DIR__.'/nenotv-demo-catalog.json'),true,64,JSON_THROW_ON_ERROR);$groups=[];
+                    foreach($entries as $entry){$type=$entry['type'];$job['counts'][$type]++;$groups[$type][$entry['categoryId']]=true;NenoTV_Catalog_Format::line($gz,['kind'=>'item','entry'=>$entry]);}
+                    foreach($groups as $type=>$names){foreach(array_keys($names) as $g)NenoTV_Catalog_Format::line($gz,['kind'=>'category','type'=>$type,'id'=>$g,'name'=>$g]);$job['categories'][$type]=count($names);}$last=true;
+                }elseif($source['type']==='M3U'){
                     self::catalog_fetch($source['m3u'],$raw);$groups=[];
                     $job['counts']['live']=NenoTV_Catalog_Format::m3u($raw,static function($entry)use($gz,&$groups){$groups[$entry['group']]=true;NenoTV_Catalog_Format::line($gz,['kind'=>'item','entry'=>$entry]);});
                     foreach(array_keys($groups) as $g)NenoTV_Catalog_Format::line($gz,['kind'=>'category','type'=>'live','id'=>$g,'name'=>$g]);$job['categories']['live']=count($groups);$last=true;

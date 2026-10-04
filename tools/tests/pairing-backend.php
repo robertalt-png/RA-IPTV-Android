@@ -191,4 +191,12 @@ $wpdb->devices[1]['entitlement_id']=1;
 try{NenoTV_Entitlement_Core::handle_device_rename();throw new LogicException('Rename did not redirect');}catch(Redirect $e){check($e->getMessage()==='https://nenotv.com/my-account/','Rename redirected off-site');}
 check($wpdb->devices[1]['display_name']==='Living room','Device label not saved');
 check(!str_contains(json_encode($wpdb->events),'Living room'),'Device label leaked into audit');
+$short=request('start',array_merge($p,['pairing_version'=>2,'lang'=>'nl']));
+check(preg_match('/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/D',$short->data['code'])===1,'New app did not receive four readable characters');
+check(str_contains($short->data['verification_url'],'lang=nl'),'Pairing language omitted');
+$shortPoll=array_merge($p,['code'=>$short->data['code'],'poll_token'=>$short->data['poll_token']]);
+check(request('status',$shortPoll)->data['state']==='pending','Short code bypassed approval');
+check(request('status',array_merge($shortPoll,['poll_token'=>str_repeat('f',64)]))->status===403,'Short code accepted without app proof');
+request('cancel',$shortPoll);
 echo $checks." pairing/account authorization checks passed\n";
+

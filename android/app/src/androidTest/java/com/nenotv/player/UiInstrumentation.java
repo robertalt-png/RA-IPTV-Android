@@ -216,6 +216,9 @@ public final class UiInstrumentation extends ImportInstrumentation {
 
     void pairingScreens()throws Exception{
         PairingActivity.Factory original=PairingActivity.factory;
+        PairingActivity.BrowserOpener previousOpener=PairingActivity.browserOpener;
+        java.util.concurrent.atomic.AtomicInteger opened=new java.util.concurrent.atomic.AtomicInteger();
+        PairingActivity.browserOpener=(activity,url)->{check("https://nenotv.com/nenotv-pair/?code=AB23&lang=nl".equals(url),"First-open routed to wrong website");opened.incrementAndGet();};
         java.util.concurrent.atomic.AtomicReference<String> state=new java.util.concurrent.atomic.AtomicReference<>("pending");
         PairingActivity.factory=context->new PairingActivity.Access(){
             public com.nenotv.player.entitlement.PairingClient.Session start()throws Exception{return com.nenotv.player.entitlement.PairingClientChecks.fixtureSession();}
@@ -225,12 +228,12 @@ public final class UiInstrumentation extends ImportInstrumentation {
         try{
             for(String language:new String[]{"nl","en","de"}){
                 SettingsStore.setPrimaryLanguage(getTargetContext(),language);state.set("pending");
-                PairingActivity a=(PairingActivity)startActivitySync(new Intent(getTargetContext(),PairingActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                PairingActivity a=(PairingActivity)startActivitySync(new Intent(getTargetContext(),PairingActivity.class).putExtra("auto_web",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
                 try{
                     java.util.concurrent.atomic.AtomicBoolean ready=new java.util.concurrent.atomic.AtomicBoolean();
                     long end=SystemClock.elapsedRealtime()+5000;
                     while(!ready.get()&&SystemClock.elapsedRealtime()<end){runOnMainSync(()->ready.set(a.session!=null&&!a.busy));Thread.sleep(50);}
-                    check(ready.get(),"Pairing screen did not render code");waitForIdleSync();
+                    check(ready.get(),"Pairing screen did not render code");waitForIdleSync();check(opened.get()>0,"First-open failed to open My NenoTV");
                     runOnMainSync(()->{
                         check(a.qr.getVisibility()==View.VISIBLE&&a.open.isEnabled(),"QR pairing controls missing");
                         check(!a.code.isSaveEnabled(),"Pairing code saved in screen state");
@@ -239,7 +242,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
                     });
                     int[] pixels=new int[512*512];runOnMainSync(()->a.bitmap.getPixels(pixels,0,512,0,0,512,512));
                     com.google.zxing.BinaryBitmap qr=new com.google.zxing.BinaryBitmap(new com.google.zxing.common.HybridBinarizer(new com.google.zxing.RGBLuminanceSource(512,512,pixels)));
-                    check("https://nenotv.com/nenotv-pair/?code=ABCDEF0123".equals(new com.google.zxing.MultiFormatReader().decode(qr).getText()),"QR does not encode pairing URL");
+                    check("https://nenotv.com/nenotv-pair/?code=AB23&lang=nl".equals(new com.google.zxing.MultiFormatReader().decode(qr).getText()),"QR does not encode pairing URL");
                     snapshot("pairing-"+language);
                     if("nl".equals(language)){
                         runOnMainSync(()->{a.expire();check(a.session==null&&!a.open.isEnabled()&&a.qr.getVisibility()==View.GONE,"Expired QR remained active");a.startPairing();});
@@ -253,7 +256,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
                     }
                 }finally{runOnMainSync(a::finish);waitForIdleSync();}
             }
-        }finally{PairingActivity.factory=original;}
+        }finally{PairingActivity.factory=original;PairingActivity.browserOpener=previousOpener;}
     }
     void core(Bundle result)throws Exception{
         XtreamImportChecks.run(getTargetContext());

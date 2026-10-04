@@ -36,6 +36,20 @@ public final class SourceSyncChecks {
         SecureProfileStore profiles=new SecureProfileStore(context);Profile previous=profiles.exists()?profiles.load():null;
         try{
             entPrefs.edit().putString("level","PRO").putLong("expires_at",0).putString("account_email","source-owner@example.invalid").commit();
+            sourcePrefs.edit().clear().commit();profiles.clear();
+            SourceStore fresh=new SourceStore(context);
+            com.nenotv.player.model.Profile offer=new com.nenotv.player.model.Profile();offer.type=com.nenotv.player.model.Profile.Type.M3U;offer.name="Website input";offer.m3uUrl="https://provider.example.invalid/list";
+            String canonical="{\"ok\":true,\"revision\":1,\"sources\":[{\"id\":\"new-web-source\",\"type\":\"M3U\",\"name\":\"Website input\",\"m3u\":\"https://provider.example.invalid/list\",\"enabled\":true}]}";
+            try(EntitlementClientChecks.Fixture fixture=new EntitlementClientChecks.Fixture(200,new String[]{"{\"ok\":true,\"revision\":0,\"sources\":[]}",canonical},false)){
+                new SourceSyncClient(context,new EntitlementClient(context,fixture.url())).submitInitialSource(offer,"new-web-source");
+                check(fixture.calls.get()==2&&fixture.requests.get(1).getInt("base_revision")==0,"Device input did not use website vault revision");
+                check(!fresh.syncDirty()&&profiles.exists()&&"new-web-source".equals(fresh.activeId()),"Website source was not ready for package bootstrap");
+            }
+            String preserved=profiles.load().m3uUrl;
+            try(EntitlementClientChecks.Fixture fixture=new EntitlementClientChecks.Fixture(409,"{\"ok\":false,\"error\":\"source_revision_conflict\"}",false)){
+                try{new SourceSyncClient(context,new EntitlementClient(context,fixture.url())).submitInitialSource(offer,"");throw new AssertionError("Rejected source setup accepted");}catch(EntitlementClient.ServiceException expected){}
+                check(preserved.equals(profiles.load().m3uUrl),"Rejected website setup destroyed previous profile");
+            }
             SourceStore sources=seed(context,false);
             try(EntitlementClientChecks.Fixture fixture=new EntitlementClientChecks.Fixture(200,"{\"ok\":true,\"revision\":2,\"sources\":[]}",false)){
                 new SourceSyncClient(context,new EntitlementClient(context,fixture.url())).sync();
