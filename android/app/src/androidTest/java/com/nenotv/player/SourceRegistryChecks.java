@@ -47,6 +47,9 @@ final class SourceRegistryChecks {
         check(!playback.isCurrent(false),"Basic retained a secondary playback route");
         Profile exported=playback.profile();exported.m3uUrl="mutated";
         check(playback.profile().m3uUrl.equals(second.m3uUrl),"Playback snapshot exposed mutable source credentials");
+        for(int n=0;n<1000;n++)check(playback.isCurrent(true),"Unchanged playback storage invalidated its route");
+        context.getSharedPreferences("nenotv_sources_v1",Context.MODE_PRIVATE).edit().putBoolean("auto_download",false).commit();
+        check(playback.isCurrent(true),"Unrelated source settings stopped playback");
         boolean playbackDenied=false;try{com.nenotv.player.provider.PlaybackSourceRoute.resolve(context,item,false);}catch(java.io.IOException expected){playbackDenied=true;}
         check(playbackDenied,"Basic opened a tagged cached favorite");
         check(com.nenotv.player.provider.PlaybackSourceRoute.resolve(context,new MediaEntry(),false).isCurrent(false),"Primary playback requires Pro");

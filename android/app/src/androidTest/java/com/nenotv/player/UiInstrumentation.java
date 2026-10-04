@@ -323,7 +323,9 @@ public final class UiInstrumentation extends ImportInstrumentation {
         com.nenotv.player.provider.M3uProvider source=new com.nenotv.player.provider.M3uProvider(profile());source.authenticate();MediaEntry basicItem=source.items("vod","all").get(0);
         PlayerActivity basic=(PlayerActivity)startActivitySync(new Intent(c,PlayerActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("media",basicItem));waitForIdleSync();
         long ready=SystemClock.elapsedRealtime()+90000;final java.util.concurrent.atomic.AtomicBoolean basePlaying=new java.util.concurrent.atomic.AtomicBoolean();while(!basePlaying.get()&&SystemClock.elapsedRealtime()<ready){runOnMainSync(()->basePlaying.set(basic.exo!=null&&basic.exo.getCurrentPosition()>1500&&basic.exo.getVideoFormat()!=null&&basic.exo.getAudioFormat()!=null));Thread.sleep(100);}check(basePlaying.get(),"Light player did not play demo");
-        runOnMainSync(()->{WindowInsets in=basic.getWindow().getDecorView().getRootWindowInsets();if(Build.VERSION.SDK_INT>=30)check(in!=null&&!in.isVisible(WindowInsets.Type.systemBars()),"Light player is not fullscreen");basic.showControls();check(basic.forward.getText().toString().contains("10"),"Forward control is unclear");basic.forward.performClick();});Thread.sleep(300);runOnMainSync(()->{check(basic.exo.getCurrentPosition()>=10000,"Forward did not seek 10 seconds");basic.rewind.performClick();});Thread.sleep(300);runOnMainSync(()->check(basic.exo.getCurrentPosition()<5000,"Rewind did not seek back"));snapshot("light-player");runOnMainSync(basic::finish);waitForIdleSync();
+        runOnMainSync(()->{WindowInsets in=basic.getWindow().getDecorView().getRootWindowInsets();if(Build.VERSION.SDK_INT>=30)check(in!=null&&!in.isVisible(WindowInsets.Type.systemBars()),"Light player is not fullscreen");basic.showControls();check(basic.forward.getText().toString().contains("10"),"Forward control is unclear");basic.forward.performClick();});Thread.sleep(300);runOnMainSync(()->{check(basic.exo.getCurrentPosition()>=10000,"Forward did not seek 10 seconds");basic.rewind.performClick();});Thread.sleep(300);runOnMainSync(()->check(basic.exo.getCurrentPosition()<5000,"Rewind did not seek back"));snapshot("light-player");
+        new SecureProfileStore(c).clear();awaitPlaybackStopped(basic,"Light kept playing after removing its primary source");
+        runOnMainSync(()->check(basic.exo==null,"Revoked Light player retained its decoder"));new SecureProfileStore(c).save(profile());waitForIdleSync();
         c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE).edit().putString("level","PRO").commit();
         check(ProLibraryBridge.isActive(a),"Pro entitlement did not enable module");
         check(ProModuleInstaller.sourcesIntent(a).getComponent().getClassName().contains("ProSourcesActivity"),"Pro source manager route missing");
@@ -377,6 +379,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
         check(DemoPolicy.isDemo(new SecureProfileStore(c).load()),"Playback fixture lost its demo profile");
         // Build the provider before selecting the packaged entry.
         com.nenotv.player.provider.M3uProvider provider=new com.nenotv.player.provider.M3uProvider(profile());provider.authenticate();MediaEntry item=provider.items("vod","all").get(0);
+        proSourceRevocation(a,item);
         Intent i=ProModuleInstaller.playerIntent(a);i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);i.putExtra("media",item);
         Activity player=startActivitySync(i);waitForIdleSync();
         check(player.getClass().getName().contains("ProPlayerActivity"),"Pro did not route to its player");
@@ -389,6 +392,35 @@ public final class UiInstrumentation extends ImportInstrumentation {
         c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE).edit().putString("level","FREE").commit();new SecureProfileStore(c).clear();runOnMainSync(a::finish);result.putString("NENOTV_PRO_RUNTIME","passed");finish(Activity.RESULT_OK,result);
     }
     static com.nenotv.player.model.Profile profile(){com.nenotv.player.model.Profile p=new com.nenotv.player.model.Profile();p.type=com.nenotv.player.model.Profile.Type.M3U;p.m3uUrl=DemoSource.URL;p.name="Demo QA";return p;}
+    void awaitPlaybackStopped(Activity player,String message)throws Exception{
+        long end=SystemClock.elapsedRealtime()+5000;
+        while(!player.isFinishing()&&!player.isDestroyed()&&SystemClock.elapsedRealtime()<end)Thread.sleep(100);
+        check(player.isFinishing()||player.isDestroyed(),message);waitForIdleSync();
+    }
+    void proSourceRevocation(Activity activity,MediaEntry item)throws Exception{
+        Context c=getTargetContext();SharedPreferences prefs=c.getSharedPreferences("nenotv_sources_v1",Context.MODE_PRIVATE);
+        Map<String,?> before=new HashMap<>(prefs.getAll());Activity player=null;
+        String oldId=item.sourceId;
+        try{
+            SourceStore store=new SourceStore(c);String id=store.upsert("",profile(),false);item.sourceId=id;
+            player=startActivitySync(ProModuleInstaller.playerIntent(activity).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("media",item));waitForIdleSync();
+            java.lang.reflect.Field exo=player.getClass().getDeclaredField("exo");exo.setAccessible(true);
+            check(exo.get(player)!=null,"Secondary playback fixture never created a decoder");
+            store.setEnabled(id,false);awaitPlaybackStopped(player,"Pro kept playing a disabled source");
+            check(exo.get(player)==null,"Disabled source retained its Pro decoder");
+            store.setEnabled(id,true);item.sourceId="";
+            player=startActivitySync(ProModuleInstaller.playerIntent(activity).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("media",item));waitForIdleSync();
+            check(exo.get(player)!=null,"Pro revocation fixture never created a decoder");
+            c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE).edit().putString("level","FREE").commit();
+            awaitPlaybackStopped(player,"Open primary Pro player ignored entitlement revocation");
+            check(exo.get(player)==null,"Revoked Pro rights retained the decoder");
+        }finally{
+            if(player!=null){Activity closing=player;runOnMainSync(closing::finish);}
+            item.sourceId=oldId;SourceRegistryChecks.restore(prefs,before);
+            c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE).edit().putString("level","PRO").commit();
+            new SecureProfileStore(c).save(profile());
+        }
+    }
     @Override public void onStart(){Bundle result=new Bundle();String phase=args.getString("phase","ui");if(!Arrays.asList("ui","resume","pro","update","xtream","onboarding").contains(phase)){super.onStart();return;}try{if("onboarding".equals(phase)){onboarding(result);finish(Activity.RESULT_OK,result);}else if("xtream".equals(phase)){XtreamImportChecks.run(getTargetContext());xtreamSharedDownloads();result.putString("NENOTV_XTREAM_IMPORT","passed");finish(Activity.RESULT_OK,result);}else if("update".equals(phase)){UpdateAccessChecks.run(getTargetContext());result.putString("NENOTV_UPDATE_ACCESS","passed");finish(Activity.RESULT_OK,result);}else if("resume".equals(phase))resume(result);else if("pro".equals(phase)){Context c=getTargetContext();SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();DemoPolicy.startOrKeep(c,System.currentTimeMillis());new SecureProfileStore(c).save(profile());pro(result);}else core(result);}catch(Throwable failure){result.putString("NENOTV_UI_TESTS","failed: "+failure.getClass().getSimpleName()+": "+failure.getMessage());finish(Activity.RESULT_CANCELED,result);}}
     static final class EpgFixture implements AutoCloseable{
         final ServerSocket socket;final Thread worker;final byte[] body;
@@ -410,3 +442,4 @@ public final class UiInstrumentation extends ImportInstrumentation {
         public void close()throws Exception{socket.close();worker.join(1000);}
     }
 }
+

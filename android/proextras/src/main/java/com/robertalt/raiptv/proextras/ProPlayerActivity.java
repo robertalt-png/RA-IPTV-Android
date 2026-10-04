@@ -85,6 +85,8 @@ public class ProPlayerActivity extends FragmentActivity {
     Handler ui=new Handler(Looper.getMainLooper());
     Profile profile=new Profile();
     com.nenotv.player.provider.PlaybackSourceRoute playbackRoute;
+    boolean playbackRevoked=false;
+    String castLoadedContentId="";
     File externalSubtitle;
     LibraryStore library;
     long lastWatchPosition=0L,lastProgressAt=0L,watchGraceUntil=0L,lastRecoveryAt=0L,pendingResumeMs=0L,sleepUntil=0L,recordingStartedAt=0L;
@@ -115,7 +117,7 @@ public class ProPlayerActivity extends FragmentActivity {
         @Override public void onSessionEnded(CastSession session,int error){disconnectCastSession(true);}
     };
 
-    Runnable tick=new Runnable(){@Override public void run(){if(destroyed)return;if(DemoPolicy.blockPlayback(ProPlayerActivity.this)){finish();return;}updateProgress();updateRecordingUi();antiFreezeTick();ui.postDelayed(this,500);}};
+    Runnable tick=new Runnable(){@Override public void run(){if(destroyed||isFinishing())return;if(DemoPolicy.blockPlayback(ProPlayerActivity.this)){revokePlayback();return;}if(!currentPlaybackRoute())return;updateProgress();updateRecordingUi();antiFreezeTick();ui.postDelayed(this,500);}};
     Runnable hide=new Runnable(){@Override public void run(){controls.animate().alpha(0f).setDuration(220).withEndAction(()->controls.setVisibility(View.GONE));}};
     Runnable sleepStop=()->{if(destroyed)return;status.setText(T("sleep_done"));saveProgress();releasePlayers();finish();};
 
@@ -144,15 +146,27 @@ public class ProPlayerActivity extends FragmentActivity {
 
     boolean prepareEntry(MediaEntry e){
         try{playbackRoute=com.nenotv.player.provider.PlaybackSourceRoute.resolve(this,e,new com.nenotv.player.storage.EntitlementStore(this).isPro());profile=playbackRoute.profile();}
-        catch(Exception unavailable){status.setText(T("source_unavailable"));finish();return false;}
+        catch(Exception unavailable){revokePlayback();return false;}
         entry=e;title.setText(DisplayText.title(e));candidates=new ArrayList<>(e.candidates);if(candidates.isEmpty()&&e.url!=null&&!e.url.isEmpty())candidates.add(e.url);index=0;freezeOnCandidate=0;pendingResumeMs=0;recovering=false;wantPlaying=true;externalSubtitle=null;lastWatchPosition=0;lastProgressAt=0;watchGraceUntil=0;
         return true;
     }
 
     boolean currentPlaybackRoute(){
-        if(destroyed||isFinishing())return false;
-        if(playbackRoute!=null&&playbackRoute.isCurrent(new com.nenotv.player.storage.EntitlementStore(this).isPro()))return true;
-        wantPlaying=false;status.setText(T("source_unavailable"));finish();return false;
+        if(destroyed||isFinishing()||playbackRevoked)return false;
+        boolean pro=new com.nenotv.player.storage.EntitlementStore(this).isPro();
+        if(pro&&playbackRoute!=null&&playbackRoute.isCurrent(true))return true;
+        revokePlayback();return false;
+    }
+    void revokePlayback(){
+        if(playbackRevoked||destroyed)return;
+        playbackRevoked=true;wantPlaying=false;recovering=false;pendingRecordStart=false;afterRecordStop=null;
+        ui.removeCallbacksAndMessages(null);
+        // Do not stop media another controller has subsequently loaded on the receiver.
+        try{if(castClient!=null&&!castLoadedContentId.isEmpty()&&castClient.getMediaInfo()!=null&&castLoadedContentId.equals(castClient.getMediaInfo().getContentId()))castClient.stop();}catch(Exception ignored){}
+        closeCastRelay();
+        if(vlc!=null&&(recording||recordingStarting))try{vlc.record(null);}catch(Exception ignored){}
+        recording=false;recordingStarting=false;releasePlayers();
+        status.setText(T("source_unavailable"));Toast.makeText(this,T("source_unavailable"),Toast.LENGTH_LONG).show();finish();
     }
 
     void updateFavoriteUi(){if(favorite==null||entry==null)return;boolean on=library.isFavorite(entry);favorite.setText(on?"♥":"♡");favorite.setContentDescription(on?T("remove_favorite"):T("add_favorite"));}
@@ -207,7 +221,7 @@ public class ProPlayerActivity extends FragmentActivity {
     String castChannelKey(MediaEntry e){String x=e==null||e.name==null?"":e.name.toLowerCase(Locale.ROOT);return x.replaceAll("\\b(?:4k|uhd|fhd|full ?hd|hd|sd|hevc|h265|h264)\\b"," ").replaceAll("[^a-z0-9]+"," ").trim();}
     int castVariantRank(MediaEntry e){String x=((e==null?"":e.name)+" "+(e==null?"":e.group)).toLowerCase(Locale.ROOT);if(x.matches(".*\\bhd\\b.*")&&!x.contains("fhd"))return 0;if(x.contains("fhd")||x.contains("full hd"))return 1;if(x.matches(".*\\bsd\\b.*"))return 2;if(x.contains("4k")||x.contains("uhd"))return 4;return 3;}
     int castPreference(String u){String x=u==null?"":u.toLowerCase(Locale.ROOT);if(x.contains(".m3u8"))return 0;if(x.contains(".mp4")||x.contains(".m4v"))return 1;if(x.contains(".ts")||x.contains(".m2ts"))return 2;if(x.contains(".mkv"))return 4;return 3;}
-    void loadCastCandidate(long position,boolean autoplay){if(!hasCastSession())return;ArrayList<String> cc=castCandidates();if(cc.isEmpty())return;if(castCandidateIndex<0||castCandidateIndex>=cc.size())castCandidateIndex=0;String original=cc.get(castCandidateIndex),u=original;castRecovering=false;try{if(castRelayMode){if(castRelay==null)castRelay=new CastRelayServer();u=castRelay.relayUrl(original);}MediaMetadata md=new MediaMetadata(MediaMetadata.MEDIA_TYPE_GENERIC);md.putString(MediaMetadata.KEY_TITLE,DisplayText.title(entry));String sub=DisplayText.meta(entry);if(sub!=null&&!sub.trim().isEmpty())md.putString(MediaMetadata.KEY_SUBTITLE,sub);MediaInfo.Builder ib=new MediaInfo.Builder(u).setStreamType("live".equals(entry.type)?MediaInfo.STREAM_TYPE_LIVE:MediaInfo.STREAM_TYPE_BUFFERED).setContentType(castMime(original)).setMetadata(md);long d=duration();if(!"live".equals(entry.type)&&d>0)ib.setStreamDuration(d);MediaLoadRequestData.Builder rb=new MediaLoadRequestData.Builder().setMediaInfo(ib.build()).setAutoplay(autoplay);if(!"live".equals(entry.type)&&position>0)rb.setCurrentTime(position);status.setText("TV · "+T(castRelayMode?"cast_try_relay":"cast_connecting"));castClient.load(rb.build());}catch(Exception e){tryNextCastCandidate();}}
+    void loadCastCandidate(long position,boolean autoplay){if(!hasCastSession())return;ArrayList<String> cc=castCandidates();if(cc.isEmpty())return;if(castCandidateIndex<0||castCandidateIndex>=cc.size())castCandidateIndex=0;String original=cc.get(castCandidateIndex),u=original;castRecovering=false;try{if(castRelayMode){if(castRelay==null)castRelay=new CastRelayServer();u=castRelay.relayUrl(original);}MediaMetadata md=new MediaMetadata(MediaMetadata.MEDIA_TYPE_GENERIC);md.putString(MediaMetadata.KEY_TITLE,DisplayText.title(entry));String sub=DisplayText.meta(entry);if(sub!=null&&!sub.trim().isEmpty())md.putString(MediaMetadata.KEY_SUBTITLE,sub);MediaInfo.Builder ib=new MediaInfo.Builder(u).setStreamType("live".equals(entry.type)?MediaInfo.STREAM_TYPE_LIVE:MediaInfo.STREAM_TYPE_BUFFERED).setContentType(castMime(original)).setMetadata(md);long d=duration();if(!"live".equals(entry.type)&&d>0)ib.setStreamDuration(d);MediaLoadRequestData.Builder rb=new MediaLoadRequestData.Builder().setMediaInfo(ib.build()).setAutoplay(autoplay);if(!"live".equals(entry.type)&&position>0)rb.setCurrentTime(position);status.setText("TV · "+T(castRelayMode?"cast_try_relay":"cast_connecting"));castLoadedContentId=u;castClient.load(rb.build());}catch(Exception e){tryNextCastCandidate();}}
     void tryNextCastCandidate(){if(castRecovering||!hasCastSession())return;castRecovering=true;ArrayList<String> cc=castCandidates();castCandidateIndex++;if(castCandidateIndex<cc.size()){status.setText(T(castRelayMode?"cast_try_relay":"cast_try_alt"));ui.postDelayed(()->{castRecovering=false;if(hasCastSession())loadCastCandidate("live".equals(entry.type)?0:Math.max(0,castLocalPosition),true);},550);return;}if(!castRelayMode){castRelayMode=true;castCandidateIndex=0;suspendLocalForRelay();status.setText(T("cast_try_relay"));ui.postDelayed(()->{castRecovering=false;if(hasCastSession())loadCastCandidate("live".equals(entry.type)?0:Math.max(0,castLocalPosition),true);},300);return;}castRecovering=false;castRemoteConfirmed=false;closeCastRelay();updateQueueControls();status.setText(T("cast_failed_local"));Toast.makeText(this,T("cast_failed_local"),Toast.LENGTH_LONG).show();if(castLocalPausedForRemote)resumeLocalAfterCastFailure();}
     void suspendLocalForRelay(){if(castLocalPausedForRemote)return;castLocalPausedForRemote=true;castLocalPosition=currentLocalPosition();try{releasePlayers();}catch(Exception ignored){}}
     void resumeLocalAfterCastFailure(){castLocalPausedForRemote=false;wantPlaying=castLocalWasPlaying;pendingResumeMs="live".equals(entry.type)?0:Math.max(0,castLocalPosition);try{if(castLocalWasVlc){if(vlc!=null&&castLocalWasPlaying)vlc.play();else startVlc();}else{if(exo!=null&&castLocalWasPlaying)exo.play();else startMedia3();}}catch(Exception ignored){}updatePlayIcon();}
@@ -242,6 +256,7 @@ public class ProPlayerActivity extends FragmentActivity {
     String subtitleCodes(){return "off".equals(SettingsStore.subtitles(this))?"none":SettingsStore.csv(SettingsStore.subtitleLanguageCodes(this));}
 
     void startVlc(){
+        if(!currentPlaybackRoute())return;
         if(isCasting())return;releasePlayers();usingVlc=true;vlcLayout.setVisibility(View.VISIBLE);media3View.setVisibility(View.GONE);
         ArrayList<String>args=new ArrayList<>(Arrays.asList("--network-caching="+SettingsStore.bufferMs(this),"--http-reconnect","--no-video-title-show","--freetype-color=16777215","--freetype-outline-color=0","--freetype-outline-opacity=255","--freetype-outline-thickness=2","--freetype-shadow-opacity=0","--freetype-background-opacity=0"));
         String ap=audioCodes(),sp=subtitleCodes();if(!ap.isEmpty())args.add("--audio-language="+ap);if(!sp.isEmpty())args.add("--sub-language="+sp);
@@ -265,6 +280,7 @@ public class ProPlayerActivity extends FragmentActivity {
     void vlcFailed(){recovering=false;freezeOnCandidate=0;index++;if(index<candidates.size()){status.setText(T("other_stream"));ui.postDelayed(this::playVlcCandidate,500);}else if("vlc".equals(SettingsStore.player(this))){status.setText(T("vlc_cannot_open"));wantPlaying=false;}else{status.setText(T("vlc_media3"));startMedia3();}}
 
     void startMedia3(){
+        if(!currentPlaybackRoute())return;
         if(isCasting())return;long resume=currentPosition();releasePlayers();usingVlc=false;media3View.setVisibility(View.VISIBLE);vlcLayout.setVisibility(View.GONE);
         DefaultHttpDataSource.Factory http=new DefaultHttpDataSource.Factory().setUserAgent("Mozilla/5.0 (Linux; Android) NenoTV/0.5.2").setAllowCrossProtocolRedirects(true).setConnectTimeoutMs(15000).setReadTimeoutMs(35000);
         Map<String,String> headers=new HashMap<>();headers.put("Accept","*/*");headers.put("Accept-Encoding","identity");http.setDefaultRequestProperties(headers);
@@ -381,6 +397,7 @@ public class ProPlayerActivity extends FragmentActivity {
     }
 
     void onRecordChanged(boolean active,String path){
+        if(playbackRevoked||destroyed)return;
         if(active){recording=true;recordingStarting=false;recordingStartedAt=SystemClock.elapsedRealtime();record.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFB91C1C));status.setText("● "+T("record_active")+" · "+recordingChannel);return;}
         boolean had=recording||recordingStarting;recording=false;recordingStarting=false;recordingStartedAt=0;record.setText("● REC");record.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0x55000000));
         if(path!=null&&!path.trim().isEmpty()){lastRecordingPath=path;publishRecordingAsync(new File(path),recordingChannel);}else if(had)status.setText(T("record_stopped"));
