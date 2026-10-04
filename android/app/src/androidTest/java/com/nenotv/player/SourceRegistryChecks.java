@@ -17,6 +17,19 @@ import java.util.HashMap;
 import java.util.Map;
 
 final class SourceRegistryChecks {
+    static void concurrentBootstrap(Context context,SharedPreferences prefs,SecureProfileStore profiles)throws Exception{
+        Profile legacy=new Profile();legacy.type=Profile.Type.M3U;legacy.m3uUrl="https://example.invalid/bootstrap";profiles.save(legacy);prefs.edit().clear().commit();
+        java.util.concurrent.ExecutorService pool=java.util.concurrent.Executors.newFixedThreadPool(6);
+        java.util.concurrent.CountDownLatch ready=new java.util.concurrent.CountDownLatch(6),start=new java.util.concurrent.CountDownLatch(1);
+        try{
+            java.util.List<java.util.concurrent.Future<String>> ids=new java.util.ArrayList<>();
+            for(int n=0;n<6;n++)ids.add(pool.submit(()->{ready.countDown();check(start.await(5,java.util.concurrent.TimeUnit.SECONDS),"Bootstrap start timed out");return new SourceStore(context).activeId();}));
+            check(ready.await(5,java.util.concurrent.TimeUnit.SECONDS),"Bootstrap workers did not start");start.countDown();
+            String first=ids.get(0).get(10,java.util.concurrent.TimeUnit.SECONDS);check(!first.isEmpty(),"Legacy migration missing source ID");
+            for(java.util.concurrent.Future<String> result:ids)check(first.equals(result.get(10,java.util.concurrent.TimeUnit.SECONDS)),"Concurrent legacy migration changed source identity");
+            check(new SourceStore(context).list().size()==1,"Concurrent migration duplicated legacy source");
+        }finally{start.countDown();pool.shutdownNow();check(pool.awaitTermination(5,java.util.concurrent.TimeUnit.SECONDS),"Bootstrap workers remained active");prefs.edit().clear().commit();profiles.clear();}
+    }
     static Provider fake(Runnable authenticated){return new Provider(){
         public void authenticate(){authenticated.run();}
         public java.util.List<Category> categories(String type){return Collections.emptyList();}
@@ -26,7 +39,7 @@ final class SourceRegistryChecks {
         Profile second=new Profile();second.type=Profile.Type.M3U;second.m3uUrl="https://example.invalid/second";
         String id=store.upsert("",second,false);MediaEntry item=new MediaEntry();item.sourceId=id;
         int[] authentications={0};Provider primary=fake(()->{throw new AssertionError("Primary authenticated for secondary item");});
-        SourceProviderResolver.Factory factory=profile->{check(profile.m3uUrl.equals(second.m3uUrl),"Wrong provider profile routed");return fake(()->authentications[0]++);};
+        SourceProviderResolver.Factory factory=(profile,language)->{check(profile.m3uUrl.equals(second.m3uUrl),"Wrong provider profile routed");return fake(()->authentications[0]++);};
         SourceProviderResolver resolver=new SourceProviderResolver(context,factory);
         Provider routed=resolver.resolve(item,primary,true);
         check(routed!=primary&&resolver.resolve(item,primary,true)==routed&&authentications[0]==1,"Secondary provider reloaded or fell back to primary");
@@ -39,13 +52,13 @@ final class SourceRegistryChecks {
         store.setEnabled(id,false);denied=false;try{resolver.resolve(item,primary,true);}catch(java.io.IOException expected){denied=true;}
         check(denied&&authentications[0]==3,"Disabled source authenticated or fell back to primary");
         store.setEnabled(id,true);
-        SourceProviderResolver revoked=new SourceProviderResolver(context,profile->fake(()->store.remove(id)));
+        SourceProviderResolver revoked=new SourceProviderResolver(context,(profile,language)->fake(()->store.remove(id)));
         denied=false;try{revoked.resolve(item,primary,true);}catch(java.io.IOException expected){denied=true;}
         check(denied,"Source revoked during authentication was cached");
         denied=false;try{resolver.resolve(item,primary,true);}catch(java.io.IOException expected){denied=true;}
         check(denied,"Removed source fell back to primary");
         store.upsert(id,second,false);
-        SourceProviderResolver edited=new SourceProviderResolver(context,profile->fake(()->{
+        SourceProviderResolver edited=new SourceProviderResolver(context,(profile,language)->fake(()->{
             second.m3uUrl="https://example.invalid/edited-during-auth";store.upsert(id,second,false);
         }));
         denied=false;try{edited.resolve(item,primary,true);}catch(java.io.IOException expected){denied=true;}
@@ -74,6 +87,7 @@ final class SourceRegistryChecks {
         SecureProfileStore profiles=new SecureProfileStore(context);Profile previous=profiles.exists()?profiles.load():null;
         try{
             sourcePrefs.edit().clear().commit();profiles.clear();
+            concurrentBootstrap(context,sourcePrefs,profiles);
             SourceStore store=new SourceStore(context),secondInstance=new SourceStore(context);
             Profile p=new Profile();p.type=Profile.Type.M3U;p.name="Local";p.m3uUrl="https://example.invalid/local";
             String first=store.upsert("",p,false);

@@ -42,7 +42,7 @@ public final class SourceStore {
         app=c.getApplicationContext();
         prefs=app.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
         crypto=new CryptoBox();
-        migrateLegacyIfNeeded();
+        synchronized(SYNC_LOCK){migrateLegacyIfNeeded();}
     }
 
     private synchronized void migrateLegacyIfNeeded(){

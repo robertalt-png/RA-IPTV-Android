@@ -38,7 +38,10 @@ final class HouseholdProfileChecks {
                 }
                 db.setTransactionSuccessful();
             }finally{db.endTransaction();}
-            long started=android.os.SystemClock.elapsedRealtime();helper.onUpgrade(db,3,4);
+            long started=android.os.SystemClock.elapsedRealtime();
+            // SQLiteOpenHelper upgrades inside one transaction; measure the same path.
+            db.beginTransaction();
+            try{helper.onUpgrade(db,3,4);db.setTransactionSuccessful();}finally{db.endTransaction();}
             android.util.Log.i("NenoTVIndexMigration","4098 rows migrated in "+(android.os.SystemClock.elapsedRealtime()-started)+" ms");
             try(android.database.Cursor c=db.rawQuery("SELECT COUNT(*) FROM entries WHERE item_key LIKE 'source:4:bulk|vod:bulk-%'",null)){
                 check(c.moveToFirst()&&c.getInt(0)==4096,"Batched migration skipped or duplicated rows");
