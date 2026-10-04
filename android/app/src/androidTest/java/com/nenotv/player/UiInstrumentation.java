@@ -154,6 +154,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
         com.nenotv.player.entitlement.PairingClientChecks.run(c);
         com.nenotv.player.entitlement.SourceSyncChecks.run(c);
         HouseholdProfileChecks.run(c);
+        com.nenotv.player.storage.CachePrivacyChecks.run(c);
         EpgSourceChecks.run(this);
         householdScreens();
         pairingScreens();

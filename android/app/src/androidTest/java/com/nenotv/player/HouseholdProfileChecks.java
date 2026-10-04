@@ -72,7 +72,20 @@ final class HouseholdProfileChecks {
             profiles.edit().clear().commit();
             HouseholdProfileStore viewers=new HouseholdProfileStore(context);
             check(viewers.list().size()==1&&viewers.activeId().equals("default"),"Default household profile missing");
+            MediaEntry idless=new MediaEntry();idless.type="vod";idless.url="https://example.invalid/LIBRARY-PRIVATE-SECRET/stream";
+            String oldIdentity=idless.uniqueKey();Set<String> oldFavorites=new HashSet<>(legacy.getStringSet("favorites",Collections.emptySet()));oldFavorites.add(oldIdentity);
+            org.json.JSONArray oldRecent=new org.json.JSONArray(legacy.getString("recent","[]"));oldRecent.put(oldIdentity);
+            String payload=new org.json.JSONObject().put("id","").put("type","vod").put("url",idless.url).toString();
+            legacy.edit().remove("storage_keys_version").putString("item:"+oldIdentity,new CryptoBox().encrypt(payload))
+                .putLong("progress:"+oldIdentity,45000).putLong("duration:"+oldIdentity,100000)
+                .putLong("progress_updated:"+oldIdentity,123).putBoolean("watched:"+oldIdentity,false)
+                .putStringSet("favorites",oldFavorites).putString("recent",oldRecent.toString()).commit();
             LibraryStore original=new LibraryStore(context);
+            check(original.isFavorite(idless)&&original.progress(idless)==45000&&original.duration(idless)==100000
+                &&original.progressUpdatedAt(idless)==123&&!original.watched(idless),"Private-key migration lost favorites or progress");
+            check(original.recent().stream().anyMatch(e->e.url.equals(idless.url)),"Private-key migration lost recent stream");
+            check(!legacy.contains("item:"+oldIdentity)&&!legacy.getAll().toString().contains("LIBRARY-PRIVATE-SECRET"),"Raw private URL remained in library identities");
+            check(new LibraryStore(context).progress(idless)==45000,"Library migration was not idempotent");
             MediaEntry movie=new MediaEntry();movie.id="qa-household-movie";movie.type="movie";movie.name="QA";
             if(!original.isFavorite(movie))original.toggleFavorite(movie);
             original.saveProgress(movie,40000,100000,true);original.recent(movie);
@@ -87,7 +100,7 @@ final class HouseholdProfileChecks {
             check(restored!=null&&restored.sourceId.equals(other.sourceId)&&restored.sourceName.equals(other.sourceName)
                 &&restored.directSource.equals(other.directSource)&&restored.catchup&&restored.catchupDays==7
                 &&restored.candidates.equals(other.candidates),"Encrypted library lost source or catchup information");
-            String encrypted=legacy.getString("item:"+other.uniqueKey(),"");
+            String encrypted=legacy.getString("item:"+StoredMediaKey.of(other),"");
             check(!encrypted.isEmpty()&&!encrypted.contains("private-stream")&&!encrypted.contains("QA provider"),"Library credentials stored unencrypted");
             check(movie.uniqueKey().equals("movie:qa-household-movie"),"Primary legacy key changed");
             SettingsStore.setPrimaryLanguage(context,"nl");settings.edit().putString("sort","favorites").putString("qa_import_cursor","keep-device-state").commit();
@@ -121,3 +134,4 @@ final class HouseholdProfileChecks {
         }
     }
 }
+
