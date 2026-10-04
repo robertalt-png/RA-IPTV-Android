@@ -20,7 +20,7 @@ public class SearchIndexStore extends SQLiteOpenHelper {
     public SearchIndexStore(Context c){this(c,DB);}
     SearchIndexStore(Context c,String database){super(c,database,null,VERSION);cipher=new CachePayloadCipher(c,database);maintenance=c.getSharedPreferences("nenotv_cache_maintenance",Context.MODE_PRIVATE);maintenanceKey=StoredMediaKey.of(database);try{setWriteAheadLoggingEnabled(true);}catch(Exception ignored){} }
 
-    @Override public void onConfigure(SQLiteDatabase db){super.onConfigure(db);db.execSQL("PRAGMA secure_delete=ON");}
+    @Override public void onConfigure(SQLiteDatabase db){super.onConfigure(db);try(Cursor c=db.rawQuery("PRAGMA secure_delete=ON",null)){if(!c.moveToFirst()||c.getInt(0)!=1)throw new IllegalStateException("CACHE_SECURE_DELETE_UNAVAILABLE");}}
     @Override public void onOpen(SQLiteDatabase db){
         super.onOpen(db);
         if(maintenance.getBoolean(maintenanceKey,false)){

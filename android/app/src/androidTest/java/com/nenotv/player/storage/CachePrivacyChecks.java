@@ -40,7 +40,7 @@ public final class CachePrivacyChecks {
                 public void onUpgrade(SQLiteDatabase db,int oldVersion,int newVersion){throw new AssertionError("Legacy fixture unexpectedly upgraded");}
             };
             try{
-                SQLiteDatabase db=legacy.getWritableDatabase();db.execSQL("PRAGMA secure_delete=OFF");db.beginTransaction();
+                SQLiteDatabase db=legacy.getWritableDatabase();try(Cursor c=db.rawQuery("PRAGMA secure_delete=OFF",null)){check(c.moveToFirst()&&c.getInt(0)==0,"Legacy fixture secure-delete state");}db.beginTransaction();
                 try(SQLiteStatement insert=db.compileStatement("INSERT INTO entries(profile,item_key,type,name,name_norm,hay_norm,lang_tag,payload) VALUES('qa',?,'vod','NL QA','nl qa','nl qa','nl',?)")){
                     for(int n=0;n<4096;n++){
                         String url="https://example.invalid/user/"+SECRET+"/"+n;
