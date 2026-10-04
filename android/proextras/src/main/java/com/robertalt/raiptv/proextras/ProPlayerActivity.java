@@ -145,6 +145,7 @@ public class ProPlayerActivity extends FragmentActivity {
     }
 
     boolean prepareEntry(MediaEntry e){
+        if(playbackRevoked||destroyed||isFinishing())return false;
         try{playbackRoute=com.nenotv.player.provider.PlaybackSourceRoute.resolve(this,e,new com.nenotv.player.storage.EntitlementStore(this).isPro());profile=playbackRoute.profile();}
         catch(Exception unavailable){revokePlayback();return false;}
         entry=e;title.setText(DisplayText.title(e));candidates=new ArrayList<>(e.candidates);if(candidates.isEmpty()&&e.url!=null&&!e.url.isEmpty())candidates.add(e.url);index=0;freezeOnCandidate=0;pendingResumeMs=0;recovering=false;wantPlaying=true;externalSubtitle=null;lastWatchPosition=0;lastProgressAt=0;watchGraceUntil=0;
@@ -190,7 +191,7 @@ public class ProPlayerActivity extends FragmentActivity {
     void showCastChooser(){
         try{if(castContext==null)castContext=CastContext.getSharedInstance(this);CastSession current=castContext.getSessionManager().getCurrentCastSession();if(current!=null&&current.isConnected()){connectCastSession(current,false);return;}MediaRouteSelector selector=new MediaRouteSelector.Builder().addControlCategory(CastMediaControlIntent.categoryForCast(NenoTVCastOptionsProvider.receiverApplicationId())).build();MediaRouteChooserDialog dialog=new MediaRouteChooserDialog(this);dialog.setRouteSelector(selector);dialog.show();}catch(Throwable e){Toast.makeText(this,T("cast_failed"),Toast.LENGTH_SHORT).show();}
     }
-    boolean hasCastSession(){return casting&&castClient!=null&&castSession!=null&&castSession.isConnected();}
+    boolean hasCastSession(){return !playbackRevoked&&!destroyed&&casting&&castClient!=null&&castSession!=null&&castSession.isConnected();}
     boolean isCasting(){return hasCastSession()&&castRemoteConfirmed;}
     void connectCastSession(CastSession session,boolean resumed){
         if(session==null)return;castSession=session;castClient=session.getRemoteMediaClient();if(castClient==null)return;try{castClient.registerCallback(castMediaCallback);}catch(Exception ignored){}
@@ -302,7 +303,7 @@ public class ProPlayerActivity extends FragmentActivity {
         exo.setMediaItem(b.build());exo.prepare();if(resume>0)exo.seekTo(resume);exo.play();
     }
 
-    void onMediaEnded(){if(library!=null&&entry!=null)library.markWatched(entry);if("episode".equals(entry.type)&&SettingsStore.autoplay(this)&&episodeQueue.size()>1){switchEpisode(1);return;}wantPlaying=false;updatePlayIcon();}
+    void onMediaEnded(){if(playbackRevoked||destroyed||isFinishing())return;if(library!=null&&entry!=null)library.markWatched(entry);if("episode".equals(entry.type)&&SettingsStore.autoplay(this)&&episodeQueue.size()>1){switchEpisode(1);return;}wantPlaying=false;updatePlayIcon();}
 
     void switchLive(int delta){
         if(liveQueue.size()<2)return;if(recording||recordingStarting){requestStopRecording(()->switchLiveInternal(delta),T("record_finish_zap"));return;}switchLiveInternal(delta);
