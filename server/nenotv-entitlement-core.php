@@ -1695,7 +1695,7 @@ final class NenoTV_Entitlement_Core {
             $html .= '</div>';
         }
 
-        if (self::mode() === 'live' && self::entitlement_is_active($ent)) {
+        if (self::user_owns_entitlement($ent)) {
             $html .= self::source_account_panel($ent, $lang);
         }
 

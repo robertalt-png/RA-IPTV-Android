@@ -71,21 +71,24 @@ trait NenoTV_Source_Manager {
 
     private static function source_account_panel(array $ent, string $lang): string {
         $s=self::source_strings($lang);
+        $canEdit=self::mode()==='live' && self::entitlement_is_active($ent);
         $h='<div class="nv-source-vault"><h3>'.esc_html($s['title']).'</h3><p>'.esc_html($s['help']).'</p>';
         try {$vault=self::load_source_vault((int)$ent['id']);}
         catch (RuntimeException $e) {return $h.'<p role="alert">'.esc_html($s['storage']).'</p></div>';}
         if (!empty($_GET['source_saved'])) $h.='<p class="nv-account-notice" role="status">'.esc_html($s['saved']).'</p>';
         if (!empty($_GET['source_deleted'])) $h.='<p class="nv-account-notice" role="status">'.esc_html($s['deleted']).'</p>';
+        if (!$canEdit) $h.='<p>'.esc_html($s['inactive']).'</p>';
         if (!$vault['sources']) $h.='<p>'.esc_html($s['empty']).'</p>';
         foreach ($vault['sources'] as $source) {
             $sid=(string)$source['id'];
             $h.='<article class="nv-source-card"><h4>'.esc_html((string)$source['name']).'</h4><p>'.esc_html((string)$source['type']).' · '.esc_html($s['priority']).': '.(int)$source['priority'].'</p>';
-            $h.='<details class="nv-source-add"><summary>'.esc_html($s['edit']).'</summary>'.self::source_form_fields($ent,(int)$vault['revision'],$lang,$source).'</details>';
+            if ($canEdit) $h.='<details class="nv-source-add"><summary>'.esc_html($s['edit']).'</summary>'.self::source_form_fields($ent,(int)$vault['revision'],$lang,$source).'</details>';
             $h.='<form class="nv-source-delete" method="post" action="'.esc_url(admin_url('admin-post.php')).'"><input type="hidden" name="action" value="nenotv_source_delete"><input type="hidden" name="source_id" value="'.esc_attr($sid).'"><input type="hidden" name="base_revision" value="'.(int)$vault['revision'].'"><input type="hidden" name="lang" value="'.esc_attr($lang).'">';
             $h.=wp_nonce_field('nenotv_source_delete_'.(int)$ent['id'].'_'.$sid,'_wpnonce',true,false);
             $h.='<button type="submit">'.esc_html($s['delete']).'</button></form></article>';
         }
-        return $h.'<details class="nv-source-add"><summary>'.esc_html($s['add']).'</summary>'.self::source_form_fields($ent,(int)$vault['revision'],$lang).'</details></div>';
+        if ($canEdit) $h.='<details class="nv-source-add"><summary>'.esc_html($s['add']).'</summary>'.self::source_form_fields($ent,(int)$vault['revision'],$lang).'</details>';
+        return $h.'</div>';
     }
 
     public static function handle_source_edit(): void {self::handle_source_action('edit');}
@@ -97,7 +100,7 @@ trait NenoTV_Source_Manager {
         $sid=$action==='add'?'':trim(self::source_post('source_id',80));
         if ($action!=='add' && $sid==='') self::source_fail('invalid');
         check_admin_referer('nenotv_source_'.$action.'_'.(int)$ent['id'].($action==='add'?'':'_'.$sid));
-        if (self::mode()!=='live' || !self::entitlement_is_active($ent)) self::source_fail('inactive',403);
+        if ($action!=='delete' && (self::mode()!=='live' || !self::entitlement_is_active($ent))) self::source_fail('inactive',403);
         $base=self::source_post('base_revision',18);
         if ($base==='' || !ctype_digit($base)) self::source_fail('conflict',409);
         try {$vault=self::load_source_vault((int)$ent['id']);}

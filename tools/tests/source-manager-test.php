@@ -85,4 +85,9 @@ try{post_source('edit',$edit);throw new LogicException('Race accepted');}catch(R
 check(source_vault()['sources'][0]['name']==='M3U updated','Concurrent edit overwrote stored data');
 $notice=new ReflectionMethod(NenoTV_Entitlement_Core::class,'source_account_notice');$options['nenotv_entitlement_mode']='shadow';
 foreach(['en'=>'not publicly active','nl'=>'nog niet publiek actief','de'=>'noch nicht öffentlich aktiv'] as $lang=>$phrase)check(str_contains($notice->invoke(null,null,$lang),$phrase),'Missing localized prelaunch notice');
+$html=$panel->invoke(null,$wpdb->entitlements[1],'en');
+check(!str_contains($html,'nenotv_source_add')&&!str_contains($html,'nenotv_source_edit')&&str_contains($html,'nenotv_source_delete'),'Inactive account did not retain deletion-only source controls');
+$revision=$wpdb->vaults[1]['revision'];
+post_source('delete',['source_id'=>$saved['id'],'base_revision'=>(string)$revision]);
+$options['nenotv_entitlement_mode']='live';check(source_vault()['sources']===[],'Inactive owner could not remove stored source');
 echo ($checks-$startChecks)." source manager/security checks passed\n";
