@@ -13,12 +13,12 @@
             android:layout_width="150dp"
             android:layout_height="150dp"
             android:src="@drawable/ic_nenotv_mark"
-            android:contentDescription="NenoTV"/>
+            android:contentDescription="SunnyIPTV"/>
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
-            android:text="NenoTV"
+            android:text="SunnyIPTV"
             android:textColor="#FFD400"
             android:textSize="34sp"
             android:textStyle="bold"
