@@ -18,7 +18,7 @@ public class LanguageSetupActivity extends Activity {
     void build(){
         ScrollView sv=new ScrollView(this);sv.setBackgroundColor(0xFF07090D);sv.setFillViewport(true);sv.setOnApplyWindowInsetsListener((v,i)->{v.setPadding(0,i.getSystemWindowInsetTop(),0,i.getSystemWindowInsetBottom());return i;});
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(24),dp(28),dp(24),dp(32));sv.addView(box,new ScrollView.LayoutParams(-1,-1));
-        TextView brand=new TextView(this);brand.setText("NenoTV");brand.setTextColor(0xFFF7F8FA);brand.setTextSize(34);brand.setTypeface(null,Typeface.BOLD);box.addView(brand);
+        TextView brand=new TextView(this);brand.setText("SunnyIPTV");brand.setTextColor(0xFFF7F8FA);brand.setTextSize(34);brand.setTypeface(null,Typeface.BOLD);box.addView(brand);
         TextView title=new TextView(this);title.setText("Kies je taal  ·  Choose your language");title.setTextColor(0xFFF7F8FA);title.setTextSize(24);title.setTypeface(null,Typeface.BOLD);title.setPadding(0,dp(28),0,dp(8));box.addView(title);
         TextView help=new TextView(this);help.setText("Deze taal wordt de standaard voor de interface, Live TV, TV-gids, films, series, metadata, audio en ondertiteling wanneer beschikbaar. Je kunt dit later wijzigen in Instellingen.");help.setTextColor(0xFFA7AFBC);help.setTextSize(14);help.setPadding(0,0,0,dp(18));box.addView(help);
         String suggested=SettingsStore.language(this);
