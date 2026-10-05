@@ -20,14 +20,13 @@ public final class WebsiteSetupJob {
     public volatile State state = State.WAITING;
     private final String account;
     private final Thread worker;
-    private long readyRevision = -1;
     private final Network transport;
+    public boolean valid(Context context) { return account.equals(new AccountLinkStore(context).accountId()) && !account.isEmpty(); }
 
     public static synchronized WebsiteSetupJob start(Context context, boolean replaceLocal) {
         String account = new AccountLinkStore(context).accountId();
         if (current != null && current.account.equals(account)
-                && ((current.worker.isAlive() && (current.state == State.WAITING || current.state == State.PREPARING || current.state == State.IMPORTING))
-                    || (current.state == State.READY && current.readyRevision == new SourceStore(context).localRevision()))) return current;
+                && current.worker.isAlive() && (current.state == State.WAITING || current.state == State.PREPARING || current.state == State.IMPORTING)) return current;
         if (current != null) current.worker.interrupt();
         current = new WebsiteSetupJob(context.getApplicationContext(), account, replaceLocal);
         current.worker.start();
@@ -70,7 +69,7 @@ public final class WebsiteSetupJob {
                     if (ready || (SettingsStore.prefs(context).getBoolean("first_sync_done_" + key, false)
                             && index.isComplete(key,"live") && index.isComplete(key,"vod") && index.isComplete(key,"series"))) {
                         if (!account.equals(new AccountLinkStore(context).accountId()) || sources.syncDirty() || sources.accountChangePending()) { state=State.FAILED; return; }
-                        readyRevision=sources.localRevision(); state = State.READY; return;
+                        state = State.READY; return;
                     }
                     state = State.CHOICE; return;
                 } catch (CatalogPackageClient.Pending pending) { state = State.PREPARING; }

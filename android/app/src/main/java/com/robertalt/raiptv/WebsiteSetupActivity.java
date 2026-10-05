@@ -54,6 +54,7 @@ public final class WebsiteSetupActivity extends Activity {
         if (!resumed || finished || job == null) return;
         if (FamilyStore.active(WebsiteSetupActivity.this)) { finish(); return; }
         WebsiteSetupJob.State s = job.state;
+        if (!job.valid(WebsiteSetupActivity.this)) s=WebsiteSetupJob.State.FAILED;
         progress.setVisibility(s==WebsiteSetupJob.State.WAITING || s==WebsiteSetupJob.State.PREPARING || s==WebsiteSetupJob.State.IMPORTING ? View.VISIBLE : View.GONE);
         retry.setVisibility(s==WebsiteSetupJob.State.CHOICE || s==WebsiteSetupJob.State.FAILED || s==WebsiteSetupJob.State.EXPIRED ? View.VISIBLE : View.GONE);
         switch (s) {

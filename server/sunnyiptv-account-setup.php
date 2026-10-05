@@ -76,7 +76,7 @@ trait SunnyIPTV_Account_Setup {
         $ent=self::current_user_entitlement();
         if (!is_array($ent) || !self::user_owns_entitlement($ent)) return;
         $legacy=self::load_source_vault((int)$ent['id']);
-        if ($legacy['sources']) self::account_save_vault($uid,$legacy['sources'],0);
+        if ($legacy['sources'] && self::account_source_rows_valid($legacy['sources'])) self::account_save_vault($uid,$legacy['sources'],0);
     }
 
     public static function account_sources_request(WP_REST_Request $r,string $action): WP_REST_Response {
@@ -115,22 +115,22 @@ trait SunnyIPTV_Account_Setup {
         $uid=get_current_user_id();if (!self::free_customer($uid)) wp_die('Please use a customer account.');
         $lang=is_string($_GET['lang']??null)&&in_array($_GET['lang'],['nl','en','de'],true)?$_GET['lang']:self::account_language();
         $nl=$lang==='nl';$de=$lang==='de';
+        try { self::account_migrate_legacy($uid);$vault=self::account_vault($uid); }
+        catch (RuntimeException $e) { wp_die('Unable to read your provider details. Please retry later.'); }
         status_header(200);if (isset($GLOBALS['wp_query'])) $GLOBALS['wp_query']->is_404=false;
-        get_header();echo '<main class="nv-pro-account"><h1>'.esc_html($nl?'Mijn SunnyIPTV':($de?'Mein SunnyIPTV':'My SunnyIPTV')).'</h1>';
-        if (!empty($_GET['saved'])) {
+        get_header();echo '<main class="nv-pro-account nv-setup-page"><h1>'.esc_html($nl?'Mijn SunnyIPTV':($de?'Mein SunnyIPTV':'My SunnyIPTV')).'</h1>';
+        if (!empty($_GET['saved']) && !empty($vault['sources'])) {
             echo '<h2>'.esc_html($nl?'Je lijst wordt klaargemaakt':($de?'Deine Liste wird vorbereitet':'Preparing your list')).'</h2><p>'.esc_html($nl?'Je aanbiedergegevens zijn opgeslagen. De app ontvangt de complete lijst automatisch zodra deze klaar is.':($de?'Deine Anbieterdaten wurden gespeichert. Die App empfängt die vollständige Liste automatisch, sobald sie bereit ist.':'Your provider details are saved. The app receives the complete list automatically when it is ready.')).'</p>';
             echo '<a class="button" href="nenotv://setup?entry=website">'.esc_html($nl?'Terug naar SunnyIPTV':($de?'Zurück zu SunnyIPTV':'Return to SunnyIPTV')).'</a>';
             echo '<p>'.esc_html($nl?'Gebruik je een tv? Laat SunnyIPTV daar openstaan.':($de?'Auf dem Fernseher? Lass SunnyIPTV dort geöffnet.':'Using a TV? Leave SunnyIPTV open there.')).'</p>';
             echo '<script>setTimeout(function(){location.href="nenotv://setup?entry=website";},1200);</script>';
         } else {
-            try { self::account_migrate_legacy($uid);$vault=self::account_vault($uid); }
-            catch (RuntimeException $e) { echo '<p role="alert">'.esc_html($nl?'Je gegevens konden niet worden gelezen. Probeer later opnieuw.':($de?'Daten konnten nicht gelesen werden. Versuche es später erneut.':'Unable to read your details. Please retry later.')).'</p></main>';get_footer();exit; }
             echo '<h2>'.esc_html($nl?'Vul je tv-aanbieder in':($de?'TV-Anbieter eingeben':'Enter your TV provider')).'</h2>';
             echo '<form class="nv-source-form" method="post" action="'.esc_url(admin_url('admin-post.php')).'"><input type="hidden" name="action" value="sunnyiptv_source_save"><input type="hidden" name="lang" value="'.esc_attr($lang).'"><input type="hidden" name="base_revision" value="'.(int)$vault['revision'].'">';
             echo wp_nonce_field('sunnyiptv_source_save_'.$uid,'_wpnonce',true,false);
             echo '<p><label>'.esc_html($nl?'Type verbinding':($de?'Verbindungstyp':'Connection type')).'<select name="source_type"><option value="XTREAM">Xtream Codes</option><option value="M3U">M3U</option></select></label></p>';
             echo '<div data-source-kind="XTREAM"><p><label>'.esc_html($nl?'Serveradres':($de?'Serveradresse':'Server address')).'<input name="source_server" type="url" maxlength="1000" placeholder="https://" required autocomplete="off"></label></p>';
-            echo '<p><label>'.esc_html($nl?'Gebruikersnaam':($de?'Benutzername':'Username')).'<input name="source_username" maxlength="500" required autocomplete="off"></label></p>';
+            echo '<p><label>'.esc_html($nl?'Gebruikersnaam':($de?'Benutzername':'Username')).'<input name="source_username" type="text" maxlength="500" required autocomplete="off"></label></p>';
             echo '<p><label>'.esc_html($nl?'Wachtwoord van je tv-aanbieder':($de?'Passwort deines TV-Anbieters':'TV provider password')).'<input name="source_password" type="password" maxlength="500" required autocomplete="new-password"></label></p></div>';
             echo '<div data-source-kind="M3U" hidden><p><label>M3U URL<input name="source_m3u" type="url" maxlength="2000" required disabled autocomplete="off"></label></p></div>';
             echo '<p><label><input name="source_consent" type="checkbox" value="1" required> '.esc_html($nl?'Mijn SunnyIPTV mag met deze gegevens mijn lijst ophalen, mijn aanbiedergegevens versleuteld bewaren en de lijst naar mijn gekoppelde apparaten sturen.':($de?'Mein SunnyIPTV darf meine Liste abrufen, meine Anbieterdaten verschlüsselt speichern und die Liste meinen verbundenen Geräten bereitstellen.':'My SunnyIPTV may retrieve my list, store my provider details encrypted and deliver the list to my linked devices.')).'</label></p>';
@@ -155,7 +155,11 @@ trait SunnyIPTV_Account_Setup {
             $row['server']=trim(self::source_post('source_server',1000));$row['username']=trim(self::source_post('source_username',500));$row['password']=self::source_post('source_password',500);
             if (!self::source_url_valid($row['server']) || $row['username']==='' || $row['password']==='') self::source_fail('invalid');
         } else { $row['m3u']=trim(self::source_post('source_m3u',2000));if (!self::source_url_valid($row['m3u'])) self::source_fail('invalid'); }
-        if ($old) $old[0]=$row;else $old=[$row];
+        if ($old) {
+            $same=true;foreach (['type','server','username','password','m3u'] as $field) if (($old[0][$field]??'')!==$row[$field]) $same=false;
+            if ($same) foreach (['name','enabled','priority','epg','epg_extra'] as $field) if (isset($old[0][$field])) $row[$field]=$old[0][$field];
+            $old[0]=$row;
+        } else $old=[$row];
         try { self::account_save_vault($uid,$old,(int)$base); }
         catch (UnexpectedValueException $e) { self::source_fail('conflict',409); }
         catch (InvalidArgumentException $e) { self::source_fail('invalid'); }
