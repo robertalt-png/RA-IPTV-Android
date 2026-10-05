@@ -107,9 +107,23 @@ public final class UiInstrumentation extends ImportInstrumentation {
                         check(privacy!=null&&privacy.isEnabled()&&privacy.getVisibility()==View.VISIBLE&&privacy.hasOnClickListeners(),"Privacy link unavailable: "+level+"/"+language);
                         check(expected.contentEquals(privacy.getText()),"Privacy label incorrect: "+language);
                         assertUnclippedText(privacy);
+                        Button deletion=a.box.findViewWithTag("account_deletion");
+                        String deletionLabel="nl".equals(language)?"Account verwijderen aanvragen":"de".equals(language)?"Kontolöschung beantragen":"Request account deletion";
+                        check(deletion!=null&&deletion.isEnabled()&&deletion.getVisibility()==View.VISIBLE&&deletion.hasOnClickListeners(),"Account deletion unavailable: "+level+"/"+language);
+                        check(deletionLabel.contentEquals(deletion.getText()),"Deletion label incorrect: "+language);
+                        assertUnclippedText(deletion);
                     });
                     snapshot("privacy-"+level.toLowerCase(java.util.Locale.ROOT)+"-"+language);
                 }finally{runOnMainSync(a::finish);waitForIdleSync();}
+                SettingsActivity settings=(SettingsActivity)startActivitySync(new Intent(c,SettingsActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                try{
+                    waitForIdleSync();
+                    runOnMainSync(()->{
+                        Button deletion=settings.box.findViewWithTag("account_deletion");
+                        check(deletion!=null&&deletion.isEnabled()&&deletion.hasOnClickListeners(),"Settings deletion unavailable: "+level+"/"+language);
+                        assertUnclippedText(deletion);
+                    });
+                }finally{runOnMainSync(settings::finish);waitForIdleSync();}
             }
         }finally{
             entitlement.edit().putString("level",previousLevel).putLong("expires_at",previousExpiry).commit();

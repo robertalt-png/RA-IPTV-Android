@@ -15,6 +15,11 @@ public final class SiteEndpoints {
         return "sunnyiptv.com".equals(host) || "nenotv.com".equals(host);
     }
 
+    public static String accountDeletionUrl(String language) {
+        return WEBSITE + "/delete-account/#" + ("nl".equals(language) ? "nl"
+                : "de".equals(language) ? "de" : "en");
+    }
+
     public static boolean isDemoUrl(String url) {
         return DEMO_URL.equals(url)
                 || "https://sunnyiptv.com/nenotv-demo.m3u".equals(url)

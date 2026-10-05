@@ -101,6 +101,11 @@ public class AccountActivity extends Activity {
         privacy.setOnClickListener(v->openWeb(SiteEndpoints.privacyUrl(SettingsStore.language(this))));
         addButton(privacy);
 
+        Button deletion=b("nl".equals(language)?"Account verwijderen aanvragen":"de".equals(language)?"Kontolöschung beantragen":"Request account deletion");
+        deletion.setTag("account_deletion");
+        deletion.setOnClickListener(v->openWeb(SiteEndpoints.accountDeletionUrl(SettingsStore.language(this))));
+        addButton(deletion);
+
         sec(T("request_trial"));
         email=input(T("email_address"),android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
         email.setText(ent.accountEmail());
