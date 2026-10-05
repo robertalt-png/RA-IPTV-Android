@@ -63,15 +63,17 @@ public final class PairingActivity extends Activity {
     }
 
     boolean firstRun(){return getIntent().getBooleanExtra("first_run",false);}
+    boolean mandatoryLogin(){return getIntent().getBooleanExtra("mandatory_login",false);}
+    void finishSetup(){if(mandatoryLogin())startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));else setResult(RESULT_OK);finish();}
     void localSetup(){
-        if(localSetupLaunched||destroyed||com.nenotv.player.storage.FamilyStore.active(this))return;
+        if(localSetupLaunched||destroyed||!new com.nenotv.player.storage.AccountLinkStore(this).linked()||com.nenotv.player.storage.FamilyStore.active(this))return;
         localSetupLaunched=true;handler.removeCallbacks(poll);
         startActivityForResult(new Intent(this,ProfileActivity.class),42);
     }
 
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);
-        if(request==42){localSetupLaunched=false;if(result==RESULT_OK&&new com.nenotv.player.storage.SecureProfileStore(this).exists()){setResult(RESULT_OK);finish();}else if(resumed&&session!=null)handler.post(poll);}
+        if(request==42){localSetupLaunched=false;if(result==RESULT_OK&&new com.nenotv.player.storage.SecureProfileStore(this).exists()){finishSetup();}else if(complete){retry.setVisibility(android.view.View.VISIBLE);retry.setText(text("profile_required"));retry.setOnClickListener(v->localSetup());}else if(resumed&&session!=null)handler.post(poll);}
     }
 
     @Override public void onCreate(Bundle saved){
@@ -87,7 +89,7 @@ public final class PairingActivity extends Activity {
         open.setEnabled(false);open.setOnClickListener(v->openPairing());LinearLayout.LayoutParams linkParams=new LinearLayout.LayoutParams(-1,-2);linkParams.topMargin=dp(16);linkParams.bottomMargin=dp(8);box.addView(open,linkParams);
         status=label(text("checking_status"),16);status.setPadding(0,dp(12),0,dp(12));status.setAccessibilityLiveRegion(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE);box.addView(status,new LinearLayout.LayoutParams(-1,-2));
         retry=button("pair_new_code");retry.setOnClickListener(v->startPairing());box.addView(retry,new LinearLayout.LayoutParams(-1,-2));
-        Button close=button("close");if(firstRun()){String lang=com.nenotv.player.storage.SettingsStore.language(this);close.setText("nl".equals(lang)?"Begin zonder account":"de".equals(lang)?"Ohne Konto starten":"Start without an account");close.setTextSize(14);close.setTag("start_without_account");close.setOnClickListener(v->localSetup());}else close.setOnClickListener(v->finish());box.addView(close,new LinearLayout.LayoutParams(-1,-2));
+        Button close=button("close");close.setOnClickListener(v->{if(mandatoryLogin())finishAffinity();else finish();});box.addView(close,new LinearLayout.LayoutParams(-1,-2));
         setContentView(scroll);ScreenInsets.browsing(this);UiText.applyDirection(this);
     }
 
@@ -148,7 +150,7 @@ public final class PairingActivity extends Activity {
                 runOnUiThread(()->{
                     if(destroyed||current!=generation)return;
                     busy=false;retry.setEnabled(true);
-                    if("complete".equals(state)){complete=true;clearCode();status.setText(text("pair_complete"));retry.setVisibility(android.view.View.GONE);ProModuleInstaller.syncEntitlement(this);if(firstRun()){if(new com.nenotv.player.storage.SecureProfileStore(this).exists()){setResult(RESULT_OK);finish();}else localSetup();}else if(getIntent().getBooleanExtra("setup",false)){setResult(RESULT_OK);finish();}else if(!new com.nenotv.player.storage.SecureProfileStore(this).exists()){startActivity(new Intent(this,ProfileActivity.class));finish();}}
+                    if("complete".equals(state)){complete=true;clearCode();status.setText(text("pair_complete"));retry.setVisibility(android.view.View.GONE);ProModuleInstaller.syncEntitlement(this);if(firstRun()){if(new com.nenotv.player.storage.SecureProfileStore(this).exists()){finishSetup();}else localSetup();}else if(getIntent().getBooleanExtra("setup",false)){setResult(RESULT_OK);finish();}else if(!new com.nenotv.player.storage.SecureProfileStore(this).exists()){startActivity(new Intent(this,ProfileActivity.class));finish();}}
                     else if("expired".equals(state)||"cancelled".equals(state))expire();
                     else{status.setText(text("pair_waiting"));schedule(active);}
                 });

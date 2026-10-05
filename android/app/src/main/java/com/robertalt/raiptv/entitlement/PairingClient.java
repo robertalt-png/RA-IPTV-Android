@@ -36,7 +36,7 @@ public final class PairingClient {
     }
 
     public Session start()throws Exception{
-        JSONObject body=new JSONObject().put("device_name",Build.MANUFACTURER+" "+Build.MODEL).put("pairing_version",2).put("lang",com.nenotv.player.storage.SettingsStore.language(context));
+        JSONObject body=new JSONObject().put("device_name",Build.MANUFACTURER+" "+Build.MODEL).put("pairing_version",3).put("lang",com.nenotv.player.storage.SettingsStore.language(context));
         return new Session(client.request("pairing/start",body));
     }
     public String status(Session session)throws Exception{
@@ -46,13 +46,22 @@ public final class PairingClient {
         if(!java.util.Arrays.asList("pending","complete","expired","cancelled").contains(state))throw new IOException("Invalid pairing state");
         if("complete".equals(state)){
             JSONObject entitlement=response.optJSONObject("entitlement");
-            if(entitlement==null||!java.util.Arrays.asList("pro","pro_trial","trial").contains(entitlement.optString("level"))
-                ||!java.util.Arrays.asList("active","trial_active").contains(entitlement.optString("status")))throw new IOException("Missing active pairing entitlement");
+            JSONObject link=response.optJSONObject("account_link");
+            boolean free=entitlement!=null&&"free".equals(entitlement.optString("level"))&&"active".equals(entitlement.optString("status"))
+                &&entitlement.optString("account_scope","").isEmpty()&&link!=null&&"free".equals(link.optString("kind"))&&"active".equals(link.optString("status"));
+            boolean paid=entitlement!=null&&java.util.Arrays.asList("pro","pro_trial","trial").contains(entitlement.optString("level"))
+                &&java.util.Arrays.asList("active","trial_active").contains(entitlement.optString("status"));
+            if((!free&&!paid)||!com.nenotv.player.storage.AccountLinkStore.valid(link)||paid&&!"paid".equals(link.optString("kind")))throw new IOException("Missing active pairing entitlement");
             client.applyEntitlement(response);
+            new com.nenotv.player.storage.AccountLinkStore(context).apply(link);
         }
         return state;
     }
     public void cancel(Session session)throws Exception{
         if(!session.expired())client.request("pairing/cancel",session.payload());
+    }
+    public void checkAccount()throws Exception{
+        JSONObject response=client.request("account/status",new JSONObject());
+        new com.nenotv.player.storage.AccountLinkStore(context).apply(response.optJSONObject("account_link"));
     }
 }

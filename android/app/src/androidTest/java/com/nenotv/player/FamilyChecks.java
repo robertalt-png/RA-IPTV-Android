@@ -11,7 +11,7 @@ import java.util.*;
 public final class FamilyChecks {
     private static void check(boolean ok,String message){if(!ok)throw new AssertionError(message);}
     private static MediaEntry media(String id,String name){MediaEntry e=new MediaEntry();e.id=id;e.name=name;e.type="vod";e.url="https://example.invalid/"+id+".mp4";e.candidates.add(e.url);return e;}
-    static void restore(SharedPreferences prefs,Map<String,?> values){
+    public static void restore(SharedPreferences prefs,Map<String,?> values){
         SharedPreferences.Editor edit=prefs.edit().clear();
         for(Map.Entry<String,?> row:values.entrySet()){
             Object v=row.getValue();String k=row.getKey();

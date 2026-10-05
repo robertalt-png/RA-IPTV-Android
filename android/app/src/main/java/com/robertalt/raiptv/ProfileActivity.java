@@ -41,7 +41,7 @@ public class ProfileActivity extends Activity {
     }
 
     @Override public void onCreate(Bundle b){
-        super.onCreate(b);if(FamilyStore.active(this)){FamilyUi.blocked(this);finish();return;} setContentView(R.layout.activity_profile); UiText.applyDirection(this); store=new SecureProfileStore(this); sources=new SourceStore(this); sourceId=getIntent().getStringExtra("source_id"); if(sourceId==null)sourceId=""; newSource=getIntent().getBooleanExtra("new_source",false);
+        super.onCreate(b);if(FamilyStore.active(this)){FamilyUi.blocked(this);finish();return;}if(!new com.nenotv.player.storage.AccountLinkStore(this).recent()){startActivity(new Intent(this,AccountCheckActivity.class));finish();return;} setContentView(R.layout.activity_profile); UiText.applyDirection(this); store=new SecureProfileStore(this); sources=new SourceStore(this); sourceId=getIntent().getStringExtra("source_id"); if(sourceId==null)sourceId=""; newSource=getIntent().getBooleanExtra("new_source",false);
         ScreenInsets.browsing(this);
         name=findViewById(R.id.nameField); server=findViewById(R.id.serverField); user=findViewById(R.id.userField); pass=findViewById(R.id.passField);
         m3u=findViewById(R.id.m3uField); epg=findViewById(R.id.epgField); xtream=findViewById(R.id.xtreamRadio); m3uRadio=findViewById(R.id.m3uRadio);
@@ -65,7 +65,7 @@ public class ProfileActivity extends Activity {
 
     void applyLanguage(){
         ((TextView)findViewById(R.id.profileTitle)).setText("SunnyIPTV");
-        ((TextView)findViewById(R.id.profileIntro)).setText(T("Start without an account","Begin zonder account","Ohne Konto starten"));
+        ((TextView)findViewById(R.id.profileIntro)).setText(T("Choose your TV source","Kies uw tv-bron","TV-Quelle waehlen"));
         xtream.setText(T("Own provider · Xtream Codes","Eigen aanbieder · Xtream Codes","Eigener Anbieter · Xtream Codes"));
         m3uRadio.setText(T("Own playlist · M3U","Eigen afspeellijst · M3U","Eigene Wiedergabeliste · M3U"));
         String demo=BuildConfig.NENOTV_DEMO_M3U_URL;
@@ -104,7 +104,7 @@ public class ProfileActivity extends Activity {
         findViewById(R.id.nenoOffer).setVisibility(isDemo?View.VISIBLE:View.GONE);
         findViewById(R.id.advancedButton).setVisibility(isDemo?View.GONE:View.VISIBLE);
         ((TextView)findViewById(R.id.nenoOffer)).setText(T("Europe by Satellite · Europe by Satellite +\nOpen films: Sintel, Spring, Tears of Steel and more","Europe by Satellite · Europe by Satellite +\nOpen films: Sintel, Spring, Tears of Steel en meer","Europe by Satellite · Europe by Satellite +\nOpen Movies: Sintel, Spring, Tears of Steel und mehr"));
-        ((Button)findViewById(R.id.saveButton)).setText(isDemo?T("Start watching","Start kijken","Jetzt ansehen"):T("Start without an account","Begin zonder account","Ohne Konto starten"));
+        ((Button)findViewById(R.id.saveButton)).setText(isDemo?T("Start watching","Start kijken","Jetzt ansehen"):T("Connect","Verbinden","Verbinden"));
         if(isDemo)advancedFields.setVisibility(View.GONE);
     }
 

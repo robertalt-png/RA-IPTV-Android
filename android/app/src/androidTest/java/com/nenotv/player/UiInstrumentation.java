@@ -210,6 +210,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
         try{
             for(String name:previous.keySet())c.getSharedPreferences(name,Context.MODE_PRIVATE).edit().clear().commit();
             c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE).edit().putString("level","FREE").commit();
+            verifiedAccount();
             ProfileActivity.localConnection=(p,l)->{check(p.type==Profile.Type.M3U,"Wrong local source");connections.incrementAndGet();};
             ProfileActivity a=(ProfileActivity)startActivitySync(new Intent(c,ProfileActivity.class).putExtra("website_first",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             try{
@@ -356,6 +357,10 @@ public final class UiInstrumentation extends ImportInstrumentation {
                 if(previousProfile!=null)savedProfiles.save(previousProfile);
             }
             Intent first=MainActivity.firstRunIntent(getTargetContext());
+            new com.nenotv.player.storage.AccountLinkStore(getTargetContext()).clear();
+            android.app.Instrumentation.ActivityMonitor loginMonitor=addMonitor(PairingActivity.class.getName(),null,false);
+            MainActivity blocked=(MainActivity)startActivitySync(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            try{android.app.Activity login=waitForMonitorWithTimeout(loginMonitor,5000);check(login instanceof PairingActivity&&blocked.isFinishing(),"Main screen bypassed required login");if(login!=null)runOnMainSync(login::finish);}finally{removeMonitor(loginMonitor);runOnMainSync(blocked::finish);verifiedAccount();}
             check(first.getComponent()!=null&&first.getComponent().getClassName().equals(PairingActivity.class.getName())&&first.getBooleanExtra("first_run",false),"First start has an intermediate source screen");
             int beforeFirst=opened.get();
             PairingActivity firstScreen=(PairingActivity)startActivitySync(first.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
@@ -364,13 +369,10 @@ public final class UiInstrumentation extends ImportInstrumentation {
                 Thread.sleep(600);waitForIdleSync();
                 runOnMainSync(()->{
                     Button skip=firstScreen.findViewById(android.R.id.content).findViewWithTag("start_without_account");
-                    check(skip!=null&&skip.getTextSize()<firstScreen.open.getTextSize(),"Secondary account-free choice missing");
+                    check(skip==null,"Mandatory account can be bypassed");
                     check(opened.get()==beforeFirst,"First start automatically opened browser");
-                    skip.performClick();skip.performClick();
                 });
-                android.app.Activity local=waitForMonitorWithTimeout(sourceMonitor,5000);
-                check(local instanceof ProfileActivity&&sourceMonitor.getHits()==1,"Account-free choice did not open exactly one source screen");
-                if(local!=null)runOnMainSync(local::finish);
+                check(sourceMonitor.getHits()==0,"First start opened source screen before approval");
             }finally{removeMonitor(sourceMonitor);runOnMainSync(firstScreen::finish);}
             for(String language:new String[]{"nl","en","de"}){
                 SettingsStore.setPrimaryLanguage(getTargetContext(),language);state.set("pending");
@@ -581,7 +583,8 @@ public final class UiInstrumentation extends ImportInstrumentation {
             new SecureProfileStore(c).save(profile());
         }
     }
-    @Override public void onStart(){Bundle result=new Bundle();String phase=args.getString("phase","ui");if(!Arrays.asList("ui","resume","pro","update","xtream","onboarding","catalog","family","account_free").contains(phase)){super.onStart();return;}try{if("account_free".equals(phase)){accountFreeSetup(result);finish(Activity.RESULT_OK,result);}else if("family".equals(phase)){family(result);finish(Activity.RESULT_OK,result);}else if("catalog".equals(phase)){com.nenotv.player.entitlement.CatalogPackageChecks.run(getTargetContext(),getContext());result.putString("NENOTV_CATALOG_PACKAGE","passed");finish(Activity.RESULT_OK,result);}else if("onboarding".equals(phase)){onboarding(result);finish(Activity.RESULT_OK,result);}else if("xtream".equals(phase)){XtreamImportChecks.run(getTargetContext());xtreamSharedDownloads();result.putString("NENOTV_XTREAM_IMPORT","passed");finish(Activity.RESULT_OK,result);}else if("update".equals(phase)){UpdateAccessChecks.run(getTargetContext());result.putString("NENOTV_UPDATE_ACCESS","passed");finish(Activity.RESULT_OK,result);}else if("resume".equals(phase))resume(result);else if("pro".equals(phase)){Context c=getTargetContext();SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();DemoPolicy.startOrKeep(c,System.currentTimeMillis());new SecureProfileStore(c).save(profile());pro(result);}else core(result);}catch(Throwable failure){result.putString("NENOTV_UI_TESTS","failed: "+failure.getClass().getSimpleName()+": "+failure.getMessage());finish(Activity.RESULT_CANCELED,result);}}
+    void verifiedAccount()throws Exception{new com.nenotv.player.storage.AccountLinkStore(getTargetContext()).apply(new org.json.JSONObject().put("status","active").put("kind","free").put("account_id",String.join("",Collections.nCopies(64,"a"))));}
+    @Override public void onStart(){Bundle result=new Bundle();String phase=args.getString("phase","ui");if(!Arrays.asList("ui","resume","pro","update","xtream","onboarding","catalog","family","account_free").contains(phase)){super.onStart();return;}android.content.SharedPreferences accountPrefs=getTargetContext().getSharedPreferences("nenotv_account_link_v1",Context.MODE_PRIVATE);Map<String,?> oldAccount=new HashMap<>(accountPrefs.getAll());try{verifiedAccount();if("account_free".equals(phase)){accountFreeSetup(result);finish(Activity.RESULT_OK,result);}else if("family".equals(phase)){family(result);finish(Activity.RESULT_OK,result);}else if("catalog".equals(phase)){com.nenotv.player.entitlement.CatalogPackageChecks.run(getTargetContext(),getContext());result.putString("NENOTV_CATALOG_PACKAGE","passed");finish(Activity.RESULT_OK,result);}else if("onboarding".equals(phase)){onboarding(result);finish(Activity.RESULT_OK,result);}else if("xtream".equals(phase)){XtreamImportChecks.run(getTargetContext());xtreamSharedDownloads();result.putString("NENOTV_XTREAM_IMPORT","passed");finish(Activity.RESULT_OK,result);}else if("update".equals(phase)){UpdateAccessChecks.run(getTargetContext());result.putString("NENOTV_UPDATE_ACCESS","passed");finish(Activity.RESULT_OK,result);}else if("resume".equals(phase))resume(result);else if("pro".equals(phase)){Context c=getTargetContext();SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();DemoPolicy.startOrKeep(c,System.currentTimeMillis());new SecureProfileStore(c).save(profile());pro(result);}else core(result);}catch(Throwable failure){result.putString("NENOTV_UI_TESTS","failed: "+failure.getClass().getSimpleName()+": "+failure.getMessage());finish(Activity.RESULT_CANCELED,result);}finally{FamilyChecks.restore(accountPrefs,oldAccount);}}
     static final class EpgFixture implements AutoCloseable{
         final ServerSocket socket;final Thread worker;final byte[] body;
         EpgFixture()throws Exception{
