@@ -27,9 +27,9 @@ public class ProNetworkActivity extends Activity {
         LinearLayout h=new LinearLayout(this);h.setGravity(Gravity.CENTER_VERTICAL);
         TextView title=t(L("Network & Privacy","Netwerk & Privacy","Netzwerk & Datenschutz"),24);title.setTypeface(null,Typeface.BOLD);h.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button close=b(L("Close","Sluiten","Schließen"));close.setOnClickListener(v->finish());h.addView(close);box.addView(h);
-        TextView help=t(L("Check whether Android routes NenoTV through a VPN and measure connection latency. Credentials are never included in this test.",
-                "Controleer of Android NenoTV via een VPN routeert en meet de verbindingslatentie. Inloggegevens worden nooit in deze test opgenomen.",
-                "Prüfe, ob Android NenoTV über ein VPN leitet, und miss die Verbindungslatenz. Zugangsdaten werden nie in diesen Test aufgenommen."),13);
+        TextView help=t(L("Check whether Android routes SunnyIPTV through a VPN and measure connection latency. Credentials are never included in this test.",
+                "Controleer of Android SunnyIPTV via een VPN routeert en meet de verbindingslatentie. Inloggegevens worden nooit in deze test opgenomen.",
+                "Prüfe, ob Android SunnyIPTV über ein VPN leitet, und miss die Verbindungslatenz. Zugangsdaten werden nie in diesen Test aufgenommen."),13);
         help.setTextColor(0xFFA7AFBC);help.setPadding(0,dp(6),0,dp(18));box.addView(help);
         vpnState=t("",18);vpnState.setPadding(dp(14),dp(14),dp(14),dp(14));vpnState.setBackgroundColor(0xFF151A21);box.addView(vpnState,new LinearLayout.LayoutParams(-1,-2));
         latencyState=t("",14);latencyState.setPadding(dp(14),dp(14),dp(14),dp(14));box.addView(latencyState,new LinearLayout.LayoutParams(-1,-2));
@@ -53,7 +53,7 @@ public class ProNetworkActivity extends Activity {
         button.setEnabled(false);latencyState.setText(L("Testing…","Testen…","Test läuft…"));
         exec.execute(()->{
             StringBuilder out=new StringBuilder();
-            out.append(testUrl("https://nenotv.com","NenoTV"));
+            out.append(testUrl("https://sunnyiptv.com","SunnyIPTV"));
             try{
                 Profile p=new SecureProfileStore(this).load();
                 String raw=p.type==Profile.Type.XTREAM?p.server:p.m3uUrl;
@@ -69,7 +69,7 @@ public class ProNetworkActivity extends Activity {
     String testUrl(String url,String label){
         long start=System.nanoTime();
         try{
-            HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();c.setConnectTimeout(5000);c.setReadTimeout(5000);c.setInstanceFollowRedirects(false);c.setRequestMethod("HEAD");c.setRequestProperty("User-Agent","NenoTV-Network-Test");
+            HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();c.setConnectTimeout(5000);c.setReadTimeout(5000);c.setInstanceFollowRedirects(false);c.setRequestMethod("HEAD");c.setRequestProperty("User-Agent","SunnyIPTV-Network-Test");
             int code=c.getResponseCode();long ms=TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start);c.disconnect();
             return label+": "+ms+" ms · HTTP "+code;
         }catch(Exception e){return label+": "+L("unreachable","onbereikbaar","nicht erreichbar");}

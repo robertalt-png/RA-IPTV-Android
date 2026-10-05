@@ -14,7 +14,7 @@ import java.util.regex.*;
  * pass through the relay. It does not transcode codecs.
  */
 public final class CastRelayServer implements Closeable {
-    private static final String UA="Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 NenoTV/0.9.3";
+    private static final String UA="Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 SunnyIPTV/0.9.3";
     private final ServerSocket server;
     private final ExecutorService workers=Executors.newCachedThreadPool(r->{Thread t=new Thread(r,"nenotv-cast-relay");t.setDaemon(true);return t;});
     private final Thread acceptThread;

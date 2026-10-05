@@ -8,7 +8,7 @@ public final class XmltvGuide {
     private XmltvGuide(){}
     public static String lookup(String url,String channelId,String channelName,int limit)throws Exception{List<EpgEntry>x=lookupEntries(url,channelId,channelName,limit,Locale.getDefault().getLanguage());if(x.isEmpty())return "No EPG available.";StringBuilder s=new StringBuilder();for(EpgEntry e:x){if(s.length()>0)s.append("\n\n");String r=e.range();if(!r.isEmpty())s.append(r).append(" · ");s.append(e.title);if(e.description!=null&&!e.description.isEmpty())s.append("\n").append(e.description);}return s.toString();}
     public static List<EpgEntry> lookupEntries(String url,String channelId,String channelName,int limit,String preferredLanguage)throws Exception{
-        HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();c.setConnectTimeout(12000);c.setReadTimeout(30000);c.setRequestProperty("User-Agent","NenoTV-Android/0.8.0");InputStream in=c.getInputStream();String enc=c.getContentEncoding();if((enc!=null&&enc.toLowerCase(Locale.ROOT).contains("gzip"))||url.toLowerCase(Locale.ROOT).endsWith(".gz"))in=new GZIPInputStream(in);
+        HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();c.setConnectTimeout(12000);c.setReadTimeout(30000);c.setRequestProperty("User-Agent","SunnyIPTV-Android/0.8.0");InputStream in=c.getInputStream();String enc=c.getContentEncoding();if((enc!=null&&enc.toLowerCase(Locale.ROOT).contains("gzip"))||url.toLowerCase(Locale.ROOT).endsWith(".gz"))in=new GZIPInputStream(in);
         Handler h=new Handler(channelId,channelName,limit,preferredLanguage);SAXParserFactory.newInstance().newSAXParser().parse(in,h);in.close();c.disconnect();return h.rows;
     }
     static final class Handler extends DefaultHandler{

@@ -218,7 +218,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
         PairingActivity.Factory original=PairingActivity.factory;
         PairingActivity.BrowserOpener previousOpener=PairingActivity.browserOpener;
         java.util.concurrent.atomic.AtomicInteger opened=new java.util.concurrent.atomic.AtomicInteger();
-        PairingActivity.browserOpener=(activity,url)->{check("https://nenotv.com/nenotv-pair/?code=AB23&lang=nl".equals(url),"First-open routed to wrong website");opened.incrementAndGet();};
+        PairingActivity.browserOpener=(activity,url)->{check("https://sunnyiptv.com/nenotv-pair/?code=AB23&lang=nl".equals(url),"First-open routed to wrong website");opened.incrementAndGet();};
         java.util.concurrent.atomic.AtomicReference<String> state=new java.util.concurrent.atomic.AtomicReference<>("pending");
         PairingActivity.factory=context->new PairingActivity.Access(){
             public com.nenotv.player.entitlement.PairingClient.Session start()throws Exception{return com.nenotv.player.entitlement.PairingClientChecks.fixtureSession();}
@@ -258,7 +258,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
                     });
                     int[] pixels=new int[512*512];runOnMainSync(()->a.bitmap.getPixels(pixels,0,512,0,0,512,512));
                     com.google.zxing.BinaryBitmap qr=new com.google.zxing.BinaryBitmap(new com.google.zxing.common.HybridBinarizer(new com.google.zxing.RGBLuminanceSource(512,512,pixels)));
-                    check("https://nenotv.com/nenotv-pair/?code=AB23&lang=nl".equals(new com.google.zxing.MultiFormatReader().decode(qr).getText()),"QR does not encode pairing URL");
+                    check("https://sunnyiptv.com/nenotv-pair/?code=AB23&lang=nl".equals(new com.google.zxing.MultiFormatReader().decode(qr).getText()),"QR does not encode pairing URL");
                     snapshot("pairing-"+language);
                     if("nl".equals(language)){
                         runOnMainSync(()->{a.expire();check(a.session==null&&!a.open.isEnabled()&&a.qr.getVisibility()==View.GONE,"Expired QR remained active");a.startPairing();});

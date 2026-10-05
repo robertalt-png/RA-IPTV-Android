@@ -16,7 +16,7 @@ public final class ProGate {
             String language=com.nenotv.player.storage.SettingsStore.language(a);
             boolean nl="nl".equals(language),de="de".equals(language);
             new AlertDialog.Builder(a)
-                .setTitle(nl?"NenoTV werkt tijdelijk als Basic":de?"NenoTV ist vorübergehend Basic":"NenoTV is temporarily Basic")
+                .setTitle(nl?"SunnyIPTV werkt tijdelijk als Basic":de?"SunnyIPTV ist vorübergehend Basic":"SunnyIPTV is temporarily Basic")
                 .setMessage(nl?"De updatetermijn van 60 dagen is verstreken. Installeer de update om je eerdere toegang automatisch te herstellen, zolang je abonnement of testerrechten nog geldig zijn.":de?"Die 60-Tage-Frist ist abgelaufen. Installiere das Update, um deinen bisherigen Zugang automatisch wiederherzustellen, sofern dein Abonnement oder deine Testerrechte noch gültig sind.":"The 60-day update deadline has passed. Install the update to restore your previous access automatically, provided your subscription or tester rights are still valid.")
                 .setNegativeButton(nl?"Verder kijken":de?"Weitersehen":"Keep watching",null)
                 .setPositiveButton(nl?"Bijwerken":de?"Aktualisieren":"Update",(dialog,which)->PlayUpdateNotifier.openPlay(a))

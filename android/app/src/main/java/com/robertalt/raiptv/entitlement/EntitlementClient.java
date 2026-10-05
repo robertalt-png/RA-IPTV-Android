@@ -15,7 +15,7 @@ import java.nio.charset.StandardCharsets;
 public final class EntitlementClient {
     private final EntitlementStore store;
     private final String base;
-    public EntitlementClient(Context c){this(c,"https://nenotv.com");}
+    public EntitlementClient(Context c){this(c,"https://sunnyiptv.com");}
     EntitlementClient(Context c,String base){store=new EntitlementStore(c);this.base=base;}
 
     public JSONObject refresh() throws Exception {
@@ -85,7 +85,7 @@ public final class EntitlementClient {
     public static final class ServiceException extends IOException {
         public final String code;
         ServiceException(String code,int status){
-            super("NenoTV account request failed (HTTP "+status+")");
+            super("SunnyIPTV account request failed (HTTP "+status+")");
             this.code=code.matches("[a-z_]{1,64}")?code:"account_unavailable";
         }
     }
@@ -100,7 +100,7 @@ public final class EntitlementClient {
         c.setDoOutput(true);
         c.setRequestProperty("Content-Type","application/json; charset=utf-8");
         c.setRequestProperty("Accept","application/json");
-        c.setRequestProperty("User-Agent","NenoTV/"+BuildConfig.VERSION_NAME+" Android");
+        c.setRequestProperty("User-Agent","SunnyIPTV/"+BuildConfig.VERSION_NAME+" Android");
         byte[] bytes=body.toString().getBytes(StandardCharsets.UTF_8);
         c.setFixedLengthStreamingMode(bytes.length);
         try(OutputStream os=c.getOutputStream()){os.write(bytes);}

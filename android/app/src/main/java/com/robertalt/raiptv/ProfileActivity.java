@@ -12,13 +12,13 @@ public class ProfileActivity extends Activity {
     long setupBackgroundUntil;
     final Handler setupHandler=new Handler(Looper.getMainLooper());
     final Runnable sourcePoll=()->checkWebsiteSource();
-    String accountUrl(){String l=SettingsStore.language(this);return "https://nenotv.com"+("nl".equals(l)?"/language/nl/mijn-account/":("de".equals(l)?"/language/de/mein-konto/":"/my-account/"))+"?nenotv_setup=1#nenotv-sources";}
-    void openWebsite(){try{startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(accountUrl())));}catch(Exception ignored){status.setText(T("Open My NenoTV on your phone or computer.","Open Mijn NenoTV op uw telefoon of computer.","Öffne Mein NenoTV auf deinem Telefon oder Computer."));}}
+    String accountUrl(){String l=SettingsStore.language(this);return "https://sunnyiptv.com"+("nl".equals(l)?"/language/nl/mijn-account/":("de".equals(l)?"/language/de/mein-konto/":"/my-account/"))+"?nenotv_setup=1#nenotv-sources";}
+    void openWebsite(){try{startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(accountUrl())));}catch(Exception ignored){status.setText(T("Open My SunnyIPTV on your phone or computer.","Open Mijn SunnyIPTV op uw telefoon of computer.","Öffne Mein SunnyIPTV auf deinem Telefon oder Computer."));}}
     void startAccountSetup(){if(pairLaunched)return;pairLaunched=true;startActivityForResult(new android.content.Intent(this,PairingActivity.class).putExtra("setup",true),31);}
     void chooseOffer(){
         if(store.exists())return;
         new AlertDialog.Builder(this).setTitle(T("Choose your TV source","Kies uw tv-aanbod","TV-Angebot auswählen"))
-            .setMessage(T("My NenoTV prepares your media package. Enter your provider here or on the website.","Mijn NenoTV bereidt uw mediapakket voor. Vul uw aanbieder hier of op de website in.","Mein NenoTV bereitet dein Medienpaket vor. Gib den Anbieter hier oder auf der Website ein."))
+            .setMessage(T("My SunnyIPTV prepares your media package. Enter your provider here or on the website.","Mijn SunnyIPTV bereidt uw mediapakket voor. Vul uw aanbieder hier of op de website in.","Mein SunnyIPTV bereitet dein Medienpaket vor. Gib den Anbieter hier oder auf der Website ein."))
             .setPositiveButton(T("Website","Website","Website"),(d,w)->openWebsite())
             .setNegativeButton(T("This device","Dit apparaat","Dieses Gerät"),(d,w)->{xtream.setChecked(true);updateMode();}).show();
     }
@@ -44,7 +44,7 @@ public class ProfileActivity extends Activity {
         m3uFields=findViewById(R.id.m3uFields); advancedFields=findViewById(R.id.advancedFields);
         websiteSetup=!store.exists();websiteFirst=getIntent().getBooleanExtra("website_first",false);
         applyLanguage(); load(); updateMode();
-        Button website=new Button(this);website.setText(T("Set up via My NenoTV","Instellen via Mijn NenoTV","Über Mein NenoTV einrichten"));website.setAllCaps(false);website.setTextColor(0xFF07090D);website.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));
+        Button website=new Button(this);website.setText(T("Set up via My SunnyIPTV","Instellen via Mijn SunnyIPTV","Über Mein SunnyIPTV einrichten"));website.setAllCaps(false);website.setTextColor(0xFF07090D);website.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));
         website.setOnClickListener(v->{websiteSetup=true;if(new EntitlementStore(this).isPro())openWebsite();else startAccountSetup();});
         LinearLayout container=(LinearLayout)findViewById(R.id.profileIntro).getParent();container.addView(website,2);
 
@@ -63,7 +63,7 @@ public class ProfileActivity extends Activity {
     @Override protected void onActivityResult(int request,int result,android.content.Intent data){super.onActivityResult(request,result,data);if(request==31){pairLaunched=false;if(result==RESULT_OK){chooseOffer();setupHandler.post(sourcePoll);}}}
 
     void applyLanguage(){
-        ((TextView)findViewById(R.id.profileTitle)).setText("NenoTV");
+        ((TextView)findViewById(R.id.profileTitle)).setText("SunnyIPTV");
         ((TextView)findViewById(R.id.profileIntro)).setText(T("Choose your TV source","Kies uw tv-aanbod","TV-Angebot auswählen"));
         xtream.setText(T("Own provider · Xtream Codes","Eigen aanbieder · Xtream Codes","Eigener Anbieter · Xtream Codes"));
         m3uRadio.setText(T("Own playlist · M3U","Eigen afspeellijst · M3U","Eigene Wiedergabeliste · M3U"));
@@ -71,10 +71,10 @@ public class ProfileActivity extends Activity {
         boolean configured=demo!=null&&!demo.trim().isEmpty();
         boolean expired=DemoPolicy.expired(this);
         demoRadio.setText(!configured
-            ?T("NenoTV TV & films · unavailable","NenoTV tv & films · niet beschikbaar","NenoTV TV & Filme · nicht verfügbar")
+            ?T("SunnyIPTV TV & films · unavailable","SunnyIPTV tv & films · niet beschikbaar","SunnyIPTV TV & Filme · nicht verfügbar")
             :expired
                 ?T("30-day demo ended · add your own TV source","30 dagen demo afgelopen · voeg uw eigen TV-bron toe","30-Tage-Demo beendet · eigene TV-Quelle hinzufügen")
-                :T("NenoTV TV & films · 30 days free","NenoTV tv & films · 30 dagen gratis","NenoTV TV & Filme · 30 Tage kostenlos"));
+                :T("SunnyIPTV TV & films · 30 days free","SunnyIPTV tv & films · 30 dagen gratis","SunnyIPTV TV & Filme · 30 Tage kostenlos"));
         demoRadio.setEnabled(configured&&!expired);
         server.setHint(T("Server address","Serveradres","Serveradresse")); user.setHint(T("Username","Gebruikersnaam","Benutzername"));
         pass.setHint(T("Password","Wachtwoord","Passwort")); m3u.setHint("M3U-URL");
@@ -110,7 +110,7 @@ public class ProfileActivity extends Activity {
     Profile collect(){
         Profile old=editingProfile!=null?editingProfile:(store.exists()?store.load():new Profile()); Profile p=new Profile();
         if(demoRadio.isChecked()){
-            p.type=Profile.Type.M3U; p.name="NenoTV Demo"; p.m3uUrl=BuildConfig.NENOTV_DEMO_M3U_URL; p.epgUrl="";
+            p.type=Profile.Type.M3U; p.name="SunnyIPTV Demo"; p.m3uUrl=BuildConfig.NENOTV_DEMO_M3U_URL; p.epgUrl="";
         }else if(m3uRadio.isChecked()){
             p.type=Profile.Type.M3U; p.name=valueOr(name,"M3U"); p.m3uUrl=m3u.getText().toString().trim(); p.epgUrl=epg.getText().toString().trim();
         }else{
@@ -131,8 +131,8 @@ public class ProfileActivity extends Activity {
                 android.net.Uri address=android.net.Uri.parse(chosen.type==Profile.Type.XTREAM?chosen.server:chosen.m3uUrl);
                 if(!java.util.Arrays.asList("https","http").contains(address.getScheme())||address.getHost()==null||(chosen.type==Profile.Type.XTREAM&&(chosen.username.trim().isEmpty()||chosen.password.isEmpty()))){status.setText(T("Enter a valid provider URL and login details.","Vul een geldige aanbieder-URL en inloggegevens in.","Gib eine gültige Anbieter-URL und Zugangsdaten ein."));return;}
             }
-            new AlertDialog.Builder(this).setTitle(T("Prepare via My NenoTV","Voorbereiden via Mijn NenoTV","Über Mein NenoTV vorbereiten"))
-                .setMessage(T("Allow My NenoTV to retrieve your list using these details, store them encrypted and prepare the media package for your linked devices?","Mag Mijn NenoTV met deze gegevens uw lijst ophalen, versleuteld opslaan en het mediapakket voor uw gekoppelde apparaten voorbereiden?","Darf Mein NenoTV mit diesen Daten deine Liste abrufen, verschlüsselt speichern und das Medienpaket für deine verbundenen Geräte vorbereiten?"))
+            new AlertDialog.Builder(this).setTitle(T("Prepare via My SunnyIPTV","Voorbereiden via Mijn SunnyIPTV","Über Mein SunnyIPTV vorbereiten"))
+                .setMessage(T("Allow My SunnyIPTV to retrieve your list using these details, store them encrypted and prepare the media package for your linked devices?","Mag Mijn SunnyIPTV met deze gegevens uw lijst ophalen, versleuteld opslaan en het mediapakket voor uw gekoppelde apparaten voorbereiden?","Darf Mein SunnyIPTV mit diesen Daten deine Liste abrufen, verschlüsselt speichern und das Medienpaket für deine verbundenen Geräte vorbereiten?"))
                 .setNegativeButton(android.R.string.cancel,null).setPositiveButton(T("Agree and prepare","Akkoord en voorbereiden","Zustimmen und vorbereiten"),(d,w)->submitWebsiteSource(chosen,demoRadio.isChecked())).show();return;
         }
 
@@ -140,9 +140,9 @@ public class ProfileActivity extends Activity {
     void submitWebsiteSource(Profile profile,boolean demo){
         if(connecting)return;
         if(demo&&DemoPolicy.expired(this)){status.setText(T("Demo ended","Demo afgelopen","Demo beendet"));return;}
-        if(demo)profile.m3uUrl="https://nenotv.com/nenotv-demo.m3u";
+        if(demo)profile.m3uUrl="https://sunnyiptv.com/sunnyiptv-demo.m3u";
         connecting=true;findViewById(R.id.saveButton).setEnabled(false);
-        status.setText(T("My NenoTV is preparing your media package…","Mijn NenoTV bereidt uw mediapakket voor…","Mein NenoTV bereitet dein Medienpaket vor…"));
+        status.setText(T("My SunnyIPTV is preparing your media package…","Mijn SunnyIPTV bereidt uw mediapakket voor…","Mein SunnyIPTV bereitet dein Medienpaket vor…"));
         exec.execute(()->{try{
             sourceId=new com.nenotv.player.entitlement.SourceSyncClient(this).submitInitialSource(profile,sourceId);
             if(demo)DemoPolicy.startOrKeep(this,System.currentTimeMillis());

@@ -24,7 +24,7 @@ public final class PairingClient {
             int duration=response.optInt("expires_in",0);
             Uri uri=Uri.parse(url);
             if(!code.matches("(?:[A-Z2-9]{4}|[A-F0-9]{10})")||!proof.matches("[a-f0-9]{64}")||duration<1||duration>600
-                ||!"https".equals(uri.getScheme())||!"nenotv.com".equals(uri.getHost())||uri.getUserInfo()!=null
+                ||!"https".equals(uri.getScheme())||!com.nenotv.player.SiteEndpoints.isPairingHost(uri.getHost())||uri.getUserInfo()!=null
                 ||(uri.getPort()!=-1&&uri.getPort()!=443)||!"/nenotv-pair/".equals(uri.getPath())
                 ||!code.equals(uri.getQueryParameter("code")))throw new IOException("Invalid pairing response");
             deadline=SystemClock.elapsedRealtime()+duration*1000L;

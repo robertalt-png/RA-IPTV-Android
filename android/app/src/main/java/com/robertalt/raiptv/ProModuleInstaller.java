@@ -25,10 +25,10 @@ public final class ProModuleInstaller {
             if(isInstalled(a))return;
             SplitInstallRequest r=SplitInstallRequest.newBuilder().addModule(MODULE).build();
             m.startInstall(r)
-              .addOnSuccessListener(id->Toast.makeText(a,"NenoTV Pro Media Pack wordt gedownload…",Toast.LENGTH_LONG).show())
-              .addOnFailureListener(e->Toast.makeText(a,"NenoTV Pro Media Pack kon niet worden gestart.",Toast.LENGTH_LONG).show());
+              .addOnSuccessListener(id->Toast.makeText(a,"SunnyIPTV Pro Media Pack wordt gedownload…",Toast.LENGTH_LONG).show())
+              .addOnFailureListener(e->Toast.makeText(a,"SunnyIPTV Pro Media Pack kon niet worden gestart.",Toast.LENGTH_LONG).show());
         }catch(Throwable t){
-            Toast.makeText(a,"NenoTV Pro Media Pack is beschikbaar via Google Play.",Toast.LENGTH_LONG).show();
+            Toast.makeText(a,"SunnyIPTV Pro Media Pack is beschikbaar via Google Play.",Toast.LENGTH_LONG).show();
         }
     }
 

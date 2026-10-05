@@ -46,9 +46,11 @@ public class AccountActivity extends Activity {
 
         LinearLayout h=new LinearLayout(this);
         h.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title=t("NenoTV",28);
-        title.setTypeface(null,Typeface.BOLD);
-        h.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+        ImageView title=new ImageView(this);
+        title.setImageResource(R.drawable.sunnyiptv_logo);
+        title.setContentDescription(getString(R.string.app_name));
+        title.setScaleType(ImageView.ScaleType.FIT_START);
+        h.addView(title,new LinearLayout.LayoutParams(0,dp(64),1));
         Button close=b(T("close"));
         close.setOnClickListener(v->finish());
         h.addView(close);
@@ -101,7 +103,7 @@ public class AccountActivity extends Activity {
         addButton(trial);
 
         Button pro=b(T("view_pro"));
-        pro.setOnClickListener(v->openWeb("https://nenotv.com/pro?device="+Uri.encode(ent.publicDeviceId())));
+        pro.setOnClickListener(v->openWeb("https://sunnyiptv.com/pro?device="+Uri.encode(ent.publicDeviceId())));
         addButton(pro);
 
         refresh=b(T("refresh_status"));
@@ -241,11 +243,11 @@ public class AccountActivity extends Activity {
 
     String myNenoLabel(){
         String l=SettingsStore.language(this);
-        return "nl".equals(l)?"Open Mijn NenoTV":"de".equals(l)?"Mein NenoTV öffnen":"Open My NenoTV";
+        return "nl".equals(l)?"Open Mijn SunnyIPTV":"de".equals(l)?"Mein SunnyIPTV öffnen":"Open My SunnyIPTV";
     }
     String myNenoUrl(){
         String l=SettingsStore.language(this);
-        return "nl".equals(l)?"https://nenotv.com/language/nl/mijn-account/":"de".equals(l)?"https://nenotv.com/language/de/mein-konto/":"https://nenotv.com/my-account/";
+        return "nl".equals(l)?"https://sunnyiptv.com/language/nl/mijn-account/":"de".equals(l)?"https://sunnyiptv.com/language/de/mein-konto/":"https://sunnyiptv.com/my-account/";
     }
 
     void openWeb(String url){

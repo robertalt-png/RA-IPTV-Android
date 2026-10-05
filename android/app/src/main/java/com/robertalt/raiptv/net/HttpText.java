@@ -69,7 +69,7 @@ public final class HttpText {
                 c.setRequestProperty("Connection", "keep-alive");
                 c.setRequestProperty("Cache-Control", "no-cache");
                 c.setRequestProperty("Pragma", "no-cache");
-                c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 NenoTV/0.9.2");
+                c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 SunnyIPTV/0.9.2");
                 for (Map.Entry<String, String> e : headers.entrySet()) c.setRequestProperty(e.getKey(), e.getValue());
 
                 if ("POST".equals(method)) {

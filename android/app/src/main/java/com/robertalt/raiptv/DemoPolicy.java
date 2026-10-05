@@ -11,7 +11,7 @@ public final class DemoPolicy {
 
     public static boolean isDemo(com.nenotv.player.model.Profile p){
         return p!=null&&p.type==com.nenotv.player.model.Profile.Type.M3U&&
-            ("https://nenotv.com/nenotv-demo.m3u".equals(p.m3uUrl)||DemoSource.URL.equals(p.m3uUrl)||BuildConfig.NENOTV_DEMO_M3U_URL.equals(p.m3uUrl));
+            (SiteEndpoints.isDemoUrl(p.m3uUrl)||DemoSource.URL.equals(p.m3uUrl)||BuildConfig.NENOTV_DEMO_M3U_URL.equals(p.m3uUrl));
     }
     public static boolean blockPlayback(Context c){
         com.nenotv.player.storage.SecureProfileStore store=new com.nenotv.player.storage.SecureProfileStore(c);

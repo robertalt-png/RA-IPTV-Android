@@ -34,7 +34,7 @@ public class MediaRowAdapter extends BaseAdapter {
         Bitmap cached=cache.get(url);if(cached!=null){image.setPadding(0,0,0,0);image.setScaleType(desired);image.setImageBitmap(cached);return;}
         images.execute(()->{HttpURLConnection c=null;try{
             c=(HttpURLConnection)new URL(url).openConnection();c.setConnectTimeout(4000);c.setReadTimeout(5500);c.setUseCaches(true);c.setInstanceFollowRedirects(true);
-            c.setRequestProperty("User-Agent","NenoTV/0.13.11 (https://nenotv.com; info@nenotv.com)");c.setRequestProperty("Connection","keep-alive");c.setRequestProperty("Accept","image/*,*/*;q=0.8");c.setRequestProperty("Accept-Encoding","identity");
+            c.setRequestProperty("User-Agent","SunnyIPTV/0.13.11 (https://sunnyiptv.com; info@sunnyiptv.com)");c.setRequestProperty("Connection","keep-alive");c.setRequestProperty("Accept","image/*,*/*;q=0.8");c.setRequestProperty("Accept-Encoding","identity");
             int code=c.getResponseCode();if(code<200||code>=300)return;byte[]data=readLimited(c.getInputStream());if(data.length==0)return;Bitmap bm=decodeScaled(data,targetW,targetH);if(bm==null)return;cache.put(url,bm);
             image.post(()->{Object tag=image.getTag();if(tag!=null&&tag.equals(url)){image.setPadding(0,0,0,0);image.setScaleType(desired);image.setImageBitmap(bm);}});
         }catch(Exception ignored){}finally{if(c!=null)c.disconnect();}});

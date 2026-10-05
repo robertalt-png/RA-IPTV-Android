@@ -41,7 +41,7 @@ public final class StreamingJsonArray {
                 connection.setInstanceFollowRedirects(false);
                 connection.setRequestProperty("Accept", "application/json");
                 connection.setRequestProperty("Accept-Encoding", "gzip");
-                connection.setRequestProperty("User-Agent", "NenoTV/0.13.2");
+                connection.setRequestProperty("User-Agent", "SunnyIPTV/0.13.2");
                 int status = connection.getResponseCode();
                 if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
                     String location = connection.getHeaderField("Location");

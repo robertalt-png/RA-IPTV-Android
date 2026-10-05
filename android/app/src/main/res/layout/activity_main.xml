@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:background="@color/bg">
   <LinearLayout android:id="@+id/topBar" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:paddingLeft="14dp" android:paddingRight="14dp" android:paddingTop="8dp" android:paddingBottom="6dp">
-  <LinearLayout android:id="@+id/brandButton" android:layout_width="wrap_content" android:layout_height="44dp" android:gravity="center_vertical" android:orientation="horizontal" android:clickable="false" android:focusable="false" android:contentDescription="NenoTV">
-    <ImageView android:layout_width="30dp" android:layout_height="30dp" android:src="@drawable/ic_nenotv_mark" android:scaleType="fitCenter" android:contentDescription="NenoTV"/>
-    <TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="7dp" android:text="NenoTV" android:textColor="#FFD400" android:textSize="17sp" android:textStyle="bold" android:letterSpacing="0.02" android:singleLine="true" android:maxLines="1" android:includeFontPadding="false"/>
+  <LinearLayout android:id="@+id/brandButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="44dp" android:gravity="center_vertical" android:orientation="horizontal" android:clickable="false" android:focusable="false" android:contentDescription="@string/app_name">
+    <ImageView android:layout_width="match_parent" android:layout_height="44dp" android:adjustViewBounds="true" android:src="@drawable/sunnyiptv_logo" android:scaleType="fitStart" android:contentDescription="@string/app_name"/>
+    <TextView android:id="@+id/title" android:visibility="gone" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/app_name" android:singleLine="true"/>
   </LinearLayout>
-  <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
+  <Space android:layout_width="5dp" android:layout_height="1dp"/>
   <Button android:id="@+id/languageBadge" android:layout_width="48dp" android:layout_height="36dp" android:text="NL" android:textAllCaps="false" android:textColor="#FFF7F8FA" android:textSize="11sp" android:backgroundTint="#151A21" android:contentDescription="Language"/>
   <Button android:paddingLeft="4dp" android:paddingRight="4dp" android:minWidth="0dp" android:id="@+id/planBadge" android:layout_width="58dp" android:layout_height="36dp" android:layout_marginLeft="5dp" android:text="LIGHT" android:textAllCaps="false" android:textStyle="bold" android:textColor="#FF0A0A0A" android:textSize="10sp" android:backgroundTint="#FFD400" android:contentDescription="Plan"/>
   <Button android:id="@+id/menuButton" android:layout_width="48dp" android:layout_height="44dp" android:text="☰" android:textSize="24sp" android:textColor="#FFFFFF" android:backgroundTint="#151A21" android:contentDescription="Menu"/>

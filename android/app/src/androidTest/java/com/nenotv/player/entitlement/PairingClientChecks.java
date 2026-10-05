@@ -9,12 +9,16 @@ import org.json.JSONObject;
 public final class PairingClientChecks {
     static void check(boolean value,String message){if(!value)throw new AssertionError(message);}
     static JSONObject response()throws Exception{return new JSONObject().put("ok",true).put("code","ABCDEF0123").put("poll_token",String.join("",Collections.nCopies(64,"a"))).put("verification_url","https://nenotv.com/nenotv-pair/?code=ABCDEF0123").put("expires_in",300).put("poll_interval",5);}
-    public static PairingClient.Session fixtureSession()throws Exception{return new PairingClient.Session(response().put("code","AB23").put("verification_url","https://nenotv.com/nenotv-pair/?code=AB23&lang=nl"));}
+    public static PairingClient.Session fixtureSession()throws Exception{return new PairingClient.Session(response().put("code","AB23").put("verification_url","https://sunnyiptv.com/nenotv-pair/?code=AB23&lang=nl"));}
     public static void run(Context context)throws Exception{
         SharedPreferences prefs=context.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE);
         Map<String,?> previous=new HashMap<>(prefs.getAll());
         try{
             prefs.edit().putString("level","PRO").commit();
+            check(new PairingClient.Session(response().put("verification_url","https://sunnyiptv.com/nenotv-pair/?code=ABCDEF0123")).displayCode().equals("ABCDE-F0123"),"SunnyIPTV pairing URL rejected");
+            for(String url:new String[]{"http://sunnyiptv.com/nenotv-pair/?code=ABCDEF0123","https://sunnyiptv.com.evil.invalid/nenotv-pair/?code=ABCDEF0123","https://sunnyiptv.com:8080/nenotv-pair/?code=ABCDEF0123","https://user@sunnyiptv.com/nenotv-pair/?code=ABCDEF0123","https://sunnyiptv.com/my-account/?code=ABCDEF0123","https://sunnyiptv.com/nenotv-pair/?code=0000000000"}){
+                try{new PairingClient.Session(response().put("verification_url",url));throw new AssertionError("Unsafe SunnyIPTV pairing URL accepted");}catch(IOException expected){}
+            }
             for(String url:new String[]{"http://nenotv.com/nenotv-pair/?code=ABCDEF0123","https://evil.invalid/nenotv-pair/?code=ABCDEF0123","https://nenotv.com:8080/nenotv-pair/?code=ABCDEF0123","https://user@nenotv.com/nenotv-pair/?code=ABCDEF0123","https://nenotv.com/my-account/?code=ABCDEF0123","https://nenotv.com/nenotv-pair/?code=0000000000"}){
                 try{new PairingClient.Session(response().put("verification_url",url));throw new AssertionError("Unsafe pairing URL accepted");}catch(IOException expected){}
             }

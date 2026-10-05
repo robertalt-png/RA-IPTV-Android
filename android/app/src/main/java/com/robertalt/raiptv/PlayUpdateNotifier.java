@@ -86,8 +86,8 @@ public final class PlayUpdateNotifier {
         if (!usable() || dialog != null) return;
         dialog = new AlertDialog.Builder(activity)
                 .setTitle(requirements.isBasicOnly()
-                        ? text("NenoTV werkt tijdelijk als Basic", "NenoTV is temporarily Basic", "NenoTV ist vorübergehend Basic")
-                        : text("Nieuwe NenoTV-versie beschikbaar", "New NenoTV version available", "Neue NenoTV-Version verfügbar"))
+                        ? text("SunnyIPTV werkt tijdelijk als Basic", "SunnyIPTV is temporarily Basic", "SunnyIPTV ist vorübergehend Basic")
+                        : text("Nieuwe SunnyIPTV-versie beschikbaar", "New SunnyIPTV version available", "Neue SunnyIPTV-Version verfügbar"))
                 .setMessage(updateMessage())
                 .setPositiveButton(text("Bijwerken", "Update", "Aktualisieren"), (d, w) -> startUpdate(info))
                 .setNegativeButton(text("Verder kijken", "Keep watching", "Weitersehen"), (d, w) -> {}).create();
@@ -123,9 +123,9 @@ public final class PlayUpdateNotifier {
         if (!usable() || dialog != null) return;
         dialog = new AlertDialog.Builder(activity)
                 .setTitle(text("Update klaar", "Update ready", "Update bereit"))
-                .setMessage(text("Herstart NenoTV om de update te installeren. Alleen downloaden is nog niet voldoende.\n\n",
-                        "Restart NenoTV to install the update. Downloading alone is not enough.\n\n",
-                        "Starte NenoTV neu, um das Update zu installieren. Herunterladen allein reicht noch nicht.\n\n") + updateMessage())
+                .setMessage(text("Herstart SunnyIPTV om de update te installeren. Alleen downloaden is nog niet voldoende.\n\n",
+                        "Restart SunnyIPTV to install the update. Downloading alone is not enough.\n\n",
+                        "Starte SunnyIPTV neu, um das Update zu installieren. Herunterladen allein reicht noch nicht.\n\n") + updateMessage())
                 .setPositiveButton(text("Herstarten", "Restart", "Neustarten"), (d, w) -> manager.completeUpdate())
                 .setNegativeButton(text("Later", "Later", "Später"), (d, w) -> {}).create();
         dialog.setOnDismissListener(d -> dialog = null);
@@ -140,15 +140,15 @@ public final class PlayUpdateNotifier {
                 "After installation, your previous access returns automatically, provided your subscription or tester rights are still valid.",
                 "Nach der Installation erhältst du deinen bisherigen Zugang automatisch zurück, sofern dein Abonnement oder deine Testerrechte noch gültig sind.");
         if (requirements.isBasicOnly()) return text(
-                "De termijn van 60 dagen is verstreken. Je gebruikt NenoTV nu als Basic totdat je de update installeert. Je account en instellingen blijven bewaard.\n\n",
-                "The 60-day deadline has passed. NenoTV now runs as Basic until you install the update. Your account and settings are preserved.\n\n",
-                "Die 60-Tage-Frist ist abgelaufen. NenoTV läuft als Basic, bis du das Update installierst. Dein Konto und deine Einstellungen bleiben erhalten.\n\n") + restoration;
+                "De termijn van 60 dagen is verstreken. Je gebruikt SunnyIPTV nu als Basic totdat je de update installeert. Je account en instellingen blijven bewaard.\n\n",
+                "The 60-day deadline has passed. SunnyIPTV now runs as Basic until you install the update. Your account and settings are preserved.\n\n",
+                "Die 60-Tage-Frist ist abgelaufen. SunnyIPTV läuft als Basic, bis du das Update installierst. Dein Konto und deine Einstellungen bleiben erhalten.\n\n") + restoration;
         long days = requirements.daysRemaining();
         return text("Installeer de update uiterlijk ", "Install the update by ", "Installiere das Update bis ")
                 + date + text(" (nog ", " (", " (noch ") + days
-                + text(" dagen). Daarna werkt NenoTV tijdelijk als Basic.\n\n",
-                        " days remaining). After that, NenoTV temporarily runs as Basic.\n\n",
-                        " Tage). Danach läuft NenoTV vorübergehend als Basic.\n\n") + restoration;
+                + text(" dagen). Daarna werkt SunnyIPTV tijdelijk als Basic.\n\n",
+                        " days remaining). After that, SunnyIPTV temporarily runs as Basic.\n\n",
+                        " Tage). Danach läuft SunnyIPTV vorübergehend als Basic.\n\n") + restoration;
     }
 
     private void showKnownUpdateOrRestoration() {
@@ -157,7 +157,7 @@ public final class PlayUpdateNotifier {
         if (!requirements.hasRestorationNotice()) return;
         boolean pro = new EntitlementStore(activity).isPro();
         dialog = new AlertDialog.Builder(activity)
-                .setTitle(text("NenoTV bijgewerkt", "NenoTV updated", "NenoTV aktualisiert"))
+                .setTitle(text("SunnyIPTV bijgewerkt", "SunnyIPTV updated", "SunnyIPTV aktualisiert"))
                 .setMessage(pro ? text("Je update is geïnstalleerd. Je eerdere Pro-toegang is automatisch hersteld.",
                         "Your update is installed. Your previous Pro access has been restored automatically.",
                         "Dein Update ist installiert. Dein bisheriger Pro-Zugang wurde automatisch wiederhergestellt.")

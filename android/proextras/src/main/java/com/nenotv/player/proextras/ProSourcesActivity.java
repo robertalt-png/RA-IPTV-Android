@@ -68,7 +68,7 @@ public class ProSourcesActivity extends Activity {
         Button add=button("＋ "+L("Add source","Bron toevoegen","Quelle hinzufügen"));
         add.setOnClickListener(v->{Intent i=new Intent(this,ProfileActivity.class);i.putExtra("new_source",true);startActivity(i);});
         topActions.addView(add,new LinearLayout.LayoutParams(0,dp(52),1));
-        Button sync=button("↻ "+L("Sync My NenoTV","Sync Mijn NenoTV","Mein NenoTV synchronisieren"));
+        Button sync=button("↻ "+L("Sync My SunnyIPTV","Sync Mijn SunnyIPTV","Mein SunnyIPTV synchronisieren"));
         sync.setOnClickListener(v->syncNow(sync));
         topActions.addView(sync,new LinearLayout.LayoutParams(0,dp(52),1));
 
@@ -108,7 +108,7 @@ public class ProSourcesActivity extends Activity {
                 new SourceSyncClient(this).sync();
                 runOnUiThread(()->{
                     if(isFinishing()||isDestroyed())return;
-                    Toast.makeText(this,L("Sources synchronized with My NenoTV.","Bronnen gesynchroniseerd met Mijn NenoTV.","Quellen mit Mein NenoTV synchronisiert."),Toast.LENGTH_LONG).show();
+                    Toast.makeText(this,L("Sources synchronized with My SunnyIPTV.","Bronnen gesynchroniseerd met Mijn SunnyIPTV.","Quellen mit Mein SunnyIPTV synchronisiert."),Toast.LENGTH_LONG).show();
                     render();
                 });
             }catch(Exception ex){
@@ -166,7 +166,7 @@ public class ProSourcesActivity extends Activity {
     void editSmartEpg(SourceStore.Entry e){
         com.nenotv.player.storage.SmartEpgStore epg=new com.nenotv.player.storage.SmartEpgStore(this);
         EditText input=new EditText(this);input.setText(android.text.TextUtils.join("\n",epg.urls(e.id)));input.setHint(L("One XMLTV/EPG URL per line","Eén XMLTV/EPG-URL per regel","Eine XMLTV/EPG-URL pro Zeile"));input.setMinLines(5);input.setGravity(Gravity.TOP);input.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        new AlertDialog.Builder(this).setTitle(L("Smart EPG sources","Smart EPG-bronnen","Smart-EPG-Quellen")).setMessage(L("NenoTV tries these only when the normal provider EPG has no usable programme data.","NenoTV probeert deze alleen als de normale provider-EPG geen bruikbare programmagegevens heeft.","NenoTV verwendet diese nur, wenn die normale Provider-EPG keine brauchbaren Programmdaten liefert.")).setView(input)
+        new AlertDialog.Builder(this).setTitle(L("Smart EPG sources","Smart EPG-bronnen","Smart-EPG-Quellen")).setMessage(L("SunnyIPTV tries these only when the normal provider EPG has no usable programme data.","SunnyIPTV probeert deze alleen als de normale provider-EPG geen bruikbare programmagegevens heeft.","SunnyIPTV verwendet diese nur, wenn die normale Provider-EPG keine brauchbaren Programmdaten liefert.")).setView(input)
             .setNegativeButton(L("Cancel","Annuleren","Abbrechen"),null)
             .setPositiveButton(L("Save","Opslaan","Speichern"),(d,w)->{
                 java.util.ArrayList<String> urls=new java.util.ArrayList<>();for(String line:input.getText().toString().split("\\r?\\n")){String u=line.trim();if(u.startsWith("https://")||u.startsWith("http://"))urls.add(u);}

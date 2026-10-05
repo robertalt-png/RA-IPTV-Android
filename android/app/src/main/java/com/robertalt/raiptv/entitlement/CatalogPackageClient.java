@@ -54,7 +54,7 @@ public final class CatalogPackageClient {
         long expected=manifest.getLong("bytes");if(expected<1||expected>CatalogPackageImporter.MAX_COMPRESSED)throw new IOException("CATALOG_SIZE");
         JSONObject body=new JSONObject().put("device_id",entitlement.deviceId()).put("device_key",entitlement.deviceKey()).put("public_device_id",entitlement.publicDeviceId()).put("platform","android").put("app_version",BuildConfig.VERSION_NAME).put("account_scope",scope).put("source_id",manifest.getString("source_id")).put("fingerprint",manifest.getString("fingerprint"));
         byte[] payload=body.toString().getBytes(StandardCharsets.UTF_8);
-        HttpURLConnection connection=(HttpURLConnection)new URL("https://nenotv.com/wp-json/nenotv/v1/catalog/download").openConnection();
+        HttpURLConnection connection=(HttpURLConnection)new URL("https://sunnyiptv.com/wp-json/nenotv/v1/catalog/download").openConnection();
         try{
             connection.setInstanceFollowRedirects(false);connection.setConnectTimeout(15000);connection.setReadTimeout(20000);connection.setRequestMethod("POST");connection.setDoOutput(true);connection.setFixedLengthStreamingMode(payload.length);connection.setRequestProperty("Content-Type","application/json");connection.setRequestProperty("Accept","application/vnd.nenotv.catalog+gzip");connection.setRequestProperty("Accept-Encoding","identity");
             try(OutputStream out=connection.getOutputStream()){out.write(payload);}
