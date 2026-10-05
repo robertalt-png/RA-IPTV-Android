@@ -67,6 +67,17 @@ class FamilyDemoTest(unittest.TestCase):
         self.assertIn('for(String type:new String[]{"live","vod","series"})', main)
         self.assertIn('searchIndex.replaceSection(key,type,indexProvider.items(type,"all"));', main)
 
+    def test_test_runner_matches_build_version(self):
+        gradle = (ROOT / 'android/app/build.gradle').read_text(encoding='utf-8')
+        version = re.search(r"versionName '([^']+)'", gradle).group(1)
+        code = re.search(r'versionCode (\d+)', gradle).group(1)
+        workflow = (ROOT / '.github/workflows/build-nenotv.yml').read_text(encoding='utf-8')
+        runner = (ROOT / 'tools/qa-one-app.sh').read_text(encoding='utf-8')
+        for edition in ('Light', 'Pro'):
+            name = f'SunnyIPTV-{edition}-v{version}-vc{code}-TEST-SIGNED.apk'
+            self.assertIn(name, workflow)
+            self.assertIn(name, runner)
+
 
 if __name__ == '__main__':
     unittest.main()
