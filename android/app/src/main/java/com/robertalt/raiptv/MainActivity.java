@@ -51,7 +51,7 @@ public class MainActivity extends Activity {
         ScreenInsets.browsing(this);
         adapter=new MediaRowAdapter(this,library);gridAdapter=new MediaGridAdapter(this,library);epgAdapter=new EpgAdapter(this,epgStore);list.setAdapter(adapter);grid.setAdapter(gridAdapter);appliedLanguage=SettingsStore.language(this);appliedContentLanguage=SettingsStore.contentLanguage(this);applyStaticLanguage();wire();wireSeasons();updateHeaderBadges();restoreFirstSyncBanner();
         if(expireDemoProfileIfNeeded()){startActivityForResult(new Intent(this,ProfileActivity.class),10);return;}
-        if(!profiles.exists())startActivityForResult(new Intent(this,ProfileActivity.class).putExtra("website_first",true),10);else openProfile();
+        if(!profiles.exists())startActivityForResult(new Intent(this,ProfileActivity.class),10);else openProfile();
     }
 
 
@@ -992,3 +992,5 @@ TextView addInfoBlock(LinearLayout b,String l,String x){TextView h=new TextView(
     }
     int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
 }
+
+

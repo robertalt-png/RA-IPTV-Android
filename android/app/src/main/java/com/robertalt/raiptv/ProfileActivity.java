@@ -5,6 +5,11 @@ import com.nenotv.player.model.Profile; import com.nenotv.player.provider.*; imp
 import java.util.concurrent.*;
 
 public class ProfileActivity extends Activity {
+    interface LocalConnection { void authenticate(Profile profile,String language)throws Exception; }
+    static LocalConnection localConnection=(profile,language)->{
+        Provider provider=profile.type==Profile.Type.XTREAM?new XtreamProvider(profile):new M3uProvider(profile,language);
+        provider.authenticate();
+    };
     EditText name,server,user,pass,m3u,epg; RadioButton xtream,m3uRadio,demoRadio; TextView status;
     LinearLayout xtreamFields,m3uFields,advancedFields; SecureProfileStore store; SourceStore sources; String sourceId=""; boolean newSource=false,websiteSetup=false; Profile editingProfile; ExecutorService exec=Executors.newSingleThreadExecutor();
 
@@ -42,20 +47,16 @@ public class ProfileActivity extends Activity {
         m3u=findViewById(R.id.m3uField); epg=findViewById(R.id.epgField); xtream=findViewById(R.id.xtreamRadio); m3uRadio=findViewById(R.id.m3uRadio);
         demoRadio=findViewById(R.id.demoRadio); status=findViewById(R.id.profileStatus); xtreamFields=findViewById(R.id.xtreamFields);
         m3uFields=findViewById(R.id.m3uFields); advancedFields=findViewById(R.id.advancedFields);
-        websiteSetup=!store.exists();websiteFirst=getIntent().getBooleanExtra("website_first",false);
+        websiteSetup=false;websiteFirst=false;
         applyLanguage(); load(); updateMode();
-        Button website=new Button(this);website.setText(T("Set up via My SunnyIPTV","Instellen via Mijn SunnyIPTV","Über Mein SunnyIPTV einrichten"));website.setAllCaps(false);website.setTextColor(0xFF07090D);website.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD400));
+        Button website=new Button(this);website.setText(T("Link devices (optional)","Apparaten koppelen (optioneel)","Geräte verbinden (optional)"));website.setTag("optional_device_link");website.setAllCaps(false);website.setMinHeight(Math.round(56*getResources().getDisplayMetrics().density));website.setTextColor(0xFFF7F8FA);website.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));
         website.setOnClickListener(v->{websiteSetup=true;if(new EntitlementStore(this).isPro())openWebsite();else startAccountSetup();});
-        LinearLayout container=(LinearLayout)findViewById(R.id.profileIntro).getParent();container.addView(website,2);
+        LinearLayout container=(LinearLayout)findViewById(R.id.profileIntro).getParent();container.addView(website,container.getChildCount()-1);
 
         findViewById(R.id.typeGroup).setOnClickListener(v->updateMode());
         xtream.setOnClickListener(v->updateMode()); m3uRadio.setOnClickListener(v->updateMode()); demoRadio.setOnClickListener(v->{updateMode();if(demoRadio.isEnabled())connectAndSave();});
         findViewById(R.id.advancedButton).setOnClickListener(v->advancedFields.setVisibility(advancedFields.getVisibility()==View.VISIBLE?View.GONE:View.VISIBLE));
         findViewById(R.id.saveButton).setOnClickListener(v->connectAndSave());
-        if(websiteFirst&&!store.exists()){
-            if(!new EntitlementStore(this).isPro())startAccountSetup();
-            else if(!getIntent().getBooleanExtra("device_entry",false))openWebsite();
-        }
     }
 
     @Override protected void onResume(){super.onResume();foreground=true;if(websiteSetup)setupHandler.post(sourcePoll);}
@@ -64,7 +65,7 @@ public class ProfileActivity extends Activity {
 
     void applyLanguage(){
         ((TextView)findViewById(R.id.profileTitle)).setText("SunnyIPTV");
-        ((TextView)findViewById(R.id.profileIntro)).setText(T("Choose your TV source","Kies uw tv-aanbod","TV-Angebot auswählen"));
+        ((TextView)findViewById(R.id.profileIntro)).setText(T("Start without an account","Begin zonder account","Ohne Konto starten"));
         xtream.setText(T("Own provider · Xtream Codes","Eigen aanbieder · Xtream Codes","Eigener Anbieter · Xtream Codes"));
         m3uRadio.setText(T("Own playlist · M3U","Eigen afspeellijst · M3U","Eigene Wiedergabeliste · M3U"));
         String demo=BuildConfig.NENOTV_DEMO_M3U_URL;
@@ -103,7 +104,7 @@ public class ProfileActivity extends Activity {
         findViewById(R.id.nenoOffer).setVisibility(isDemo?View.VISIBLE:View.GONE);
         findViewById(R.id.advancedButton).setVisibility(isDemo?View.GONE:View.VISIBLE);
         ((TextView)findViewById(R.id.nenoOffer)).setText(T("Europe by Satellite · Europe by Satellite +\nOpen films: Sintel, Spring, Tears of Steel and more","Europe by Satellite · Europe by Satellite +\nOpen films: Sintel, Spring, Tears of Steel en meer","Europe by Satellite · Europe by Satellite +\nOpen Movies: Sintel, Spring, Tears of Steel und mehr"));
-        ((Button)findViewById(R.id.saveButton)).setText(isDemo?T("Start watching","Start kijken","Jetzt ansehen"):T("Connect and continue","Verbinden en doorgaan","Verbinden und fortfahren"));
+        ((Button)findViewById(R.id.saveButton)).setText(isDemo?T("Start watching","Start kijken","Jetzt ansehen"):T("Start without an account","Begin zonder account","Ohne Konto starten"));
         if(isDemo)advancedFields.setVisibility(View.GONE);
     }
 
@@ -124,19 +125,36 @@ public class ProfileActivity extends Activity {
 
     boolean connecting=false;
     void connectAndSave(){
-        if(!new EntitlementStore(this).isPro()){startAccountSetup();return;}
-        if(new EntitlementStore(this).isPro()){
+        if(connecting||FamilyStore.active(this))return;
             final Profile chosen=collect();
             if(!demoRadio.isChecked()){
                 android.net.Uri address=android.net.Uri.parse(chosen.type==Profile.Type.XTREAM?chosen.server:chosen.m3uUrl);
                 if(!java.util.Arrays.asList("https","http").contains(address.getScheme())||address.getHost()==null||(chosen.type==Profile.Type.XTREAM&&(chosen.username.trim().isEmpty()||chosen.password.isEmpty()))){status.setText(T("Enter a valid provider URL and login details.","Vul een geldige aanbieder-URL en inloggegevens in.","Gib eine gültige Anbieter-URL und Zugangsdaten ein."));return;}
             }
-            new AlertDialog.Builder(this).setTitle(T("Prepare via My SunnyIPTV","Voorbereiden via Mijn SunnyIPTV","Über Mein SunnyIPTV vorbereiten"))
-                .setMessage(T("Allow My SunnyIPTV to retrieve your list using these details, store them encrypted and prepare the media package for your linked devices?","Mag Mijn SunnyIPTV met deze gegevens uw lijst ophalen, versleuteld opslaan en het mediapakket voor uw gekoppelde apparaten voorbereiden?","Darf Mein SunnyIPTV mit diesen Daten deine Liste abrufen, verschlüsselt speichern und das Medienpaket für deine verbundenen Geräte vorbereiten?"))
-                .setNegativeButton(android.R.string.cancel,null).setPositiveButton(T("Agree and prepare","Akkoord en voorbereiden","Zustimmen und vorbereiten"),(d,w)->submitWebsiteSource(chosen,demoRadio.isChecked())).show();return;
-        }
-
+            final boolean demo=demoRadio.isChecked();
+            if(demo&&DemoPolicy.expired(this)){status.setText(T("Demo ended","Demo afgelopen","Demo beendet"));return;}
+            final String language=SettingsStore.language(this);
+            final long sourceRevision=sources.localRevision();
+            final String destination=sourceId.isEmpty()&&!newSource?sources.activeId():sourceId;
+            connecting=true;findViewById(R.id.saveButton).setEnabled(false);
+            status.setText(T("Connecting…","Verbinden…","Verbindung wird hergestellt…"));
+            exec.execute(()->{try{
+                localConnection.authenticate(chosen,language);
+                if(Thread.currentThread().isInterrupted())return;
+                runOnUiThread(()->{
+                    if(isFinishing()||isDestroyed())return;
+                    try{
+                        if(FamilyStore.active(this))throw new IllegalStateException("FAMILY_ACTIVE");
+                        if(sources.localRevision()!=sourceRevision)throw new IllegalStateException("LOCAL_SOURCES_CHANGED");
+                        sources.upsert(destination,chosen,true);
+                        sources.setAutomaticDownloadEnabled(false);
+                        if(demo)DemoPolicy.startOrKeep(this,System.currentTimeMillis());
+                        setResult(RESULT_OK);finish();
+                    }catch(Exception error){localFailure();}
+                });
+            }catch(Exception error){runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())localFailure();});}});
     }
+    void localFailure(){connecting=false;findViewById(R.id.saveButton).setEnabled(true);status.setText(T("Could not connect. Check your provider details. Your existing library is kept.","Verbinden niet gelukt. Controleer de gegevens van uw aanbieder. Uw bestaande bibliotheek blijft behouden.","Verbindung fehlgeschlagen. Prüfe die Zugangsdaten deines Anbieters. Deine bisherige Bibliothek bleibt erhalten."));}
     void submitWebsiteSource(Profile profile,boolean demo){
         if(connecting)return;
         if(demo&&DemoPolicy.expired(this)){status.setText(T("Demo ended","Demo afgelopen","Demo beendet"));return;}

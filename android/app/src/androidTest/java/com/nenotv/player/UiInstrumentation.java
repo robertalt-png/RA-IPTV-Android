@@ -150,6 +150,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
     }
     void onboarding(Bundle result)throws Exception{
         privacyAccess();
+        accountFreeSetup(result);
         Context c=getTargetContext();
         SecureProfileStore profiles=new SecureProfileStore(c);
         profiles.clear();
@@ -198,6 +199,51 @@ public final class UiInstrumentation extends ImportInstrumentation {
         }finally{runOnMainSync(films::finish);SettingsStore.prefs(c).edit().putString("start_screen",previousStart).commit();}
         accountChecks();
         result.putString("NENOTV_ONBOARDING","passed");
+    }
+    void accountFreeSetup(Bundle result)throws Exception{
+        Context c=getTargetContext();
+        Map<String,Map<String,?>> previous=new LinkedHashMap<>();
+        for(String name:new String[]{"profile","nenotv_sources_v1","nenotv_entitlement","sunnyiptv_family_v1"})
+            previous.put(name,new HashMap<>(c.getSharedPreferences(name,Context.MODE_PRIVATE).getAll()));
+        ProfileActivity.LocalConnection original=ProfileActivity.localConnection;
+        java.util.concurrent.atomic.AtomicInteger connections=new java.util.concurrent.atomic.AtomicInteger();
+        try{
+            for(String name:previous.keySet())c.getSharedPreferences(name,Context.MODE_PRIVATE).edit().clear().commit();
+            c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE).edit().putString("level","FREE").commit();
+            ProfileActivity.localConnection=(p,l)->{check(p.type==Profile.Type.M3U,"Wrong local source");connections.incrementAndGet();};
+            ProfileActivity a=(ProfileActivity)startActivitySync(new Intent(c,ProfileActivity.class).putExtra("website_first",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            try{
+                waitForIdleSync();
+                runOnMainSync(()->{
+                    check(!a.pairLaunched&&!a.websiteSetup,"Fresh setup forced cloud login");
+                    Button optional=a.findViewById(android.R.id.content).findViewWithTag("optional_device_link");
+                    check(optional!=null,"Optional linking unavailable");assertUnclippedText(optional);
+                    a.m3uRadio.performClick();a.m3u.setText("https://provider.example/test.m3u");
+                });
+                snapshot("account-free-setup");
+                runOnMainSync(()->a.findViewById(R.id.saveButton).performClick());
+                long end=SystemClock.elapsedRealtime()+5000;
+                while(!new SecureProfileStore(c).exists()&&SystemClock.elapsedRealtime()<end){waitForIdleSync();Thread.sleep(50);}
+                check(new SecureProfileStore(c).exists(),"Free local source was not saved");
+                check(connections.get()==1,"Local connection duplicated");
+                check(!new EntitlementStore(c).isPro(),"Guest setup granted Pro");
+                check(!new SourceStore(c).automaticDownloadEnabled(),"Local source opted into cloud");
+                check(new SecureProfileStore(c).load().m3uUrl.equals("https://provider.example/test.m3u"),"Wrong source saved");
+            }finally{runOnMainSync(a::finish);waitForIdleSync();}
+            ProfileActivity.localConnection=(p,l)->{throw new IOException("QA connection failure");};
+            ProfileActivity failed=(ProfileActivity)startActivitySync(new Intent(c,ProfileActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            try{
+                waitForIdleSync();runOnMainSync(()->{failed.m3u.setText("https://provider.example/broken.m3u");failed.findViewById(R.id.saveButton).performClick();});
+                long end=SystemClock.elapsedRealtime()+5000;java.util.concurrent.atomic.AtomicBoolean ready=new java.util.concurrent.atomic.AtomicBoolean();
+                while(!ready.get()&&SystemClock.elapsedRealtime()<end){runOnMainSync(()->ready.set(!failed.connecting));Thread.sleep(50);}
+                check(ready.get(),"Failed local connection stuck");
+                check(new SecureProfileStore(c).load().m3uUrl.equals("https://provider.example/test.m3u"),"Failed connection replaced saved source");
+            }finally{runOnMainSync(failed::finish);waitForIdleSync();}
+            result.putString("SUNNYIPTV_ACCOUNT_FREE_SETUP","passed");
+        }finally{
+            ProfileActivity.localConnection=original;
+            for(Map.Entry<String,Map<String,?>> entry:previous.entrySet())FamilyChecks.restore(c.getSharedPreferences(entry.getKey(),Context.MODE_PRIVATE),entry.getValue());
+        }
     }
     void accountChecks()throws Exception{
         Context c=getTargetContext();
@@ -513,7 +559,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
             new SecureProfileStore(c).save(profile());
         }
     }
-    @Override public void onStart(){Bundle result=new Bundle();String phase=args.getString("phase","ui");if(!Arrays.asList("ui","resume","pro","update","xtream","onboarding","catalog","family").contains(phase)){super.onStart();return;}try{if("family".equals(phase)){family(result);finish(Activity.RESULT_OK,result);}else if("catalog".equals(phase)){com.nenotv.player.entitlement.CatalogPackageChecks.run(getTargetContext(),getContext());result.putString("NENOTV_CATALOG_PACKAGE","passed");finish(Activity.RESULT_OK,result);}else if("onboarding".equals(phase)){onboarding(result);finish(Activity.RESULT_OK,result);}else if("xtream".equals(phase)){XtreamImportChecks.run(getTargetContext());xtreamSharedDownloads();result.putString("NENOTV_XTREAM_IMPORT","passed");finish(Activity.RESULT_OK,result);}else if("update".equals(phase)){UpdateAccessChecks.run(getTargetContext());result.putString("NENOTV_UPDATE_ACCESS","passed");finish(Activity.RESULT_OK,result);}else if("resume".equals(phase))resume(result);else if("pro".equals(phase)){Context c=getTargetContext();SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();DemoPolicy.startOrKeep(c,System.currentTimeMillis());new SecureProfileStore(c).save(profile());pro(result);}else core(result);}catch(Throwable failure){result.putString("NENOTV_UI_TESTS","failed: "+failure.getClass().getSimpleName()+": "+failure.getMessage());finish(Activity.RESULT_CANCELED,result);}}
+    @Override public void onStart(){Bundle result=new Bundle();String phase=args.getString("phase","ui");if(!Arrays.asList("ui","resume","pro","update","xtream","onboarding","catalog","family","account_free").contains(phase)){super.onStart();return;}try{if("account_free".equals(phase)){accountFreeSetup(result);finish(Activity.RESULT_OK,result);}else if("family".equals(phase)){family(result);finish(Activity.RESULT_OK,result);}else if("catalog".equals(phase)){com.nenotv.player.entitlement.CatalogPackageChecks.run(getTargetContext(),getContext());result.putString("NENOTV_CATALOG_PACKAGE","passed");finish(Activity.RESULT_OK,result);}else if("onboarding".equals(phase)){onboarding(result);finish(Activity.RESULT_OK,result);}else if("xtream".equals(phase)){XtreamImportChecks.run(getTargetContext());xtreamSharedDownloads();result.putString("NENOTV_XTREAM_IMPORT","passed");finish(Activity.RESULT_OK,result);}else if("update".equals(phase)){UpdateAccessChecks.run(getTargetContext());result.putString("NENOTV_UPDATE_ACCESS","passed");finish(Activity.RESULT_OK,result);}else if("resume".equals(phase))resume(result);else if("pro".equals(phase)){Context c=getTargetContext();SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();DemoPolicy.startOrKeep(c,System.currentTimeMillis());new SecureProfileStore(c).save(profile());pro(result);}else core(result);}catch(Throwable failure){result.putString("NENOTV_UI_TESTS","failed: "+failure.getClass().getSimpleName()+": "+failure.getMessage());finish(Activity.RESULT_CANCELED,result);}}
     static final class EpgFixture implements AutoCloseable{
         final ServerSocket socket;final Thread worker;final byte[] body;
         EpgFixture()throws Exception{
