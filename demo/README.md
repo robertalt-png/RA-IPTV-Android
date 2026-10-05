@@ -1,7 +1,7 @@
-# NenoTV demo catalogue v0.13.10
+# SunnyIPTV family demo catalogue
 
-19 unique entries: 17 open films and 2 live European Union channels (EbS, EbS+). Films appear under Films, channels under Live TV. No series or commercial subscription channels are included.
+Three short Caminandes animated films, with no live feeds or other bundled films. The animations contain mild comic peril/slapstick; this is not a formal all-ages rating. Google/IARC determine the app rating separately. Customer-provided sources remain supported and are not certified by this selection.
 
-`catalogue.json` records source pages, attribution and licence links. Wikimedia film derivatives are unmodified VP9/Opus 480p streams. Big Buck Bunny uses Mux adaptive HLS. EU live feeds use their official audiovisual service; reuse remains subject to the linked conditions, including third-party rights exceptions. No endorsement is implied.
+Catalogue source pages, credits and Creative Commons licence links are retained. Streams are unmodified Wikimedia VP9/Opus 480p derivatives. Playback needs internet. The app uses the packaged selection for both current and recognised legacy demo URLs, preventing old server playlists from restoring removed films.
 
-The app packages the playlist and credits; playback needs internet. The 30-day trial is local to the installation. Tests decode video and audio for every entry in both Android builds and verify trial persistence and expiry. External broadcasters can interrupt feeds.
+The 30-day demo period and existing account/Pro rules are unchanged. Android tests decode audio/video for each film, check legacy demo URLs and check expiry/restart behaviour.

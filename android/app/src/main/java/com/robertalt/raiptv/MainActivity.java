@@ -584,7 +584,7 @@ void scheduleBackgroundIndex(){
         });
     }
 
-    String safe(String s){return s==null?"":s;} String profileKey(){if(profile==null)return "none";String base=profile.type.name()+"|"+safe(profile.server)+"|"+safe(profile.username)+"|"+safe(profile.m3uUrl);return Integer.toHexString(base.hashCode())+":"+profile.type.name();} String cacheCursorKey(String type){return cacheCursorKey(profileKey(),type);} String cacheCursorKey(String key,String type){return "cache_cursor_"+key+"_"+type;}
+    String safe(String s){return s==null?"":s;} String profileKey(){if(profile==null)return "none";String base=profile.type.name()+"|"+safe(profile.server)+"|"+safe(profile.username)+"|"+safe(profile.m3uUrl);if(DemoPolicy.isDemo(profile))base+="|family-demo-v1";return Integer.toHexString(base.hashCode())+":"+profile.type.name();} String cacheCursorKey(String type){return cacheCursorKey(profileKey(),type);} String cacheCursorKey(String key,String type){return "cache_cursor_"+key+"_"+type;}
     void publishIndexedTop(String type){
         publishIndexedTop(type,false);
     }
@@ -628,8 +628,15 @@ void scheduleBackgroundIndex(){
                 if(indexProvider instanceof M3uProvider){
                     if(requestedForce||!searchIndex.isFresh(key,"live",SEARCH_INDEX_TTL_MS)){
                         indexProvider.authenticate();
-                        List<MediaEntry>x=indexProvider.items("live","all");if(x.isEmpty())throw new IllegalStateException("EMPTY_PLAYLIST");searchIndex.replaceSection(key,"live",x);
-                        searchIndex.replaceCategories(key,"live",indexProvider.categories("live"));
+                        if(DemoPolicy.isDemo(profile)){
+                            for(String type:new String[]{"live","vod","series"}){
+                                searchIndex.replaceSection(key,type,indexProvider.items(type,"all"));
+                                searchIndex.replaceCategories(key,type,indexProvider.categories(type));
+                            }
+                        }else{
+                            List<MediaEntry>x=indexProvider.items("live","all");if(x.isEmpty())throw new IllegalStateException("EMPTY_PLAYLIST");searchIndex.replaceSection(key,"live",x);
+                            searchIndex.replaceCategories(key,"live",indexProvider.categories("live"));
+                        }
                     }
                     allComplete=true;
                 }else{

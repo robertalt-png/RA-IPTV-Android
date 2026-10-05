@@ -197,9 +197,17 @@ public class ImportInstrumentation extends Instrumentation {
         java.util.List<MediaEntry> entries=provider.items("live","all");
         require(entries.size()==DemoSource.LIVE_COUNT,"Live count");
         java.util.List<MediaEntry> films=provider.items("vod","all");require(films.size()==DemoSource.FILM_COUNT,"Film count");
+        require(DemoSource.LIVE_COUNT==0 && DemoSource.FILM_COUNT==3,"Family demo counts");
+        for(String demoUrl:new String[]{SiteEndpoints.DEMO_URL,"https://sunnyiptv.com/nenotv-demo.m3u","https://nenotv.com/nenotv-demo.m3u"}){
+            require(DemoSource.PLAYLIST.equals(com.nenotv.player.net.HttpText.get(demoUrl)),"Legacy demo still uses remote content");
+            com.nenotv.player.model.Profile legacy=new com.nenotv.player.model.Profile();legacy.type=com.nenotv.player.model.Profile.Type.M3U;legacy.m3uUrl=demoUrl;
+            com.nenotv.player.provider.M3uProvider safe=new com.nenotv.player.provider.M3uProvider(legacy);safe.authenticate();
+            require(safe.items("live","all").isEmpty() && safe.items("vod","all").size()==3,"Legacy demo catalogue differs");
+        }
+        require(!SiteEndpoints.isDemoUrl("https://example.com/customer.m3u"),"Customer source treated as demo");
         entries.addAll(films);
         java.util.HashSet<String> ids=new java.util.HashSet<>();
-        for(MediaEntry e:entries){require(ids.add(e.tvgId),"Duplicate catalogue item");require(e.plot.contains("https://"),"Missing credits");require(provider.items(e.type,e.group).contains(e),"Category lost entry");}
+        for(MediaEntry e:entries){require(java.util.Arrays.asList("film-46670912","film-29654117","film-52325031").contains(e.tvgId),"Unreviewed demo film");require(ids.add(e.tvgId),"Duplicate catalogue item");require(e.plot.contains("https://"),"Missing credits");require(provider.items(e.type,e.group).contains(e),"Category lost entry");}
         for(MediaEntry item:entries){
             final androidx.media3.exoplayer.ExoPlayer[] player={null};
             final android.graphics.SurfaceTexture[] texture={null};

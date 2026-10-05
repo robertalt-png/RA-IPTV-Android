@@ -25,6 +25,7 @@ public final class CatalogPackageClient {
         if(!entitlement.isPro()||scope.isEmpty()||!scope.equals(entitlement.cloudAccountScope())||sources.syncDirty()||sources.accountChangePending()||sources.localRevision()!=revision||!id.equals(sources.activeId()))throw new IllegalStateException("CATALOG_ACCOUNT_CHANGED");
     }
     public boolean bootstrap(SearchIndexStore index,String profileKey,Profile profile,CatalogPackageImporter.Progress progress)throws Exception {
+        if(com.nenotv.player.DemoPolicy.isDemo(profile))return false;
         SourceStore.Entry active=sources.active();
         if(!entitlement.isPro()||scope.isEmpty()||sources.syncDirty()||sources.accountChangePending()||active==null||!active.enabled)return false;
         Profile actual=active.profile;

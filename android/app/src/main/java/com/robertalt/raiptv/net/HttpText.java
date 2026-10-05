@@ -21,7 +21,7 @@ public final class HttpText {
     private HttpText() {}
 
     public static String get(String url) throws IOException {
-        if(com.nenotv.player.DemoSource.URL.equals(url))return com.nenotv.player.DemoSource.PLAYLIST;
+        if(com.nenotv.player.SiteEndpoints.isDemoUrl(url))return com.nenotv.player.DemoSource.PLAYLIST;
         return execute("GET", url, null, Collections.emptyMap());
     }
 
