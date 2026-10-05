@@ -41,6 +41,7 @@ public final class PairingActivity extends Activity {
     boolean resumed,busy,complete,destroyed,openedWebsite,browserHandoff;
     int generation;
     Bitmap bitmap;
+    boolean localSetupLaunched;
     final Runnable poll=()->pollStatus();
 
     int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
@@ -61,6 +62,18 @@ public final class PairingActivity extends Activity {
         try{browserHandoff=true;browserOpener.open(this,session.url);}catch(Exception e){status.setText(text("server_unavailable"));}
     }
 
+    boolean firstRun(){return getIntent().getBooleanExtra("first_run",false);}
+    void localSetup(){
+        if(localSetupLaunched||destroyed||com.nenotv.player.storage.FamilyStore.active(this))return;
+        localSetupLaunched=true;handler.removeCallbacks(poll);
+        startActivityForResult(new Intent(this,ProfileActivity.class),42);
+    }
+
+    @Override protected void onActivityResult(int request,int result,Intent data){
+        super.onActivityResult(request,result,data);
+        if(request==42){localSetupLaunched=false;if(result==RESULT_OK&&new com.nenotv.player.storage.SecureProfileStore(this).exists()){setResult(RESULT_OK);finish();}else if(resumed&&session!=null)handler.post(poll);}
+    }
+
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);if(com.nenotv.player.storage.FamilyStore.active(this)){FamilyUi.blocked(this);finish();return;}client=factory.create(this);
         ScrollView scroll=new ScrollView(this);scroll.setBackgroundColor(0xFF07090D);
@@ -74,7 +87,7 @@ public final class PairingActivity extends Activity {
         open.setEnabled(false);open.setOnClickListener(v->openPairing());LinearLayout.LayoutParams linkParams=new LinearLayout.LayoutParams(-1,-2);linkParams.topMargin=dp(16);linkParams.bottomMargin=dp(8);box.addView(open,linkParams);
         status=label(text("checking_status"),16);status.setPadding(0,dp(12),0,dp(12));status.setAccessibilityLiveRegion(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE);box.addView(status,new LinearLayout.LayoutParams(-1,-2));
         retry=button("pair_new_code");retry.setOnClickListener(v->startPairing());box.addView(retry,new LinearLayout.LayoutParams(-1,-2));
-        Button close=button("close");close.setOnClickListener(v->finish());box.addView(close,new LinearLayout.LayoutParams(-1,-2));
+        Button close=button("close");if(firstRun()){String lang=com.nenotv.player.storage.SettingsStore.language(this);close.setText("nl".equals(lang)?"Begin zonder account":"de".equals(lang)?"Ohne Konto starten":"Start without an account");close.setTextSize(14);close.setTag("start_without_account");close.setOnClickListener(v->localSetup());}else close.setOnClickListener(v->finish());box.addView(close,new LinearLayout.LayoutParams(-1,-2));
         setContentView(scroll);ScreenInsets.browsing(this);UiText.applyDirection(this);
     }
 
@@ -82,7 +95,7 @@ public final class PairingActivity extends Activity {
 
     @Override protected void onResume(){
         super.onResume();if(com.nenotv.player.storage.FamilyStore.active(this)){finish();return;}resumed=true;
-        if(complete)return;
+        if(complete||localSetupLaunched)return;
         if(session!=null)handler.post(poll);
         else if(!busy)startPairing();
     }
@@ -122,7 +135,7 @@ public final class PairingActivity extends Activity {
     }
 
     void pollStatus(){
-        if((!resumed&&!backgroundAllowed())||destroyed||busy||complete||session==null)return;
+        if((!resumed&&!backgroundAllowed())||destroyed||busy||complete||localSetupLaunched||session==null)return;
         PairingClient.Session active=session;int current=generation;
         if(active.expired()){expire();return;}
         busy=true;retry.setEnabled(false);
@@ -135,7 +148,7 @@ public final class PairingActivity extends Activity {
                 runOnUiThread(()->{
                     if(destroyed||current!=generation)return;
                     busy=false;retry.setEnabled(true);
-                    if("complete".equals(state)){complete=true;clearCode();status.setText(text("pair_complete"));retry.setVisibility(android.view.View.GONE);ProModuleInstaller.syncEntitlement(this);if(getIntent().getBooleanExtra("setup",false)){setResult(RESULT_OK);finish();}else if(!new com.nenotv.player.storage.SecureProfileStore(this).exists()){startActivity(new Intent(this,ProfileActivity.class).putExtra("website_first",true));finish();}}
+                    if("complete".equals(state)){complete=true;clearCode();status.setText(text("pair_complete"));retry.setVisibility(android.view.View.GONE);ProModuleInstaller.syncEntitlement(this);if(firstRun()){if(new com.nenotv.player.storage.SecureProfileStore(this).exists()){setResult(RESULT_OK);finish();}else localSetup();}else if(getIntent().getBooleanExtra("setup",false)){setResult(RESULT_OK);finish();}else if(!new com.nenotv.player.storage.SecureProfileStore(this).exists()){startActivity(new Intent(this,ProfileActivity.class));finish();}}
                     else if("expired".equals(state)||"cancelled".equals(state))expire();
                     else{status.setText(text("pair_waiting"));schedule(active);}
                 });

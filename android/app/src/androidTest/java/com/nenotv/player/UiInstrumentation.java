@@ -355,6 +355,23 @@ public final class UiInstrumentation extends ImportInstrumentation {
                 removeMonitor(pairingMonitor);runOnMainSync(input::finish);entitlementPrefs.edit().putString("level",oldLevel).commit();
                 if(previousProfile!=null)savedProfiles.save(previousProfile);
             }
+            Intent first=MainActivity.firstRunIntent(getTargetContext());
+            check(first.getComponent()!=null&&first.getComponent().getClassName().equals(PairingActivity.class.getName())&&first.getBooleanExtra("first_run",false),"First start has an intermediate source screen");
+            int beforeFirst=opened.get();
+            PairingActivity firstScreen=(PairingActivity)startActivitySync(first.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            android.app.Instrumentation.ActivityMonitor sourceMonitor=addMonitor(ProfileActivity.class.getName(),null,false);
+            try{
+                Thread.sleep(600);waitForIdleSync();
+                runOnMainSync(()->{
+                    Button skip=firstScreen.findViewById(android.R.id.content).findViewWithTag("start_without_account");
+                    check(skip!=null&&skip.getTextSize()<firstScreen.open.getTextSize(),"Secondary account-free choice missing");
+                    check(opened.get()==beforeFirst,"First start automatically opened browser");
+                    skip.performClick();skip.performClick();
+                });
+                android.app.Activity local=waitForMonitorWithTimeout(sourceMonitor,5000);
+                check(local instanceof ProfileActivity&&sourceMonitor.getHits()==1,"Account-free choice did not open exactly one source screen");
+                if(local!=null)runOnMainSync(local::finish);
+            }finally{removeMonitor(sourceMonitor);runOnMainSync(firstScreen::finish);}
             for(String language:new String[]{"nl","en","de"}){
                 SettingsStore.setPrimaryLanguage(getTargetContext(),language);state.set("pending");
                 PairingActivity a=(PairingActivity)startActivitySync(new Intent(getTargetContext(),PairingActivity.class).putExtra("auto_web",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
