@@ -324,9 +324,16 @@ public final class UiInstrumentation extends ImportInstrumentation {
             final Dialog[] detailsDialog={null};runOnMainSync(()->detailsDialog[0]=a.showDetailsDialog(one,info));waitForIdleSync();long dialogDeadline=SystemClock.elapsedRealtime()+5000;android.view.accessibility.AccessibilityNodeInfo active=null;boolean visible=false;while(!visible&&SystemClock.elapsedRealtime()<dialogDeadline){active=getUiAutomation().getRootInActiveWindow();visible=active!=null&&!active.findAccessibilityNodeInfosByText("QA film").isEmpty();if(!visible)Thread.sleep(150);}if(!visible)snapshot("film-dialog-failure");check(visible,"Film detail dialog did not become visible: "+String.valueOf(active));runOnMainSync(()->assertUnclippedText((TextView)detailsDialog[0].getWindow().getDecorView().findViewWithTag("details-favorite")));runOnMainSync(()->detailsDialog[0].getWindow().getDecorView().findViewWithTag("details-favorite").performClick());waitForIdleSync();runOnMainSync(()->assertUnclippedText((TextView)detailsDialog[0].getWindow().getDecorView().findViewWithTag("details-favorite")));snapshot("film-info-"+language);sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
             try(ImageFixture images=new ImageFixture()){
                 final ImageView[] image={null};runOnMainSync(()->{image[0]=new ImageView(a);((ViewGroup)a.findViewById(android.R.id.content)).addView(image[0],new ViewGroup.LayoutParams(1,1));MediaRowAdapter.loadArtwork(image[0],images.url("ok"),"QA",240,360);});
-                long end=SystemClock.elapsedRealtime()+10000;while(!(image[0].getDrawable() instanceof android.graphics.drawable.BitmapDrawable)&&SystemClock.elapsedRealtime()<end)Thread.sleep(100);
-                check(image[0].getDrawable() instanceof android.graphics.drawable.BitmapDrawable,"Valid poster did not decode");
-                runOnMainSync(()->MediaRowAdapter.loadArtwork(image[0],images.url("missing"),"QA",240,360));Thread.sleep(500);check(image[0].getDrawable()!=null&&!(image[0].getDrawable() instanceof android.graphics.drawable.BitmapDrawable),"Failed poster left old image or blank card");
+                android.graphics.Bitmap fallback=android.graphics.BitmapFactory.decodeResource(a.getResources(),R.drawable.sunnyiptv_icon);
+                java.util.concurrent.atomic.AtomicBoolean posterLoaded=new java.util.concurrent.atomic.AtomicBoolean();
+                long end=SystemClock.elapsedRealtime()+10000;
+                while(!posterLoaded.get()&&SystemClock.elapsedRealtime()<end){
+                    runOnMainSync(()->posterLoaded.set(image[0].getDrawable() instanceof android.graphics.drawable.BitmapDrawable&&image[0].getPaddingLeft()==0&&!((android.graphics.drawable.BitmapDrawable)image[0].getDrawable()).getBitmap().sameAs(fallback)));
+                    if(!posterLoaded.get())Thread.sleep(100);
+                }
+                check(posterLoaded.get(),"Valid poster did not decode");
+                runOnMainSync(()->MediaRowAdapter.loadArtwork(image[0],images.url("missing"),"QA",240,360));Thread.sleep(500);
+                runOnMainSync(()->check(image[0].getDrawable() instanceof android.graphics.drawable.BitmapDrawable&&((android.graphics.drawable.BitmapDrawable)image[0].getDrawable()).getBitmap().sameAs(fallback),"Failed poster did not restore the SunnyIPTV logo"));
             }
             runOnMainSync(a::finish);
         }
