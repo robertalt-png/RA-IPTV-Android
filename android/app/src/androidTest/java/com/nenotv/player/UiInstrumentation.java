@@ -315,6 +315,9 @@ public final class UiInstrumentation extends ImportInstrumentation {
                     runOnMainSync(()->{
                         check(a.qr.getVisibility()==View.VISIBLE&&a.open.isEnabled(),"QR pairing controls missing");
                         check(!a.code.isSaveEnabled(),"Pairing code saved in screen state");
+                        check(a.code==a.open&&a.open.getText().toString().equals(a.linkLabel()+"\nAB23"),"Pairing code is not inside the link button");
+                        check(a.open.isClickable()&&a.open.isFocusable(),"Link button cannot be activated");
+                        int before=opened.get();a.open.performClick();check(opened.get()==before+1,"Link button did not open the code-bearing URL exactly once");
                         assertUnclippedText(a.code);assertUnclippedText(a.status);assertUnclippedText(a.retry);
                         check(a.bitmap!=null&&a.bitmap.getWidth()==512,"QR bitmap missing");
                     });
@@ -323,7 +326,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
                     check("https://sunnyiptv.com/nenotv-pair/?code=AB23&lang=nl".equals(new com.google.zxing.MultiFormatReader().decode(qr).getText()),"QR does not encode pairing URL");
                     snapshot("pairing-"+language);
                     if("nl".equals(language)){
-                        runOnMainSync(()->{a.expire();check(a.session==null&&!a.open.isEnabled()&&a.qr.getVisibility()==View.GONE,"Expired QR remained active");a.startPairing();});
+                        runOnMainSync(()->{a.expire();check(a.session==null&&!a.open.isEnabled()&&a.qr.getVisibility()==View.GONE,"Expired QR remained active");int before=opened.get();a.open.performClick();check(opened.get()==before,"Expired code opened browser");a.startPairing();});
                         ready.set(false);end=SystemClock.elapsedRealtime()+5000;
                         while(!ready.get()&&SystemClock.elapsedRealtime()<end){runOnMainSync(()->ready.set(a.session!=null&&!a.busy));Thread.sleep(50);}
                         check(ready.get(),"New pairing code not rendered");
@@ -531,3 +534,5 @@ public final class UiInstrumentation extends ImportInstrumentation {
         public void close()throws Exception{socket.close();worker.join(1000);}
     }
 }
+
+
