@@ -52,6 +52,7 @@ public final class PairingClient {
             boolean paid=entitlement!=null&&java.util.Arrays.asList("pro","pro_trial","trial").contains(entitlement.optString("level"))
                 &&java.util.Arrays.asList("active","trial_active").contains(entitlement.optString("status"));
             if((!free&&!paid)||!com.nenotv.player.storage.AccountLinkStore.valid(link)||paid&&!"paid".equals(link.optString("kind")))throw new IOException("Missing active pairing entitlement");
+            if(free)entitlement.put("email","").put("account_email","");
             client.applyEntitlement(response);
             new com.nenotv.player.storage.AccountLinkStore(context).apply(link);
         }
