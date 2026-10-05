@@ -1,4 +1,5 @@
 package com.nenotv.player;
+import android.content.Intent;
 
 import android.app.*; import android.os.*; import android.view.*; import android.widget.*;
 import com.nenotv.player.model.Profile; import com.nenotv.player.provider.*; import com.nenotv.player.storage.*;
