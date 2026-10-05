@@ -270,7 +270,10 @@ public class ImportInstrumentation extends Instrumentation {
     @Override public void onStart() {
         Bundle result = new Bundle();
         String phase=args.getString("phase","");
+        android.content.SharedPreferences account=getTargetContext().getSharedPreferences("nenotv_account_link_v1",android.content.Context.MODE_PRIVATE);
+        java.util.Map<String,?> previousAccount=new java.util.HashMap<>(account.getAll());
         try {
+            new com.nenotv.player.storage.AccountLinkStore(getTargetContext()).apply(new org.json.JSONObject().put("status","active").put("kind","free").put("account_id",String.join("",java.util.Collections.nCopies(64,"a"))));
             if ("demo".equals(phase)) demoSuite(result);
             else if ("demo_resume".equals(phase)) verifyDemoResume(result);
             else if ("prepare_resume".equals(phase)) prepareResume(result);
@@ -280,6 +283,6 @@ public class ImportInstrumentation extends Instrumentation {
             String key="demo_resume".equals(phase)?"NENOTV_DEMO_RESUME":"demo".equals(phase)?"NENOTV_DEMO_TESTS":"prepare_resume".equals(phase)?"NENOTV_RESUME_PREPARE":"verify_resume".equals(phase)?"NENOTV_RESUME_VERIFY":"NENOTV_IMPORT_TESTS";
             result.putString(key, "failed: " + failure.getClass().getSimpleName() + ": " + String.valueOf(failure.getMessage()));
             finish(Activity.RESULT_CANCELED, result);
-        }
+        }finally{FamilyChecks.restore(account,previousAccount);}
     }
 }
