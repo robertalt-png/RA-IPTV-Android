@@ -46,7 +46,7 @@ public class AccountActivity extends Activity {
 
         LinearLayout h=new LinearLayout(this);
         h.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title=t("NenoTV",28);
+        TextView title=t("SunnyIPTV",28);
         title.setTypeface(null,Typeface.BOLD);
         h.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button close=b(T("close"));
@@ -241,7 +241,7 @@ public class AccountActivity extends Activity {
 
     String myNenoLabel(){
         String l=SettingsStore.language(this);
-        return "nl".equals(l)?"Open Mijn NenoTV":"de".equals(l)?"Mein NenoTV öffnen":"Open My NenoTV";
+        return "nl".equals(l)?"Open Mijn SunnyIPTV":"de".equals(l)?"Mein SunnyIPTV öffnen":"Open My SunnyIPTV";
     }
     String myNenoUrl(){
         String l=SettingsStore.language(this);
