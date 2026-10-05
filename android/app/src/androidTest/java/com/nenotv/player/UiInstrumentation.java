@@ -100,8 +100,10 @@ public final class UiInstrumentation extends ImportInstrumentation {
             waitForIdleSync();
             runOnMainSync(()->{
                 check(a.demoRadio.isEnabled()&&a.demoRadio.isChecked(),"NenoTV offer not selected on fresh install");
+                ImageView heading=a.findViewById(R.id.profileBrand);
+                check(heading.getVisibility()==View.VISIBLE&&heading.getHeight()>0&&heading.getDrawable()!=null,"SunnyIPTV onboarding logo missing");
                 if(Build.VERSION.SDK_INT>=30){
-                    View heading=a.findViewById(R.id.profileTitle);int[] position=new int[2];heading.getLocationOnScreen(position);
+                    int[] position=new int[2];heading.getLocationOnScreen(position);
                     WindowInsets insets=heading.getRootWindowInsets();
                     check(insets!=null&&position[1]>=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout()).top,"Onboarding title overlaps system bars");
                 }
