@@ -342,9 +342,14 @@ public final class UiInstrumentation extends ImportInstrumentation {
             android.app.Instrumentation.ActivityMonitor pairingMonitor=addMonitor(PairingActivity.class.getName(),null,false);
             ProfileActivity input=(ProfileActivity)startActivitySync(new Intent(getTargetContext(),ProfileActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             try{
-                runOnMainSync(()->{input.xtream.setChecked(true);input.server.setText("https://provider.example.invalid");input.user.setText("qa-user");input.pass.setText("qa-password");input.connectAndSave();input.connectAndSave();});
+                runOnMainSync(()->{
+                    check(!input.pairLaunched,"Source entry forced pairing");
+                    Button optional=input.findViewById(android.R.id.content).findViewWithTag("optional_device_link");
+                    check(optional!=null,"Optional pairing button missing");
+                    optional.performClick();optional.performClick();
+                });
                 android.app.Activity top=waitForMonitorWithTimeout(pairingMonitor,5000);
-                check(top!=null&&pairingMonitor.getHits()==1&&!savedProfiles.exists()&&opened.get()==0,"Unpaired input imported locally, opened browser or launched duplicate pairing sessions");
+                check(top!=null&&pairingMonitor.getHits()==1&&!savedProfiles.exists()&&opened.get()==0,"Optional device linking imported a source, opened a browser or launched duplicate sessions");
                 if(top!=null)runOnMainSync(top::finish);
             }finally{
                 removeMonitor(pairingMonitor);runOnMainSync(input::finish);entitlementPrefs.edit().putString("level",oldLevel).commit();
