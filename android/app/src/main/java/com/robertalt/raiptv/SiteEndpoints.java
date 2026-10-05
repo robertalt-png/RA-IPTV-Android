@@ -6,6 +6,11 @@ public final class SiteEndpoints {
 
     private SiteEndpoints() {}
 
+    public static String privacyUrl(String language) {
+        return WEBSITE + ("nl".equals(language) ? "/language/nl/privacybeleid/"
+                : "de".equals(language) ? "/language/de/datenschutz/" : "/privacy/");
+    }
+
     public static boolean isPairingHost(String host) {
         return "sunnyiptv.com".equals(host) || "nenotv.com".equals(host);
     }

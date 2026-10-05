@@ -89,7 +89,35 @@ public final class UiInstrumentation extends ImportInstrumentation {
         int count(String action){java.util.concurrent.atomic.AtomicInteger n=counts.get(action);return n==null?0:n.get();}
         public void close()throws Exception{socket.close();worker.join(1000);}
     }
+    void privacyAccess()throws Exception{
+        Context c=getTargetContext();
+        SharedPreferences entitlement=c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE);
+        String previousLevel=entitlement.getString("level","FREE"),previousLanguage=SettingsStore.language(c);
+        long previousExpiry=entitlement.getLong("expires_at",0L);
+        try{
+            for(String level:new String[]{"FREE","PRO"})for(String language:new String[]{"nl","en","de"}){
+                entitlement.edit().putString("level",level).putLong("expires_at",0L).commit();
+                SettingsStore.setPrimaryLanguage(c,language);
+                AccountActivity a=(AccountActivity)startActivitySync(new Intent(c,AccountActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                try{
+                    waitForIdleSync();
+                    runOnMainSync(()->{
+                        Button privacy=a.box.findViewWithTag("privacy_policy");
+                        String expected="nl".equals(language)?"Privacyverklaring":"de".equals(language)?"Datenschutzerklärung":"Privacy policy";
+                        check(privacy!=null&&privacy.isEnabled()&&privacy.getVisibility()==View.VISIBLE&&privacy.hasOnClickListeners(),"Privacy link unavailable: "+level+"/"+language);
+                        check(expected.contentEquals(privacy.getText()),"Privacy label incorrect: "+language);
+                        assertUnclippedText(privacy);
+                    });
+                    snapshot("privacy-"+level.toLowerCase(java.util.Locale.ROOT)+"-"+language);
+                }finally{runOnMainSync(a::finish);waitForIdleSync();}
+            }
+        }finally{
+            entitlement.edit().putString("level",previousLevel).putLong("expires_at",previousExpiry).commit();
+            SettingsStore.setPrimaryLanguage(c,previousLanguage);
+        }
+    }
     void onboarding(Bundle result)throws Exception{
+        privacyAccess();
         Context c=getTargetContext();
         SecureProfileStore profiles=new SecureProfileStore(c);
         profiles.clear();

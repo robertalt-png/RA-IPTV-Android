@@ -94,6 +94,12 @@ public class AccountActivity extends Activity {
         my.setOnClickListener(v->openWeb(myNenoUrl()));
         addButton(my);
 
+        String language=SettingsStore.language(this);
+        Button privacy=b("nl".equals(language)?"Privacyverklaring":"de".equals(language)?"Datenschutzerklärung":"Privacy policy");
+        privacy.setTag("privacy_policy");
+        privacy.setOnClickListener(v->openWeb(SiteEndpoints.privacyUrl(SettingsStore.language(this))));
+        addButton(privacy);
+
         sec(T("request_trial"));
         email=input(T("email_address"),android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
         email.setText(ent.accountEmail());
