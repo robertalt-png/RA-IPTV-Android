@@ -14,6 +14,7 @@ import com.nenotv.player.model.MediaEntry;
 import com.nenotv.player.storage.CrashGuard;
 import com.nenotv.player.storage.LibraryStore;
 import com.nenotv.player.storage.SettingsStore;
+import com.nenotv.player.storage.FamilyStore;
 import java.util.*;
 
 public class PlayerActivity extends FragmentActivity {
@@ -22,7 +23,7 @@ public class PlayerActivity extends FragmentActivity {
     SeekBar seek; FrameLayout controls; Handler ui=new Handler(Looper.getMainLooper()); boolean userSeeking=false,destroyed=false; int aspectMode=0; float playbackSpeed=1f;
     String T(String k){return UiText.t(this,k);}
     com.nenotv.player.provider.PlaybackSourceRoute playbackRoute;
-    Runnable tick=new Runnable(){public void run(){if(destroyed||isFinishing())return;if(playbackRoute==null||!playbackRoute.isCurrent(false)){if(exo!=null){exo.release();exo=null;}Toast.makeText(PlayerActivity.this,T("source_unavailable"),Toast.LENGTH_LONG).show();finish();return;}updateProgress();ui.postDelayed(this,500);}};
+    Runnable tick=new Runnable(){public void run(){if(destroyed||isFinishing())return;if(!FamilyStore.allowed(PlayerActivity.this,entry)||playbackRoute==null||!playbackRoute.isCurrent(false)){if(exo!=null){exo.release();exo=null;}Toast.makeText(PlayerActivity.this,T("source_unavailable"),Toast.LENGTH_LONG).show();finish();return;}updateProgress();ui.postDelayed(this,500);}};
     Runnable hideControlsTask=()->hideControls();
 
     void cancelControlsHide(){ui.removeCallbacks(hideControlsTask);}
@@ -59,7 +60,7 @@ public class PlayerActivity extends FragmentActivity {
         super.onCreate(b);if(DemoPolicy.blockPlayback(this)){finish();return;}com.nenotv.player.storage.SecureProfileStore demoStore=new com.nenotv.player.storage.SecureProfileStore(this);if(demoStore.exists()&&DemoPolicy.isDemo(demoStore.load()))demoHandler.post(demoExpiryCheck);CrashGuard.install(this);getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);getWindow().setStatusBarColor(Color.BLACK);
         setContentView(R.layout.activity_player);UiText.applyDirection(this);library=new LibraryStore(this);
         media3View=findViewById(R.id.media3View);controls=findViewById(R.id.playerControls);title=findViewById(R.id.playerTitle);status=findViewById(R.id.playerStatus);timeText=findViewById(R.id.timeText);playPause=findViewById(R.id.playPauseButton);rewind=findViewById(R.id.rewindButton);forward=findViewById(R.id.forwardButton);audio=findViewById(R.id.audioButton);subtitle=findViewById(R.id.subtitleButton);pip=findViewById(R.id.pipButton);seek=findViewById(R.id.seekBar);speed=findViewById(R.id.speedButton);aspect=findViewById(R.id.aspectButton);sleep=findViewById(R.id.sleepButton);record=findViewById(R.id.recordButton);favorite=findViewById(R.id.favoriteButton);castButton=findViewById(R.id.castRouteButton);channelPrev=findViewById(R.id.channelPrevButton);channelNext=findViewById(R.id.channelNextButton);
-        entry=(MediaEntry)getIntent().getSerializableExtra("media");if(entry==null){finish();return;}title.setText(DisplayText.title(entry));
+        entry=(MediaEntry)getIntent().getSerializableExtra("media");if(entry==null||!FamilyStore.allowed(this,entry)){finish();return;}title.setText(DisplayText.title(entry));
         record.setVisibility(View.GONE);castButton.setVisibility(View.GONE);channelPrev.setVisibility(View.GONE);channelNext.setVisibility(View.GONE);pip.setVisibility(View.GONE);
         media3View.setUseController(false);
         media3View.setOnClickListener(v->touchControls());
@@ -77,6 +78,7 @@ public class PlayerActivity extends FragmentActivity {
     }
 
     void startPlayer(){
+        if(!FamilyStore.allowed(this,entry)){FamilyUi.blocked(this);finish();return;}
         try{playbackRoute=com.nenotv.player.provider.PlaybackSourceRoute.resolve(this,entry,false);}
         catch(Exception unavailable){status.setText(T("source_unavailable"));finish();return;}
         ArrayList<String> urls=new ArrayList<>(entry.candidates);if(urls.isEmpty()&&entry.url!=null&&!entry.url.isEmpty())urls.add(entry.url);if(urls.isEmpty()){status.setText(T("no_stream_url"));return;}
@@ -96,4 +98,3 @@ public class PlayerActivity extends FragmentActivity {
     @Override public void onWindowFocusChanged(boolean focus){super.onWindowFocusChanged(focus);if(focus)ScreenInsets.player(this);}
     @Override protected void onDestroy(){destroyed=true;ui.removeCallbacksAndMessages(null);demoHandler.removeCallbacksAndMessages(null);if(exo!=null){exo.release();exo=null;}super.onDestroy();}
 }
-

@@ -40,10 +40,20 @@ public final class SettingsStore {
     public static boolean parental(Context c){return prefs(c).getBoolean("parental_enabled",false);}
     public static boolean hasParentalPin(Context c){return !prefs(c).getString("parental_pin_hash","").isEmpty();}
     public static void setParentalEnabled(Context c,boolean enabled){prefs(c).edit().putBoolean("parental_enabled",enabled).apply();if(!enabled)adultUnlocked=false;}
-    public static void setParentalPin(Context c,String pin){prefs(c).edit().putString("parental_pin_hash",hash(pin)).apply();adultUnlocked=false;}
-    public static boolean unlockAdults(Context c,String pin){if(!parental(c)){adultUnlocked=true;return true;}boolean ok=hash(pin).equals(prefs(c).getString("parental_pin_hash",""));if(ok)adultUnlocked=true;return ok;}
+    public static void setParentalPin(Context c,String pin){if(!prefs(c).edit().putString("parental_pin_hash",ParentPinCodec.encode(pin)).putInt("parental_pin_failures",0).putLong("parental_pin_locked_until",0).commit())throw new IllegalStateException("PIN storage unavailable");adultUnlocked=false;}
+    public static synchronized boolean verifyParentalPin(Context c,String pin){
+        SharedPreferences p=prefs(c);long now=System.currentTimeMillis();
+        if(now<p.getLong("parental_pin_locked_until",0))return false;
+        String stored=p.getString("parental_pin_hash","");
+        boolean valid=pin!=null&&pin.matches("[0-9]{4,8}")&&!stored.isEmpty();
+        boolean ok=valid&&(stored.startsWith("pbkdf2-v1:")?ParentPinCodec.verify(pin,stored):stored.matches("[a-f0-9]{64}")&&MessageDigest.isEqual(hash(pin).getBytes(StandardCharsets.UTF_8),stored.getBytes(StandardCharsets.UTF_8)));
+        if(ok){if(!stored.startsWith("pbkdf2-v1:"))setParentalPin(c,pin);return p.edit().putInt("parental_pin_failures",0).putLong("parental_pin_locked_until",0).commit();}
+        int failures=p.getInt("parental_pin_failures",0)+1;
+        p.edit().putInt("parental_pin_failures",failures>=5?0:failures).putLong("parental_pin_locked_until",failures>=5?now+60000:0).commit();return false;
+    }
+    public static boolean unlockAdults(Context c,String pin){boolean ok=verifyParentalPin(c,pin);if(ok&&!FamilyStore.active(c))adultUnlocked=true;return ok;}
     public static void lockAdults(){adultUnlocked=false;}
-    public static boolean adultsAllowed(Context c){return !parental(c)||adultUnlocked;}
+    public static boolean adultsAllowed(Context c){return !FamilyStore.active(c)&&(!parental(c)||adultUnlocked);}
     public static boolean isAdultLabel(String s){if(s==null)return false;String n=(" "+s.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9+]+"," ")+" ");return n.contains(" adult ")||n.contains(" adults ")||n.contains(" xxx ")||n.contains(" 18+ ")||n.contains(" erot")||n.contains(" porn")||n.contains(" sex ")||n.contains(" volwassenen ");}
     private static String hash(String s){try{MessageDigest md=MessageDigest.getInstance("SHA-256");byte[] b=md.digest(("nenotv-parental-v1|"+(s==null?"":s)).getBytes(StandardCharsets.UTF_8));StringBuilder out=new StringBuilder();for(byte x:b)out.append(String.format(java.util.Locale.ROOT,"%02x",x));return out.toString();}catch(Exception e){return Integer.toHexString((s==null?"":s).hashCode());}}
 }

@@ -116,6 +116,38 @@ public final class UiInstrumentation extends ImportInstrumentation {
             SettingsStore.setPrimaryLanguage(c,previousLanguage);
         }
     }
+    void family(Bundle result)throws Exception{
+        Context c=getTargetContext();int checks=FamilyChecks.run(c);
+        Map<String,Map<String,?>> previous=new LinkedHashMap<>();
+        for(String name:new String[]{"nenotv_settings","sunnyiptv_family_v1","profile","nenotv_entitlement"})previous.put(name,new HashMap<>(c.getSharedPreferences(name,Context.MODE_PRIVATE).getAll()));
+        try{
+            Profile p=new Profile();p.type=Profile.Type.M3U;p.m3uUrl="https://example.invalid/qa-family.m3u";new SecureProfileStore(c).save(p);
+            SettingsStore.setParentalPin(c,"2468");
+            MediaEntry allowed=new MediaEntry();allowed.id="family-approved";allowed.name="Approved family movie";allowed.type="vod";allowed.url="https://example.invalid/approved.mp4";
+            check(FamilyStore.approve(c,allowed,"2468"),"QA approval failed");check(FamilyStore.setActive(c,true,"2468"),"QA mode failed");
+            for(String language:new String[]{"nl","en","de"}){
+                SettingsStore.setPrimaryLanguage(c,language);
+                FamilyActivity a=(FamilyActivity)startActivitySync(new Intent(c,FamilyActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                try{waitForIdleSync();snapshot("family-"+language);}finally{runOnMainSync(a::finish);waitForIdleSync();}
+            }
+            try(XtreamFixture fixture=new XtreamFixture("General")){
+                Profile stream=new Profile();stream.type=Profile.Type.XTREAM;stream.server=fixture.url();stream.username="family-qa";stream.password="qa";new SecureProfileStore(c).save(stream);
+                MainActivity main=(MainActivity)startActivitySync(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                try{
+                    waitForIdleSync();
+                    runOnMainSync(()->{
+                        MediaEntry hidden=new MediaEntry();hidden.id="hidden";hidden.name="Not approved";hidden.type="vod";
+                        check(main.visibleItems(Arrays.asList(allowed,hidden)).isEmpty(),"Changed source leaked through browse filter");
+                        check(main.isAdultLocked(hidden),"Playback guard missing");
+                        check(FamilyStore.approve(c,hidden,"2468"),"QA item not approved");
+                        check(main.visibleItems(Arrays.asList(allowed,hidden)).size()==1,"Browse filter not using allowlist");
+                    });
+                    snapshot("family-main-deny-default");
+                }finally{runOnMainSync(main::finish);waitForIdleSync();}
+            }
+            result.putString("SUNNYIPTV_FAMILY_TESTS","passed");result.putInt("SUNNYIPTV_FAMILY_CHECK_COUNT",checks);
+        }finally{for(Map.Entry<String,Map<String,?>> e:previous.entrySet())FamilyChecks.restore(c.getSharedPreferences(e.getKey(),Context.MODE_PRIVATE),e.getValue());SettingsStore.lockAdults();}
+    }
     void onboarding(Bundle result)throws Exception{
         privacyAccess();
         Context c=getTargetContext();
@@ -478,7 +510,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
             new SecureProfileStore(c).save(profile());
         }
     }
-    @Override public void onStart(){Bundle result=new Bundle();String phase=args.getString("phase","ui");if(!Arrays.asList("ui","resume","pro","update","xtream","onboarding","catalog").contains(phase)){super.onStart();return;}try{if("catalog".equals(phase)){com.nenotv.player.entitlement.CatalogPackageChecks.run(getTargetContext(),getContext());result.putString("NENOTV_CATALOG_PACKAGE","passed");finish(Activity.RESULT_OK,result);}else if("onboarding".equals(phase)){onboarding(result);finish(Activity.RESULT_OK,result);}else if("xtream".equals(phase)){XtreamImportChecks.run(getTargetContext());xtreamSharedDownloads();result.putString("NENOTV_XTREAM_IMPORT","passed");finish(Activity.RESULT_OK,result);}else if("update".equals(phase)){UpdateAccessChecks.run(getTargetContext());result.putString("NENOTV_UPDATE_ACCESS","passed");finish(Activity.RESULT_OK,result);}else if("resume".equals(phase))resume(result);else if("pro".equals(phase)){Context c=getTargetContext();SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();DemoPolicy.startOrKeep(c,System.currentTimeMillis());new SecureProfileStore(c).save(profile());pro(result);}else core(result);}catch(Throwable failure){result.putString("NENOTV_UI_TESTS","failed: "+failure.getClass().getSimpleName()+": "+failure.getMessage());finish(Activity.RESULT_CANCELED,result);}}
+    @Override public void onStart(){Bundle result=new Bundle();String phase=args.getString("phase","ui");if(!Arrays.asList("ui","resume","pro","update","xtream","onboarding","catalog","family").contains(phase)){super.onStart();return;}try{if("family".equals(phase)){family(result);finish(Activity.RESULT_OK,result);}else if("catalog".equals(phase)){com.nenotv.player.entitlement.CatalogPackageChecks.run(getTargetContext(),getContext());result.putString("NENOTV_CATALOG_PACKAGE","passed");finish(Activity.RESULT_OK,result);}else if("onboarding".equals(phase)){onboarding(result);finish(Activity.RESULT_OK,result);}else if("xtream".equals(phase)){XtreamImportChecks.run(getTargetContext());xtreamSharedDownloads();result.putString("NENOTV_XTREAM_IMPORT","passed");finish(Activity.RESULT_OK,result);}else if("update".equals(phase)){UpdateAccessChecks.run(getTargetContext());result.putString("NENOTV_UPDATE_ACCESS","passed");finish(Activity.RESULT_OK,result);}else if("resume".equals(phase))resume(result);else if("pro".equals(phase)){Context c=getTargetContext();SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();DemoPolicy.startOrKeep(c,System.currentTimeMillis());new SecureProfileStore(c).save(profile());pro(result);}else core(result);}catch(Throwable failure){result.putString("NENOTV_UI_TESTS","failed: "+failure.getClass().getSimpleName()+": "+failure.getMessage());finish(Activity.RESULT_CANCELED,result);}}
     static final class EpgFixture implements AutoCloseable{
         final ServerSocket socket;final Thread worker;final byte[] body;
         EpgFixture()throws Exception{
@@ -499,5 +531,3 @@ public final class UiInstrumentation extends ImportInstrumentation {
         public void close()throws Exception{socket.close();worker.join(1000);}
     }
 }
-
-

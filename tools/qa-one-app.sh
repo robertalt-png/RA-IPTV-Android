@@ -3,9 +3,13 @@ set -euo pipefail
 device="$1"
 mkdir -p qa-results
 trap 'timeout 15s adb logcat -d > qa-results/logcat.txt || true; timeout 15s adb pull /sdcard/Android/data/com.nenotv.player/files/qa qa-results/final-screenshots || true' EXIT
-apk="$PWD/distribution/SunnyIPTV-Pro-v0.14.7-vc101-TEST-SIGNED.apk"
-light_apk="$PWD/distribution/SunnyIPTV-Light-v0.14.7-vc101-TEST-SIGNED.apk"
+apk="$PWD/distribution/SunnyIPTV-Pro-v0.14.8-vc102-TEST-SIGNED.apk"
+light_apk="$PWD/distribution/SunnyIPTV-Light-v0.14.8-vc102-TEST-SIGNED.apk"
 adb install "$light_apk"
+adb install qa-tools/tests.apk
+adb shell am instrument -w -e phase family com.nenotv.player.test/com.nenotv.player.UiInstrumentation | tee qa-results/family-light.txt
+rg -q 'SUNNYIPTV_FAMILY_TESTS=passed' qa-results/family-light.txt
+adb shell am force-stop com.nenotv.player
 adb shell pm path com.nenotv.player > qa-results/light-apk-paths.txt
 if rg -qi proextras qa-results/light-apk-paths.txt; then exit 2; fi
 adb logcat -c
@@ -23,6 +27,9 @@ if [ "$device" = phone ]; then
 fi
 adb install "$apk"
 adb install qa-tools/tests.apk
+adb shell am instrument -w -e phase family com.nenotv.player.test/com.nenotv.player.UiInstrumentation | tee qa-results/family-pro.txt
+rg -q 'SUNNYIPTV_FAMILY_TESTS=passed' qa-results/family-pro.txt
+adb shell am force-stop com.nenotv.player
 adb shell settings put secure immersive_mode_confirmations confirmed
 adb logcat -c
 if [ "$device" = phone ]; then
@@ -67,4 +74,3 @@ if [ "$device" = phone ]; then
 fi
 adb logcat -d > qa-results/logcat.txt
 if rg -q 'FATAL EXCEPTION' qa-results/logcat.txt; then exit 2; fi
-

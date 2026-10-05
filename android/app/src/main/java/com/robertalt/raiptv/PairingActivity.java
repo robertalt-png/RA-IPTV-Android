@@ -49,7 +49,7 @@ public final class PairingActivity extends Activity {
     Button button(String key){Button view=new Button(this);view.setText(text(key));view.setAllCaps(false);view.setTextColor(0xFFF7F8FA);view.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));view.setMinHeight(dp(52));return view;}
 
     @Override public void onCreate(Bundle saved){
-        super.onCreate(saved);client=factory.create(this);
+        super.onCreate(saved);if(com.nenotv.player.storage.FamilyStore.active(this)){FamilyUi.blocked(this);finish();return;}client=factory.create(this);
         ScrollView scroll=new ScrollView(this);scroll.setBackgroundColor(0xFF07090D);
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setGravity(Gravity.CENTER_HORIZONTAL);box.setPadding(dp(18),dp(18),dp(18),dp(24));scroll.addView(box);
         TextView title=label(text("link_my_nenotv"),24);box.addView(title,new LinearLayout.LayoutParams(-1,-2));
@@ -67,7 +67,7 @@ public final class PairingActivity extends Activity {
     boolean backgroundAllowed(){return browserHandoff||getIntent().getBooleanExtra("auto_web",false);}
 
     @Override protected void onResume(){
-        super.onResume();resumed=true;
+        super.onResume();if(com.nenotv.player.storage.FamilyStore.active(this)){finish();return;}resumed=true;
         if(complete)return;
         if(session!=null)handler.post(poll);
         else if(!busy)startPairing();
@@ -144,7 +144,7 @@ public final class PairingActivity extends Activity {
         return text("server_unavailable");
     }
     @Override protected void onDestroy(){
-        destroyed=true;generation++;handler.removeCallbacksAndMessages(null);clearCode();
+        destroyed=true;generation++;handler.removeCallbacksAndMessages(null);if(qr!=null)clearCode();
         PairingClient.Session active=session;session=null;
         if(active!=null)worker.execute(()->{try{client.cancel(active);}catch(Exception ignored){}});
         worker.shutdown();super.onDestroy();

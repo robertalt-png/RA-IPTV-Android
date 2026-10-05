@@ -28,13 +28,14 @@ public class AccountActivity extends Activity {
 
     @Override public void onCreate(Bundle x){
         super.onCreate(x);
+        if(com.nenotv.player.storage.FamilyStore.active(this)){FamilyUi.blocked(this);finish();return;}
         ent=new EntitlementStore(this);
         build();
         UiText.applyDirection(this);
         handleIntent(getIntent());
     }
-    @Override protected void onNewIntent(Intent i){super.onNewIntent(i);setIntent(i);handleIntent(i);}
-    @Override protected void onResume(){super.onResume();refreshUi();ProModuleInstaller.syncEntitlement(this);}
+    @Override protected void onNewIntent(Intent i){super.onNewIntent(i);if(com.nenotv.player.storage.FamilyStore.active(this)){finish();return;}setIntent(i);handleIntent(i);}
+    @Override protected void onResume(){super.onResume();if(com.nenotv.player.storage.FamilyStore.active(this)){finish();return;}refreshUi();ProModuleInstaller.syncEntitlement(this);}
 
     void build(){
         ScrollView sv=new ScrollView(this);

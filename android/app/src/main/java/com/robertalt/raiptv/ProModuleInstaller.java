@@ -47,6 +47,7 @@ public final class ProModuleInstaller {
     }
 
     public static Intent sourcesIntent(Activity a){
+        if(com.nenotv.player.storage.FamilyStore.active(a))return new Intent(a,FamilyActivity.class);
         boolean pro=new EntitlementStore(a).isPro();
         if(pro&&isInstalled(a)){
             Intent i=new Intent();i.setClassName(a,PRO_SOURCES);return i;
@@ -56,6 +57,7 @@ public final class ProModuleInstaller {
     }
 
     public static Intent networkIntent(Activity a){
+        if(com.nenotv.player.storage.FamilyStore.active(a))return new Intent(a,FamilyActivity.class);
         boolean pro=new EntitlementStore(a).isPro();
         if(pro&&isInstalled(a)){Intent i=new Intent();i.setClassName(a,PRO_NETWORK);return i;}
         if(pro&&!isInstalled(a))request(a);

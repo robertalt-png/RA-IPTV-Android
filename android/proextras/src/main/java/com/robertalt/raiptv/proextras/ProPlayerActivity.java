@@ -131,7 +131,7 @@ public class ProPlayerActivity extends FragmentActivity {
         library=new LibraryStore(this);
         root=findViewById(R.id.playerRoot);controls=findViewById(R.id.playerControls);vlcLayout=findViewById(R.id.vlcLayout);media3View=findViewById(R.id.media3View);title=findViewById(R.id.playerTitle);status=findViewById(R.id.playerStatus);timeText=findViewById(R.id.timeText);playPause=findViewById(R.id.playPauseButton);rewind=findViewById(R.id.rewindButton);forward=findViewById(R.id.forwardButton);audio=findViewById(R.id.audioButton);subtitle=findViewById(R.id.subtitleButton);pip=findViewById(R.id.pipButton);seek=findViewById(R.id.seekBar);channelPrev=findViewById(R.id.channelPrevButton);channelNext=findViewById(R.id.channelNextButton);speed=findViewById(R.id.speedButton);aspect=findViewById(R.id.aspectButton);sleep=findViewById(R.id.sleepButton);record=findViewById(R.id.recordButton);favorite=findViewById(R.id.favoriteButton);castButton=findViewById(R.id.castRouteButton);
         audio.setText(T("audio"));subtitle.setText(T("subtitles"));aspect.setText(T("fit"));sleep.setText(T("sleep_short"));pip.setContentDescription(T("picture_in_picture"));
-        entry=(MediaEntry)getIntent().getSerializableExtra("media");if(entry==null){finish();return;}
+        entry=(MediaEntry)getIntent().getSerializableExtra("media");if(entry==null||!com.nenotv.player.storage.FamilyStore.allowed(this,entry)){finish();return;}
         PlaybackQueueStore.Payload qp=PlaybackQueueStore.take(getIntent().getStringExtra("queueToken"));
         if(qp!=null){if("live".equals(qp.kind)){liveQueue=qp.items;liveIndex=qp.index;}else if("episode".equals(qp.kind)){episodeQueue=qp.items;episodeIndex=qp.index;}}
         else{
@@ -139,6 +139,11 @@ public class ProPlayerActivity extends FragmentActivity {
             Object eq=getIntent().getSerializableExtra("episodeQueue");if(eq instanceof ArrayList<?>)try{episodeQueue=(ArrayList<MediaEntry>)eq;}catch(Exception ignored){}
             liveIndex=getIntent().getIntExtra("liveIndex",-1);episodeIndex=getIntent().getIntExtra("episodeIndex",-1);
         }
+        liveQueue.removeIf(e->!com.nenotv.player.storage.FamilyStore.allowed(this,e));
+        episodeQueue.removeIf(e->!com.nenotv.player.storage.FamilyStore.allowed(this,e));
+        liveIndex=-1;episodeIndex=-1;
+        for(int n=0;n<liveQueue.size();n++)if(liveQueue.get(n).uniqueKey().equals(entry.uniqueKey()))liveIndex=n;
+        for(int n=0;n<episodeQueue.size();n++)if(episodeQueue.get(n).uniqueKey().equals(entry.uniqueKey()))episodeIndex=n;
         if(!prepareEntry(entry))return;updateFavoriteUi();
         if(candidates.isEmpty()){status.setText(T("no_stream_url"));return;}
         wireControls();setupCast();updateQueueControls();startPreferredPlayer();searchExternalSubtitle();ui.post(tick);showControls();
@@ -146,6 +151,7 @@ public class ProPlayerActivity extends FragmentActivity {
 
     boolean prepareEntry(MediaEntry e){
         if(playbackRevoked||destroyed||isFinishing())return false;
+        if(!com.nenotv.player.storage.FamilyStore.allowed(this,e)){revokePlayback();return false;}
         try{playbackRoute=com.nenotv.player.provider.PlaybackSourceRoute.resolve(this,e,new com.nenotv.player.storage.EntitlementStore(this).isPro());profile=playbackRoute.profile();}
         catch(Exception unavailable){revokePlayback();return false;}
         entry=e;title.setText(DisplayText.title(e));candidates=new ArrayList<>(e.candidates);if(candidates.isEmpty()&&e.url!=null&&!e.url.isEmpty())candidates.add(e.url);index=0;freezeOnCandidate=0;pendingResumeMs=0;recovering=false;wantPlaying=true;externalSubtitle=null;lastWatchPosition=0;lastProgressAt=0;watchGraceUntil=0;
@@ -155,7 +161,7 @@ public class ProPlayerActivity extends FragmentActivity {
     boolean currentPlaybackRoute(){
         if(destroyed||isFinishing()||playbackRevoked)return false;
         boolean pro=new com.nenotv.player.storage.EntitlementStore(this).isPro();
-        if(pro&&playbackRoute!=null&&playbackRoute.isCurrent(true))return true;
+        if(pro&&com.nenotv.player.storage.FamilyStore.allowed(this,entry)&&playbackRoute!=null&&playbackRoute.isCurrent(true))return true;
         revokePlayback();return false;
     }
     void revokePlayback(){
@@ -463,4 +469,3 @@ public class ProPlayerActivity extends FragmentActivity {
     @Override protected void onPause(){saveProgress();super.onPause();}
     @Override protected void onDestroy(){destroyed=true;ui.removeCallbacksAndMessages(null);saveProgress();try{if(castClient!=null)castClient.unregisterCallback(castMediaCallback);}catch(Exception ignored){}closeCastRelay();if(vlc!=null&&(recording||recordingStarting))try{vlc.record(null);}catch(Exception ignored){}releasePlayers();exec.shutdownNow();super.onDestroy();}
 }
-

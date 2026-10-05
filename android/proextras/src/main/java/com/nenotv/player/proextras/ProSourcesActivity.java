@@ -24,12 +24,12 @@ public class ProSourcesActivity extends Activity {
 
     @Override public void onCreate(Bundle b){
         super.onCreate(b);
-        if(!new EntitlementStore(this).isPro()){finish();return;}
+        if(com.nenotv.player.storage.FamilyStore.active(this)||!new EntitlementStore(this).isPro()){finish();return;}
         sources=new SourceStore(this);
         setResult(RESULT_OK);
         build();
     }
-    @Override protected void onResume(){super.onResume();if(box!=null)render();}
+    @Override protected void onResume(){super.onResume();if(com.nenotv.player.storage.FamilyStore.active(this)){finish();return;}if(box!=null)render();}
 
     void build(){
         ScrollView sv=new ScrollView(this);sv.setBackgroundColor(0xFF07090D);

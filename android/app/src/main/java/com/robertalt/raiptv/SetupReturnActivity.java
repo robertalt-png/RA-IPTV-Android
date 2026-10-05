@@ -6,6 +6,7 @@ import android.net.Uri;
 public final class SetupReturnActivity extends Activity {
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
+        if(com.nenotv.player.storage.FamilyStore.active(this)){FamilyUi.blocked(this);finish();return;}
         Uri uri=getIntent().getData();
         if(uri!=null&&"nenotv".equals(uri.getScheme())&&"setup".equals(uri.getHost())){
             if(!new com.nenotv.player.storage.EntitlementStore(this).isPro())startActivity(new Intent(this,PairingActivity.class).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
