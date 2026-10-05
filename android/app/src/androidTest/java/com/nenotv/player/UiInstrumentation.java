@@ -203,7 +203,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
     void accountFreeSetup(Bundle result)throws Exception{
         Context c=getTargetContext();
         Map<String,Map<String,?>> previous=new LinkedHashMap<>();
-        for(String name:new String[]{"profile","nenotv_sources_v1","nenotv_entitlement","sunnyiptv_family_v1"})
+        for(String name:new String[]{"profile","nenotv_sources_v1","nenotv_entitlement","sunnyiptv_family_v1","nenotv_account_link_v1"})
             previous.put(name,new HashMap<>(c.getSharedPreferences(name,Context.MODE_PRIVATE).getAll()));
         ProfileActivity.LocalConnection original=ProfileActivity.localConnection;
         java.util.concurrent.atomic.AtomicInteger connections=new java.util.concurrent.atomic.AtomicInteger();
