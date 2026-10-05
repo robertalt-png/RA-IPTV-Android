@@ -89,7 +89,41 @@ public final class UiInstrumentation extends ImportInstrumentation {
         int count(String action){java.util.concurrent.atomic.AtomicInteger n=counts.get(action);return n==null?0:n.get();}
         public void close()throws Exception{socket.close();worker.join(1000);}
     }
+    void agePrivacyAccess()throws Exception{
+        Context c=getTargetContext();
+        SharedPreferences prefs=c.getSharedPreferences(com.nenotv.player.storage.ExtraPrivacyStore.PREFS,Context.MODE_PRIVATE);
+        Map<String,?> previous=new HashMap<>(prefs.getAll());
+        String previousLanguage=SettingsStore.language(c);
+        SharedPreferences entitlement=c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE);
+        Map<String,?> oldEntitlement=new HashMap<>(entitlement.getAll());
+        try{
+            entitlement.edit().putString("level","PRO").putLong("expires_at",0L).commit();
+            for(String language:new String[]{"nl","en","de"}){
+                SettingsStore.setPrimaryLanguage(c,language);
+                AgePrivacyActivity screen=(AgePrivacyActivity)startActivitySync(new Intent(c,AgePrivacyActivity.class).putExtra("settings",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                try{waitForIdleSync();runOnMainSync(()->{
+                    for(String group:new String[]{"under_13","13_plus","unknown"}){
+                        Button button=screen.box.findViewWithTag("age_"+group);
+                        check(button!=null&&button.isEnabled()&&button.hasOnClickListeners(),"Missing age choice "+group);
+                        assertUnclippedText(button);
+                    }
+                });snapshot("age-privacy-"+language);
+                runOnMainSync(()->screen.choose("unknown"));
+                check(com.nenotv.player.storage.ExtraPrivacyStore.answered(c)&&!com.nenotv.player.storage.ExtraPrivacyStore.allowsSdk(c),"Unknown age enables SDKs");
+                }finally{runOnMainSync(screen::finish);waitForIdleSync();}
+            }
+            InfoTranslator.init(c);
+            for(String group:new String[]{"under_13","unknown"}){
+                com.nenotv.player.storage.ExtraPrivacyStore.choose(c,group);
+                java.util.concurrent.atomic.AtomicReference<String> translated=new java.util.concurrent.atomic.AtomicReference<>();
+                InfoTranslator.translate("Original text","nl",translated::set);
+                check("Original text".equals(translated.get()),"Restricted translation started instead of original text");
+                check(prefs.getAll().size()==2,"Age choice stored extra personal data");
+            }
+        }finally{FamilyChecks.restore(prefs,previous);FamilyChecks.restore(entitlement,oldEntitlement);SettingsStore.setPrimaryLanguage(c,previousLanguage);}
+    }
     void privacyAccess()throws Exception{
+        agePrivacyAccess();
         Context c=getTargetContext();
         SharedPreferences entitlement=c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE);
         String previousLevel=entitlement.getString("level","FREE"),previousLanguage=SettingsStore.language(c);
@@ -597,7 +631,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
             new SecureProfileStore(c).save(profile());
         }
     }
-    void verifiedAccount()throws Exception{new com.nenotv.player.storage.AccountLinkStore(getTargetContext()).apply(new org.json.JSONObject().put("status","active").put("kind","free").put("account_id",String.join("",Collections.nCopies(64,"a"))));}
+    void verifiedAccount()throws Exception{com.nenotv.player.storage.ExtraPrivacyStore.choose(getTargetContext(),"unknown");new com.nenotv.player.storage.AccountLinkStore(getTargetContext()).apply(new org.json.JSONObject().put("status","active").put("kind","free").put("account_id",String.join("",Collections.nCopies(64,"a"))));}
     @Override public void onStart(){Bundle result=new Bundle();String phase=args.getString("phase","ui");if(!Arrays.asList("ui","resume","pro","update","xtream","onboarding","catalog","family","account_free").contains(phase)){super.onStart();return;}android.content.SharedPreferences accountPrefs=getTargetContext().getSharedPreferences("nenotv_account_link_v1",Context.MODE_PRIVATE);Map<String,?> oldAccount=new HashMap<>(accountPrefs.getAll());try{verifiedAccount();if("account_free".equals(phase)){accountFreeSetup(result);finish(Activity.RESULT_OK,result);}else if("family".equals(phase)){family(result);finish(Activity.RESULT_OK,result);}else if("catalog".equals(phase)){com.nenotv.player.entitlement.CatalogPackageChecks.run(getTargetContext(),getContext());result.putString("NENOTV_CATALOG_PACKAGE","passed");finish(Activity.RESULT_OK,result);}else if("onboarding".equals(phase)){onboarding(result);finish(Activity.RESULT_OK,result);}else if("xtream".equals(phase)){XtreamImportChecks.run(getTargetContext());xtreamSharedDownloads();result.putString("NENOTV_XTREAM_IMPORT","passed");finish(Activity.RESULT_OK,result);}else if("update".equals(phase)){UpdateAccessChecks.run(getTargetContext());result.putString("NENOTV_UPDATE_ACCESS","passed");finish(Activity.RESULT_OK,result);}else if("resume".equals(phase))resume(result);else if("pro".equals(phase)){Context c=getTargetContext();SettingsStore.prefs(c).edit().remove("demo_consumed").remove("demo_expires_at").remove("demo_started_at").commit();DemoPolicy.startOrKeep(c,System.currentTimeMillis());new SecureProfileStore(c).save(profile());pro(result);}else core(result);}catch(Throwable failure){result.putString("NENOTV_UI_TESTS","failed: "+failure.getClass().getSimpleName()+": "+failure.getMessage());finish(Activity.RESULT_CANCELED,result);}finally{FamilyChecks.restore(accountPrefs,oldAccount);}}
     static final class EpgFixture implements AutoCloseable{
         final ServerSocket socket;final Thread worker;final byte[] body;

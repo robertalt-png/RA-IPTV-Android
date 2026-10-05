@@ -6,3 +6,5 @@ javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/UpdatePromptP
 java -cp "$classes" com.nenotv.player.UpdatePromptPolicyTest
 javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/SiteEndpoints.java tools/tests/SiteEndpointsTest.java
 java -cp "$classes" com.nenotv.player.SiteEndpointsTest
+javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/ExtraPrivacyPolicy.java tools/tests/ExtraPrivacyPolicyTest.java
+java -cp "$classes" com.nenotv.player.ExtraPrivacyPolicyTest

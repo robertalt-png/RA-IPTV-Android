@@ -191,15 +191,17 @@ public class ProPlayerActivity extends FragmentActivity {
 
     void setupCast(){
         if(castButton==null)return;
-        castButton.setVisibility(View.VISIBLE);
+        castButton.setVisibility(com.nenotv.player.storage.ExtraPrivacyStore.allowsSdk(this)?View.VISIBLE:View.GONE);
         castButton.setOnClickListener(v->showCastChooser());
     }
     void showCastChooser(){
+        if(!com.nenotv.player.storage.ExtraPrivacyStore.allowsSdk(this))return;
         try{if(castContext==null)castContext=CastContext.getSharedInstance(this);CastSession current=castContext.getSessionManager().getCurrentCastSession();if(current!=null&&current.isConnected()){connectCastSession(current,false);return;}MediaRouteSelector selector=new MediaRouteSelector.Builder().addControlCategory(CastMediaControlIntent.categoryForCast(NenoTVCastOptionsProvider.receiverApplicationId())).build();MediaRouteChooserDialog dialog=new MediaRouteChooserDialog(this);dialog.setRouteSelector(selector);dialog.show();}catch(Throwable e){Toast.makeText(this,T("cast_failed"),Toast.LENGTH_SHORT).show();}
     }
     boolean hasCastSession(){return !playbackRevoked&&!destroyed&&casting&&castClient!=null&&castSession!=null&&castSession.isConnected();}
     boolean isCasting(){return hasCastSession()&&castRemoteConfirmed;}
     void connectCastSession(CastSession session,boolean resumed){
+        if(!com.nenotv.player.storage.ExtraPrivacyStore.allowsSdk(this))return;
         if(session==null)return;castSession=session;castClient=session.getRemoteMediaClient();if(castClient==null)return;try{castClient.registerCallback(castMediaCallback);}catch(Exception ignored){}
         castLocalPosition=currentLocalPosition();castLocalWasPlaying=isLocalPlaying();castLocalWasVlc=usingVlc;casting=true;castRemoteConfirmed=false;castLocalPausedForRemote=false;castRelayMode=false;closeCastRelay();updateQueueControls();
         if(resumed&&castClient.hasMediaSession()&&castClient.isPlaying()){confirmRemotePlayback();status.setText("TV · "+T("cast_playing"));updatePlayIcon();return;}castCandidateIndex=0;loadCastCandidate(castLocalPosition,castLocalWasPlaying);
@@ -463,9 +465,10 @@ public class ProPlayerActivity extends FragmentActivity {
 
     @Override public void onUserLeaveHint(){super.onUserLeaveHint();enterPip();}
     @Override public void onConfigurationChanged(Configuration c){super.onConfigurationChanged(c);}
-    @Override protected void onStart(){super.onStart();try{if(castContext==null)castContext=CastContext.getSharedInstance(this);if(castContext!=null){castContext.getSessionManager().addSessionManagerListener(castSessionListener,CastSession.class);CastSession c=castContext.getSessionManager().getCurrentCastSession();if(c!=null&&c.isConnected()&&!casting)connectCastSession(c,true);}}catch(Throwable ignored){}}
+    @Override protected void onStart(){super.onStart();setupCast();if(!com.nenotv.player.storage.ExtraPrivacyStore.allowsSdk(this)){if(casting)disconnectCastSession(true);return;}try{if(castContext==null)castContext=CastContext.getSharedInstance(this);if(castContext!=null){castContext.getSessionManager().addSessionManagerListener(castSessionListener,CastSession.class);CastSession c=castContext.getSessionManager().getCurrentCastSession();if(c!=null&&c.isConnected()&&!casting)connectCastSession(c,true);}}catch(Throwable ignored){}}
     @Override protected void onStop(){if(castContext!=null)try{castContext.getSessionManager().removeSessionManagerListener(castSessionListener,CastSession.class);}catch(Exception ignored){}super.onStop();}
     @Override public void onWindowFocusChanged(boolean focus){super.onWindowFocusChanged(focus);if(focus)ScreenInsets.player(this);}
     @Override protected void onPause(){saveProgress();super.onPause();}
     @Override protected void onDestroy(){destroyed=true;ui.removeCallbacksAndMessages(null);saveProgress();try{if(castClient!=null)castClient.unregisterCallback(castMediaCallback);}catch(Exception ignored){}closeCastRelay();if(vlc!=null&&(recording||recordingStarting))try{vlc.record(null);}catch(Exception ignored){}releasePlayers();exec.shutdownNow();super.onDestroy();}
 }
+

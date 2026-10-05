@@ -15,7 +15,7 @@ public final class InfoTranslator {
 
     public static void translate(String text,String target,Callback cb){
         String fallback=text==null?"":text;
-        if(appContext==null||!new com.nenotv.player.storage.EntitlementStore(appContext).isPro()){if(cb!=null)cb.done(fallback);return;}
+        if(appContext==null||!com.nenotv.player.storage.ExtraPrivacyStore.allowsSdk(appContext)||!new com.nenotv.player.storage.EntitlementStore(appContext).isPro()){if(cb!=null)cb.done(fallback);return;}
         try{
             Class<?> impl=Class.forName("com.nenotv.player.proextras.ProInfoTranslator");
             java.lang.reflect.Method m=impl.getMethod(

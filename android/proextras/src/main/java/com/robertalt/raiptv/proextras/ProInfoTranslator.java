@@ -10,7 +10,12 @@ import android.util.LruCache;
 
 public final class ProInfoTranslator {
     private static volatile boolean MLKIT_READY=false;
+    private static boolean allowed(){
+        android.content.Context context=InfoTranslator.context();
+        return context!=null&&com.nenotv.player.storage.ExtraPrivacyStore.allowsSdk(context);
+    }
     private static synchronized boolean ensureMlKit(){
+        if(!allowed())return false;
         if(MLKIT_READY)return true;
         android.content.Context context=InfoTranslator.context();
         if(context==null)return false;
@@ -30,6 +35,7 @@ public final class ProInfoTranslator {
         final String key=target+"\u0000"+text;String cached=CACHE.get(key);if(cached!=null){cb.done(cached);return;}
         LanguageIdentifier id = LanguageIdentification.getClient();
         id.identifyLanguage(text).addOnSuccessListener(code -> {
+            if(!allowed()){cb.done(text);id.close();return;}
             try {
                 String source = TranslateLanguage.fromLanguageTag(code);
                 String dest = TranslateLanguage.fromLanguageTag(target);
@@ -44,9 +50,11 @@ public final class ProInfoTranslator {
                     .build();
                 Translator translator = Translation.getClient(options);
                 translator.downloadModelIfNeeded(new DownloadConditions.Builder().build())
-                    .addOnSuccessListener(v -> translator.translate(text)
+                    .addOnSuccessListener(v -> {
+                        if(!allowed()){cb.done(text);translator.close();id.close();return;}
+                        translator.translate(text)
                         .addOnSuccessListener(out -> {
-                            String ready=out == null || out.trim().isEmpty() ? text : out;CACHE.put(key,ready);cb.done(ready);
+                            String ready=!allowed()||out == null || out.trim().isEmpty() ? text : out;CACHE.put(key,ready);cb.done(ready);
                             translator.close();
                             id.close();
                         })
@@ -54,7 +62,7 @@ public final class ProInfoTranslator {
                             cb.done(text);
                             translator.close();
                             id.close();
-                        }))
+                        });})
                     .addOnFailureListener(e -> {
                         cb.done(text);
                         translator.close();

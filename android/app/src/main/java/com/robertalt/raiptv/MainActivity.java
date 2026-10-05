@@ -46,6 +46,7 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle b){
         super.onCreate(b);InfoTranslator.init(this);CrashGuard.install(this);SettingsStore.migrateLanguagePreferences(this);if(!SettingsStore.hasLanguageProfile(this)){startActivity(new Intent(this,LanguageSetupActivity.class));finish();return;}
+        if(!com.nenotv.player.storage.ExtraPrivacyStore.answered(this)&&!FamilyStore.active(this)){startActivity(new Intent(this,AgePrivacyActivity.class));finish();return;}
         AccountLinkStore account=new AccountLinkStore(this);if(!account.recent()){startActivity(!account.linked()&&!FamilyStore.active(this)?firstRunIntent(this):new Intent(this,AccountCheckActivity.class));finish();return;}
         setContentView(R.layout.activity_main);UiText.applyDirection(this);
         profiles=new SecureProfileStore(this);library=new LibraryStore(this);searchIndex=new SearchIndexStore(this);epgStore=new EpgStore(this);
