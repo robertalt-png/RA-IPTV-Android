@@ -584,7 +584,7 @@ void scheduleBackgroundIndex(){
         });
     }
 
-    String safe(String s){return s==null?"":s;} String profileKey(){if(profile==null)return "none";String base=profile.type.name()+"|"+safe(profile.server)+"|"+safe(profile.username)+"|"+safe(profile.m3uUrl);if(DemoPolicy.isDemo(profile))base+="|family-demo-v1";return Integer.toHexString(base.hashCode())+":"+profile.type.name();} String cacheCursorKey(String type){return cacheCursorKey(profileKey(),type);} String cacheCursorKey(String key,String type){return "cache_cursor_"+key+"_"+type;}
+    String safe(String s){return s==null?"":s;} String profileKey(){return ProfileCacheKey.of(profile);} String cacheCursorKey(String type){return cacheCursorKey(profileKey(),type);} String cacheCursorKey(String key,String type){return "cache_cursor_"+key+"_"+type;}
     void publishIndexedTop(String type){
         publishIndexedTop(type,false);
     }

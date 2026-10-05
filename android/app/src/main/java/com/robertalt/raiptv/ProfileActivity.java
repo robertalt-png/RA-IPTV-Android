@@ -18,8 +18,8 @@ public class ProfileActivity extends Activity {
     long setupBackgroundUntil;
     final Handler setupHandler=new Handler(Looper.getMainLooper());
     final Runnable sourcePoll=()->checkWebsiteSource();
-    String accountUrl(){String l=SettingsStore.language(this);return "https://sunnyiptv.com"+("nl".equals(l)?"/language/nl/mijn-account/":("de".equals(l)?"/language/de/mein-konto/":"/my-account/"))+"?nenotv_setup=1#nenotv-sources";}
-    void openWebsite(){try{startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(accountUrl())));}catch(Exception ignored){status.setText(T("Open My SunnyIPTV on your phone or computer.","Open Mijn SunnyIPTV op uw telefoon of computer.","Öffne Mein SunnyIPTV auf deinem Telefon oder Computer."));}}
+    String accountUrl(){return WebsiteSetupActivity.websiteUrl(this);}
+    void openWebsite(){startActivity(new Intent(this,WebsiteSetupActivity.class));try{startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(accountUrl())));}catch(Exception ignored){status.setText(T("Open My SunnyIPTV on your phone or computer.","Open Mijn SunnyIPTV op uw telefoon of computer.","Öffne Mein SunnyIPTV auf deinem Telefon oder Computer."));}}
     void startAccountSetup(){if(pairLaunched)return;pairLaunched=true;startActivityForResult(new android.content.Intent(this,PairingActivity.class).putExtra("setup",true),31);}
     void chooseOffer(){
         if(store.exists())return;
@@ -29,11 +29,11 @@ public class ProfileActivity extends Activity {
             .setNegativeButton(T("This device","Dit apparaat","Dieses Gerät"),(d,w)->{xtream.setChecked(true);updateMode();}).show();
     }
     void checkWebsiteSource(){
-        if((!foreground&&(!websiteFirst||SystemClock.elapsedRealtime()>=setupBackgroundUntil))||polling||connecting||!websiteSetup||!new EntitlementStore(this).isPro())return;
+        if((!foreground&&(!websiteFirst||SystemClock.elapsedRealtime()>=setupBackgroundUntil))||polling||connecting||!websiteSetup||!new AccountLinkStore(this).linked())return;
         polling=true;
         exec.execute(()->{
-            try{new com.nenotv.player.entitlement.SourceSyncClient(this).pullAutomatically();}catch(Exception ignored){}
-            runOnUiThread(()->{polling=false;if(isFinishing()||isDestroyed())return;if(store.exists()&&!sources.syncDirty()){setResult(RESULT_OK);finish();}else if(foreground||(websiteFirst&&SystemClock.elapsedRealtime()<setupBackgroundUntil))setupHandler.postDelayed(sourcePoll,5000);});
+            com.nenotv.player.entitlement.WebsiteSetupJob job=com.nenotv.player.entitlement.WebsiteSetupJob.start(this,false);
+            runOnUiThread(()->{polling=false;if(isFinishing()||isDestroyed())return;if(job.state==com.nenotv.player.entitlement.WebsiteSetupJob.State.READY){setResult(RESULT_OK);finish();}else if(foreground||(websiteFirst&&SystemClock.elapsedRealtime()<setupBackgroundUntil))setupHandler.postDelayed(sourcePoll,5000);});
         });
     }
 
@@ -51,7 +51,7 @@ public class ProfileActivity extends Activity {
         websiteSetup=false;websiteFirst=false;
         applyLanguage(); load(); updateMode();
         Button website=new Button(this);website.setText(T("Link devices (optional)","Apparaten koppelen (optioneel)","Geräte verbinden (optional)"));website.setTag("optional_device_link");website.setAllCaps(false);website.setMinHeight(Math.round(56*getResources().getDisplayMetrics().density));website.setTextColor(0xFFF7F8FA);website.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));
-        website.setOnClickListener(v->{websiteSetup=true;if(new EntitlementStore(this).isPro())openWebsite();else startAccountSetup();});
+        website.setOnClickListener(v->startAccountSetup());
         LinearLayout container=(LinearLayout)findViewById(R.id.profileIntro).getParent();container.addView(website,container.getChildCount()-1);
 
         findViewById(R.id.typeGroup).setOnClickListener(v->updateMode());

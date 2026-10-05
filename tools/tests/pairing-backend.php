@@ -106,7 +106,7 @@ $validNonce=true;$logged=false;
 try{NenoTV_Entitlement_Core::pairing_approve();throw new LogicException('Anonymous approval allowed');}catch(Redirect $e){check($e->getMessage()==='login','Anonymous approval did not require login');}
 $logged=true;
 $userEmail='unrelated@example.invalid';
-try{NenoTV_Entitlement_Core::pairing_approve();throw new LogicException('Unrelated account allowed approval');}catch(RuntimeException $e){check($e->getMessage()==='An active NenoTV account is required.','Account isolation failed');}
+try{NenoTV_Entitlement_Core::pairing_approve();throw new LogicException('Unrelated account allowed approval');}catch(RuntimeException $e){check($e->getMessage()==='An active SunnyIPTV account or a current app is required.','Account isolation failed');}
 check($options[$key]['state']==='pending','Unrelated account altered session');
 $userEmail='owner@example.invalid';
 try{NenoTV_Entitlement_Core::pairing_approve();throw new LogicException('No safe redirect');}catch(Redirect $e){check(str_starts_with($e->getMessage(),'https://nenotv.com/nenotv-pair/'),'Approval redirected off-site');}

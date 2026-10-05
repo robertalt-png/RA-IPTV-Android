@@ -288,6 +288,17 @@ public final class UiInstrumentation extends ImportInstrumentation {
                 check(ready.get(),"Failed local connection stuck");
                 check(new SecureProfileStore(c).load().m3uUrl.equals("https://provider.example/test.m3u"),"Failed connection replaced saved source");
             }finally{runOnMainSync(failed::finish);waitForIdleSync();}
+            com.nenotv.player.entitlement.WebsiteSetupChecks.run(c);
+            String oldLanguage=SettingsStore.language(c);
+            try {
+                for(String language:new String[]{"nl","en","de"}){
+                    SettingsStore.setPrimaryLanguage(c,language);
+                    WebsiteSetupActivity web=(WebsiteSetupActivity)startActivitySync(new Intent(c,WebsiteSetupActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                    try{Thread.sleep(1000);waitForIdleSync();snapshot("website-setup-"+language);}
+                    finally{runOnMainSync(web::finish);waitForIdleSync();}
+                }
+            } finally{SettingsStore.setPrimaryLanguage(c,oldLanguage);}
+            result.putString("SUNNYIPTV_WEBSITE_PACKAGE","passed");
             result.putString("SUNNYIPTV_ACCOUNT_FREE_SETUP","passed");
         }finally{
             ProfileActivity.localConnection=original;

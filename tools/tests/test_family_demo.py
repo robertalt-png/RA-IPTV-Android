@@ -63,7 +63,9 @@ class FamilyDemoTest(unittest.TestCase):
 
     def test_demo_cache_rebuilt_without_live_channels(self):
         main = (JAVA / 'MainActivity.java').read_text(encoding='utf-8')
-        self.assertIn('if(DemoPolicy.isDemo(profile))base+="|family-demo-v1";', main)
+        helper = (JAVA / 'ProfileCacheKey.java').read_text(encoding='utf-8')
+        self.assertIn('family-demo-v1', helper)
+        self.assertIn('ProfileCacheKey.of(profile)', main)
         self.assertIn('for(String type:new String[]{"live","vod","series"})', main)
         self.assertIn('searchIndex.replaceSection(key,type,indexProvider.items(type,"all"));', main)
 

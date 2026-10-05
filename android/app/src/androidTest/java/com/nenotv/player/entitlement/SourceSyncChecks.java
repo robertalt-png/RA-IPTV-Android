@@ -14,7 +14,7 @@ public final class SourceSyncChecks {
         context.getSharedPreferences("nenotv_sources_v1",Context.MODE_PRIVATE).edit().clear().commit();
         new SecureProfileStore(context).clear();
         Profile profile=new Profile();profile.type=Profile.Type.M3U;profile.name="Priv\u00e9 QA";profile.m3uUrl="https://example.invalid/local.m3u";
-        SourceStore sources=new SourceStore(context);sources.bindCloudAccount(new com.nenotv.player.storage.EntitlementStore(context).cloudAccountScope());sources.upsert("",profile,true);
+        SourceStore sources=new SourceStore(context);sources.bindCloudAccount(new CloudSourceAccess(context).scope());sources.upsert("",profile,true);
         if(known){sources.markSynced(4);sources.touchSync();}
         return sources;
     }
@@ -32,10 +32,17 @@ public final class SourceSyncChecks {
     public static void run(Context context)throws Exception{
         SharedPreferences sourcePrefs=context.getSharedPreferences("nenotv_sources_v1",Context.MODE_PRIVATE);
         SharedPreferences entPrefs=context.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE);
+        SharedPreferences accountPrefs=context.getSharedPreferences("nenotv_account_link_v1",Context.MODE_PRIVATE);
         Map<String,?> oldSources=new HashMap<>(sourcePrefs.getAll()),oldEnt=new HashMap<>(entPrefs.getAll());
+        Map<String,?> oldAccount=new HashMap<>(accountPrefs.getAll());
         SecureProfileStore profiles=new SecureProfileStore(context);Profile previous=profiles.exists()?profiles.load():null;
         try{
-            entPrefs.edit().putString("level","PRO").putLong("expires_at",0).putString("account_email","source-owner@example.invalid").commit();
+            entPrefs.edit().putString("level","FREE").putLong("expires_at",0).putString("account_email","source-owner@example.invalid").commit();
+            new com.nenotv.player.storage.AccountLinkStore(context).apply(new org.json.JSONObject().put("status","active").put("kind","account").put("account_id",String.join("",Collections.nCopies(64,"a"))));
+            CloudSourceAccess basic=new CloudSourceAccess(context);
+            check(basic.valid()&&"account/sources/pull".equals(basic.route("sources/pull")),"Light source access still depends on Pro");
+            entPrefs.edit().putString("account_email","unrelated-pro@example.invalid").commit();
+            check(basic.valid(),"Pro identity changed the base source account");
             sourcePrefs.edit().clear().commit();profiles.clear();
             SourceStore fresh=new SourceStore(context);
             com.nenotv.player.model.Profile offer=new com.nenotv.player.model.Profile();offer.type=com.nenotv.player.model.Profile.Type.M3U;offer.name="Website input";offer.m3uUrl="https://provider.example.invalid/list";
@@ -101,7 +108,7 @@ public final class SourceSyncChecks {
             sources=seed(context,true);
             try(EntitlementClientChecks.Fixture fixture=new EntitlementClientChecks.Fixture(200,"{\"ok\":true,\"revision\":0,\"sources\":[]}",false)){
                 SourceSyncClient oldClient=new SourceSyncClient(context,new EntitlementClient(context,fixture.url()));
-                entPrefs.edit().putString("account_email","different-owner@example.invalid").commit();
+                new com.nenotv.player.storage.AccountLinkStore(context).apply(new org.json.JSONObject().put("status","active").put("kind","account").put("account_id",String.join("",Collections.nCopies(64,"b"))));
                 try{oldClient.push();throw new AssertionError("Old client uploaded to changed account");}catch(IOException expected){}
                 check(fixture.calls.get()==0,"Account change exposed source payload before confirmation");
                 SourceSyncClient newClient=new SourceSyncClient(context,new EntitlementClient(context,fixture.url()));
@@ -110,14 +117,21 @@ public final class SourceSyncChecks {
                 check(!newClient.pullAutomatically()&&fixture.calls.get()==0&&sources.list().size()==1&&sources.cloudRevision()==0&&sources.accountChangePending(),"Account change lost local sources or reused another account revision");
                 newClient.pull();
                 check(!sources.accountChangePending()&&sources.list().isEmpty()&&fixture.calls.get()==1,"Explicit new-account cloud choice not applied");
-                check(fixture.requests.get(0).getString("account_scope").equals(new com.nenotv.player.storage.EntitlementStore(context).cloudAccountScope())&&!fixture.requests.get(0).has("sources"),"Explicit cloud choice uploaded previous credentials");
+                check(fixture.requests.get(0).getString("account_scope").equals(new CloudSourceAccess(context).scope())&&!fixture.requests.get(0).has("sources"),"Explicit cloud choice uploaded previous credentials");
             }
             sources=seed(context,true);
             sourcePrefs.edit().putString("sources","invalid-encrypted-data").commit();
             boolean unreadable=false;try{sources.exportForSync();}catch(IllegalStateException expected){unreadable=true;}
             check(unreadable&&"invalid-encrypted-data".equals(sourcePrefs.getString("sources","")),"Unreadable local source vault was treated as empty");
             sources=seed(context,true);
+            String kept=sources.activeId();
+            try(EntitlementClientChecks.Fixture fixture=new EntitlementClientChecks.Fixture(200,"{\"ok\":true,\"revision\":0,\"sources\":[]}",false)){
+                check(!new SourceSyncClient(context,new EntitlementClient(context,fixture.url())).pullForWebsite(),"Pending website vault treated as complete");
+                check(kept.equals(sources.activeId())&&sources.syncDirty(),"Pending website choice erased local settings");
+            }
             entPrefs.edit().putString("level","FREE").commit();
+            check(!new com.nenotv.player.storage.EntitlementStore(context).isPro(),"Basic source sync granted Pro");
+            new com.nenotv.player.storage.AccountLinkStore(context).clear();
             try(EntitlementClientChecks.Fixture fixture=new EntitlementClientChecks.Fixture(200,"{\"ok\":true}",false)){
                 SourceSyncClient client=new SourceSyncClient(context,new EntitlementClient(context,fixture.url()));
                 try{client.push();throw new AssertionError("Basic pushed cloud sources");}catch(IOException expected){}
@@ -125,6 +139,6 @@ public final class SourceSyncChecks {
                 check(!client.pullAutomatically(),"Basic downloaded sources automatically");
                 check(fixture.calls.get()==0,"Basic contacted source service");
             }
-        }finally{restore(sourcePrefs,oldSources);restore(entPrefs,oldEnt);if(previous==null)profiles.clear();else profiles.save(previous);}
+        }finally{restore(sourcePrefs,oldSources);restore(entPrefs,oldEnt);restore(accountPrefs,oldAccount);if(previous==null)profiles.clear();else profiles.save(previous);}
     }
 }

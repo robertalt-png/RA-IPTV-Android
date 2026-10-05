@@ -22,6 +22,7 @@ public final class AccountLinkStore {
         if(!prefs.edit().putString("account_id",link.optString("account_id")).putString("binding",binding()).putLong("checked_at",System.currentTimeMillis()).commit())throw new IOException("Account link could not be saved");
     }
     public boolean linked(){return prefs.getString("account_id","").matches("[a-f0-9]{64}")&&binding().equals(prefs.getString("binding",""));}
+    public String accountId(){return linked()?prefs.getString("account_id",""):"";}
     public boolean recent(){long age=System.currentTimeMillis()-prefs.getLong("checked_at",0);return linked()&&age>=0&&age<15*60*1000L;}
     public void clear(){prefs.edit().clear().commit();}
 }

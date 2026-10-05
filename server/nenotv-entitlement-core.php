@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: NenoTV Entitlement Core
- * Description: Central NenoTV entitlement control plane for payment grants, refunds, device claims and the app bridge. Defaults to safe shadow mode until commercial launch.
- * Version: 0.1.22
- * Author: NenoTV
+ * Plugin Name: SunnyIPTV Entitlement Core
+ * Description: Central SunnyIPTV entitlement control plane for payment grants, refunds, device claims and the app bridge. Defaults to safe shadow mode until commercial launch.
+ * Version: 0.1.25
+ * Author: SunnyIPTV
  * Requires at least: 6.6
  * Requires PHP: 8.0
  */
@@ -13,12 +13,16 @@ if (!defined('ABSPATH')) exit;
 require_once __DIR__ . '/nenotv-pairing.php';
 require_once __DIR__ . '/nenotv-source-manager.php';
 require_once __DIR__ . '/nenotv-catalog-package.php';
+require_once __DIR__ . '/sunnyiptv-review-access.php';
+require_once __DIR__ . '/sunnyiptv-account-setup.php';
 
 final class NenoTV_Entitlement_Core {
     use NenoTV_Pairing;
     use NenoTV_Source_Manager;
     use NenoTV_Catalog_Package;
-    const VERSION = '0.1.22';
+    use SunnyIPTV_Review_Access;
+    use SunnyIPTV_Account_Setup;
+    const VERSION = '0.1.25';
     const DB_VERSION = '5';
     const NS = 'nenotv-backend/v1';
     const APP_NS = 'nenotv/v1';
@@ -43,8 +47,11 @@ final class NenoTV_Entitlement_Core {
 
     public static function init(): void {
         self::pairing_hooks();
+        self::account_setup_hooks();
         add_action('wp_enqueue_scripts', static function(){wp_enqueue_style('nenotv-account-flow', plugins_url('account-flow.css',__FILE__), [], self::VERSION . '.' . (string)filemtime(__DIR__.'/account-flow.css'));});
         self::catalog_hooks();
+        add_action('init', [__CLASS__, 'review_meta']);
+        add_action('rest_api_init', [__CLASS__, 'review_routes']);
         add_action('rest_api_init', [__CLASS__, 'register_routes']);
         add_action('admin_menu', [__CLASS__, 'admin_menu'], 65);
         add_action('admin_init', [__CLASS__, 'register_settings']);
@@ -507,7 +514,7 @@ final class NenoTV_Entitlement_Core {
     }
 
     /**
-     * One-time safe reconciliation for paid NenoTV test orders that existed before
+     * One-time safe reconciliation for paid SunnyIPTV test orders that existed before
      * Entitlement Core was installed. Shadow mode never grants Pro access.
      */
     public static function maybe_shadow_reconcile(): void {
@@ -543,11 +550,11 @@ final class NenoTV_Entitlement_Core {
                     $ref,
                     $source_ref,
                     'success',
-                    'Existing paid NenoTV test order reconciled into shadow entitlement ledger.',
+                    'Existing paid SunnyIPTV test order reconciled into shadow entitlement ledger.',
                     'evt:reconcile-shadow:' . absint($order->get_id())
                 );
                 if (method_exists($order, 'add_order_note')) {
-                    $order->add_order_note('NenoTV Entitlement Core: existing paid test order reconciled into the shadow entitlement ledger. No Pro access was issued.');
+                    $order->add_order_note('SunnyIPTV Entitlement Core: existing paid test order reconciled into the shadow entitlement ledger. No Pro access was issued.');
                 }
                 do_action('nenotv_entitlement_shadow_reconciled', absint($order->get_id()), $order, $ref);
                 $count++;
@@ -604,7 +611,7 @@ final class NenoTV_Entitlement_Core {
             $order_plan = self::plan_for_order($order);
             if (!in_array($order_plan, ['annual','lifetime'], true)) {
                 self::log_event('grant_live', '', $source_ref, 'blocked', 'Live grant blocked because the order does not resolve to one supported commercial plan.', 'evt:grant-live-blocked-plan:' . absint($order->get_id()));
-                return ['handled'=>true,'success'=>false,'message'=>'This order does not map to a supported NenoTV Pro plan.','reference'=>''];
+                return ['handled'=>true,'success'=>false,'message'=>'This order does not map to a supported SunnyIPTV Pro plan.','reference'=>''];
             }
 
             $existing = self::find_by_source('woocommerce', $source_ref);
@@ -614,7 +621,7 @@ final class NenoTV_Entitlement_Core {
                 if ($existing_status === 'active') {
                     if ($existing_plan === $order_plan && self::entitlement_is_active($existing)) {
                         self::log_event('grant_live_replay', (string)$existing['reference'], $source_ref, 'success', 'Duplicate live grant ignored; existing entitlement remains active.', 'evt:grant-live-replay:' . absint($order->get_id()));
-                        return ['handled'=>true,'success'=>true,'message'=>'NenoTV Pro access was already granted for this payment.','reference'=>(string)$existing['reference']];
+                        return ['handled'=>true,'success'=>true,'message'=>'SunnyIPTV Pro access was already granted for this payment.','reference'=>(string)$existing['reference']];
                     }
                     self::log_event('grant_live_replay', (string)$existing['reference'], $source_ref, 'blocked', 'Duplicate live grant blocked because the existing entitlement is expired or does not match the paid plan.', 'evt:grant-live-replay-blocked:' . absint($order->get_id()));
                     return ['handled'=>true,'success'=>false,'message'=>'The existing entitlement for this payment cannot be re-granted automatically.','reference'=>(string)$existing['reference']];
@@ -632,7 +639,7 @@ final class NenoTV_Entitlement_Core {
             $ref = is_array($rec['row'] ?? null) ? (string)$rec['row']['reference'] : '';
             if ($ref === '') return ['handled'=>true,'success'=>false,'message'=>'Entitlement could not be stored.','reference'=>''];
             self::log_event('grant_live', $ref, $source_ref, 'success', 'Live Pro entitlement granted.', 'evt:grant-live:' . absint($order->get_id()));
-            return ['handled'=>true,'success'=>true,'message'=>'NenoTV Pro access granted automatically.','reference'=>$ref];
+            return ['handled'=>true,'success'=>true,'message'=>'SunnyIPTV Pro access granted automatically.','reference'=>$ref];
         }
 
         if ($action === 'revoke') {
@@ -681,9 +688,11 @@ final class NenoTV_Entitlement_Core {
     }
 
     private static function authenticate_backend_request(WP_REST_Request $request): true|WP_Error {
-        $timestamp = (string)$request->get_header('x-nenotv-timestamp');
-        $event_id = substr(sanitize_text_field((string)$request->get_header('x-nenotv-event-id')), 0, 100);
-        $signature = (string)$request->get_header('x-nenotv-signature');
+        // Select one complete header family; both require the existing HMAC and replay checks.
+        $prefix = $request->get_header('x-sunnyiptv-signature') !== '' ? 'x-sunnyiptv-' : 'x-nenotv-';
+        $timestamp = (string)$request->get_header($prefix.'timestamp');
+        $event_id = substr(sanitize_text_field((string)$request->get_header($prefix.'event-id')), 0, 100);
+        $signature = (string)$request->get_header($prefix.'signature');
         if ($timestamp === '' || $event_id === '' || $signature === '') return new WP_Error('missing_auth','Missing backend authentication headers.',['status'=>401]);
         if (!ctype_digit($timestamp) || abs(time() - (int)$timestamp) > 300) return new WP_Error('stale_request','Request timestamp is outside the allowed window.',['status'=>401]);
         if (get_transient('nenotv_evt_' . md5($event_id))) return new WP_Error('replay','Duplicate backend event.',['status'=>409]);
@@ -763,15 +772,15 @@ final class NenoTV_Entitlement_Core {
 
     private static function start_trial(array $p): WP_REST_Response {
         if (self::mode() !== 'live') {
-            return self::json(['ok'=>false,'error'=>'trial_not_live','message'=>'The NenoTV trial is not live yet.'],200);
+            return self::json(['ok'=>false,'error'=>'trial_not_live','message'=>'The SunnyIPTV trial is not live yet.'],200);
         }
         if (!self::trial_enabled()) {
-            return self::json(['ok'=>false,'error'=>'trial_not_enabled','message'=>'The NenoTV trial is not enabled yet.'],200);
+            return self::json(['ok'=>false,'error'=>'trial_not_enabled','message'=>'The SunnyIPTV trial is not enabled yet.'],200);
         }
 
         $email=self::normalize_email((string)($p['email']??''));
         if ($email==='' || !is_email($email)) {
-            return self::json(['ok'=>false,'error'=>'email_required','message'=>'A valid email address is required to start the NenoTV trial.'],400);
+            return self::json(['ok'=>false,'error'=>'email_required','message'=>'A valid email address is required to start the SunnyIPTV trial.'],400);
         }
 
         $device_id=(string)($p['device_id']??'');
@@ -783,10 +792,10 @@ final class NenoTV_Entitlement_Core {
             }
             $existing_ent=self::find_by_id((int)$existing_device['entitlement_id']);
             if (is_array($existing_ent) && self::is_trial($existing_ent)) {
-                return self::json(['ok'=>true,'entitlement'=>self::trial_payload($existing_ent),'mode'=>'live','message'=>'This device already has its NenoTV trial record.'],200);
+                return self::json(['ok'=>true,'entitlement'=>self::trial_payload($existing_ent),'mode'=>'live','message'=>'This device already has its SunnyIPTV trial record.'],200);
             }
             if (($existing_device['status']??'')==='active' && is_array($existing_ent) && self::entitlement_is_active($existing_ent)) {
-                return self::json(['ok'=>true,'entitlement'=>self::pro_payload($existing_ent),'mode'=>'live','message'=>'NenoTV Pro is already active on this device.'],200);
+                return self::json(['ok'=>true,'entitlement'=>self::pro_payload($existing_ent),'mode'=>'live','message'=>'SunnyIPTV Pro is already active on this device.'],200);
             }
         }
 
@@ -801,8 +810,8 @@ final class NenoTV_Entitlement_Core {
                 'entitlement'=>self::trial_payload($existing),
                 'mode'=>'live',
                 'message'=>self::entitlement_is_active($existing)
-                    ? 'Your existing NenoTV trial is active.'
-                    : 'Your NenoTV trial has already ended.',
+                    ? 'Your existing SunnyIPTV trial is active.'
+                    : 'Your SunnyIPTV trial has already ended.',
             ],200);
         }
 
@@ -831,12 +840,12 @@ final class NenoTV_Entitlement_Core {
             'updated_at'=>$now,
         ]);
         if (!$inserted) {
-            return self::json(['ok'=>false,'error'=>'trial_create_failed','message'=>'The NenoTV trial could not be created.'],503);
+            return self::json(['ok'=>false,'error'=>'trial_create_failed','message'=>'The SunnyIPTV trial could not be created.'],503);
         }
 
         $ent=self::find_by_id((int)$wpdb->insert_id);
         if (!is_array($ent)) {
-            return self::json(['ok'=>false,'error'=>'trial_create_failed','message'=>'The NenoTV trial could not be loaded.'],503);
+            return self::json(['ok'=>false,'error'=>'trial_create_failed','message'=>'The SunnyIPTV trial could not be loaded.'],503);
         }
         $bound=self::bind_device($ent,$p);
         if (!$bound['ok']) {
@@ -844,7 +853,7 @@ final class NenoTV_Entitlement_Core {
             return self::json($bound,200);
         }
 
-        self::log_event('trial_started',(string)$ent['reference'],(string)$p['device_id'],'success','NenoTV 30-day trial started for this account and device.');
+        self::log_event('trial_started',(string)$ent['reference'],(string)$p['device_id'],'success','SunnyIPTV 30-day trial started for this account and device.');
         $welcome_event='evt:trial-started:'.(int)$ent['id'];
         if (!self::event_exists($welcome_event)) {
             if (self::send_trial_notice($ent,'started')) {
@@ -853,7 +862,7 @@ final class NenoTV_Entitlement_Core {
                 self::log_event('trial_email_failed',(string)$ent['reference'],(string)$p['device_id'],'failed','Trial start email could not be sent.');
             }
         }
-        return self::json(['ok'=>true,'entitlement'=>self::trial_payload($ent),'mode'=>'live','message'=>'Your NenoTV trial has started.'],200);
+        return self::json(['ok'=>true,'entitlement'=>self::trial_payload($ent),'mode'=>'live','message'=>'Your SunnyIPTV trial has started.'],200);
     }
 
     private static function entitlement_is_active(array $row): bool {
@@ -887,7 +896,7 @@ final class NenoTV_Entitlement_Core {
         if((int)$wpdb->get_var($wpdb->prepare('SELECT GET_LOCK(%s, 3)',$lock))!==1)return ['ok'=>false,'error'=>'device_busy','message'=>'Please retry linking this device.'];
         try{
             $current=self::find_by_id((int)$ent['id']);
-            if(!is_array($current)||!self::entitlement_is_active($current))return ['ok'=>false,'error'=>'pro_inactive','message'=>'NenoTV access is no longer active.'];
+            if(!is_array($current)||!self::entitlement_is_active($current))return ['ok'=>false,'error'=>'pro_inactive','message'=>'SunnyIPTV access is no longer active.'];
             return self::bind_device_unlocked($current,$p);
         }
         finally{$wpdb->get_var($wpdb->prepare('SELECT RELEASE_LOCK(%s)',$lock));}
@@ -897,7 +906,7 @@ final class NenoTV_Entitlement_Core {
         global $wpdb;
         $device_id = sanitize_text_field((string)($p['device_id'] ?? ''));
         $device_key = (string)($p['device_key'] ?? '');
-        if ($device_id==='' || $device_key==='') return ['ok'=>false,'error'=>'invalid_device','message'=>'Missing NenoTV device identity.'];
+        if ($device_id==='' || $device_key==='') return ['ok'=>false,'error'=>'invalid_device','message'=>'Missing SunnyIPTV device identity.'];
         $existing=self::find_device($device_id);
         $key_hash=self::key_hash($device_key);
         $now=self::now_mysql();
@@ -906,13 +915,13 @@ final class NenoTV_Entitlement_Core {
             if ((int)$existing['entitlement_id'] !== (int)$ent['id'] && $existing['status']==='active') {
                 $current=self::find_by_id((int)$existing['entitlement_id']);
                 $trial_to_paid=is_array($current) && self::is_trial($current) && !self::is_trial($ent);
-                if (!$trial_to_paid) return ['ok'=>false,'error'=>'device_already_linked','message'=>'This device is already linked to another NenoTV entitlement.'];
+                if (!$trial_to_paid) return ['ok'=>false,'error'=>'device_already_linked','message'=>'This device is already linked to another SunnyIPTV entitlement.'];
                 if (self::count_active_devices((int)$ent['id']) >= (int)$ent['max_devices']) {
-                    return ['ok'=>false,'error'=>'device_limit','message'=>'The NenoTV Pro device limit has been reached.'];
+                    return ['ok'=>false,'error'=>'device_limit','message'=>'The SunnyIPTV Pro device limit has been reached.'];
                 }
             }
             if (($existing['status'] ?? '') !== 'active' && self::count_active_devices((int)$ent['id']) >= (int)$ent['max_devices']) {
-                return ['ok'=>false,'error'=>'device_limit','message'=>'The NenoTV Pro device limit has been reached.'];
+                return ['ok'=>false,'error'=>'device_limit','message'=>'The SunnyIPTV Pro device limit has been reached.'];
             }
             $saved=$wpdb->update(self::dev_table(),[
                 'entitlement_id'=>(int)$ent['id'],'public_device_id'=>sanitize_text_field((string)($p['public_device_id']??'')),'platform'=>sanitize_text_field((string)($p['platform']??'')),'app_version'=>sanitize_text_field((string)($p['app_version']??'')),'status'=>'active','last_seen_at'=>$now,'revoked_at'=>null
@@ -920,7 +929,7 @@ final class NenoTV_Entitlement_Core {
             if($saved===false)return ['ok'=>false,'error'=>'device_write_failed','message'=>'Device could not be linked.'];
             return ['ok'=>true];
         }
-        if (self::count_active_devices((int)$ent['id']) >= (int)$ent['max_devices']) return ['ok'=>false,'error'=>'device_limit','message'=>'The NenoTV Pro device limit has been reached.'];
+        if (self::count_active_devices((int)$ent['id']) >= (int)$ent['max_devices']) return ['ok'=>false,'error'=>'device_limit','message'=>'The SunnyIPTV Pro device limit has been reached.'];
         $saved=$wpdb->insert(self::dev_table(),[
             'entitlement_id'=>(int)$ent['id'],'device_id'=>$device_id,'public_device_id'=>sanitize_text_field((string)($p['public_device_id']??'')),'device_key_hash'=>$key_hash,'platform'=>sanitize_text_field((string)($p['platform']??'')),'app_version'=>sanitize_text_field((string)($p['app_version']??'')),'status'=>'active','created_at'=>$now,'last_seen_at'=>$now
         ]);
@@ -963,12 +972,15 @@ final class NenoTV_Entitlement_Core {
     public static function app_entitlement(WP_REST_Request $request, string $action): WP_REST_Response {
         $auth=self::authenticate_backend_request($request); if (is_wp_error($auth)) return self::wp_error_json($auth);
         $p=self::clean_app_payload($request);
-        if (empty($p['device_id']) || empty($p['device_key'])) return self::json(['ok'=>false,'error'=>'invalid_device','message'=>'Missing NenoTV device identity.'],400);
+        if (empty($p['device_id']) || empty($p['device_key'])) return self::json(['ok'=>false,'error'=>'invalid_device','message'=>'Missing SunnyIPTV device identity.'],400);
+
+        $review = self::review_entitlement_request($p, $action);
+        if ($review !== null) return $review;
 
         // Safe by design: shadow mode never returns fabricated Pro access.
         if (self::mode() !== 'live') {
-            if ($action==='refresh') return self::json(['ok'=>true,'entitlement'=>self::free_entitlement(),'mode'=>'shadow','message'=>'NenoTV Pro is not live yet.'],200);
-            return self::json(['ok'=>false,'error'=>'pro_not_live','message'=>'NenoTV Pro activation is not live yet.'],200);
+            if ($action==='refresh') return self::json(['ok'=>true,'entitlement'=>self::free_entitlement(),'mode'=>'shadow','message'=>'SunnyIPTV Pro is not live yet.'],200);
+            return self::json(['ok'=>false,'error'=>'pro_not_live','message'=>'SunnyIPTV Pro activation is not live yet.'],200);
         }
 
         if ($action==='refresh') {
@@ -986,10 +998,10 @@ final class NenoTV_Entitlement_Core {
 
         $token=(string)($p['activation_token']??'');
         $ent=self::find_by_activation($token);
-        if (!$ent || !self::entitlement_is_active($ent)) return self::json(['ok'=>false,'error'=>'invalid_activation','message'=>'This NenoTV activation code is invalid or inactive.'],200);
-        if (!empty($ent['activation_expires_at']) && strtotime($ent['activation_expires_at'].' UTC') < time()) return self::json(['ok'=>false,'error'=>'activation_expired','message'=>'This NenoTV activation code has expired.'],200);
+        if (!$ent || !self::entitlement_is_active($ent)) return self::json(['ok'=>false,'error'=>'invalid_activation','message'=>'This SunnyIPTV activation code is invalid or inactive.'],200);
+        if (!empty($ent['activation_expires_at']) && strtotime($ent['activation_expires_at'].' UTC') < time()) return self::json(['ok'=>false,'error'=>'activation_expired','message'=>'This SunnyIPTV activation code has expired.'],200);
         if(!self::claim_activation_code($ent)){
-            return self::json(['ok'=>false,'error'=>'activation_used','message'=>'This NenoTV activation code has already been used. Generate a new code in My NenoTV for another device.'],200);
+            return self::json(['ok'=>false,'error'=>'activation_used','message'=>'This SunnyIPTV activation code has already been used. Generate a new code in My SunnyIPTV for another device.'],200);
         }
         $bound=self::bind_device($ent,$p);
         if (!$bound['ok']) {
@@ -998,7 +1010,7 @@ final class NenoTV_Entitlement_Core {
         }
         self::finalize_activation_code($ent);
         self::log_event('device_'.$action,(string)$ent['reference'],(string)$p['device_id'],'success','Device linked to Pro entitlement; one-time activation code consumed atomically.');
-        return self::json(['ok'=>true,'entitlement'=>self::pro_payload($ent),'mode'=>'live','message'=>'NenoTV Pro activated.'],200);
+        return self::json(['ok'=>true,'entitlement'=>self::pro_payload($ent),'mode'=>'live','message'=>'SunnyIPTV Pro activated.'],200);
     }
 
     private static function source_vault_key(): string {
@@ -1064,6 +1076,7 @@ final class NenoTV_Entitlement_Core {
     }
 
     private static function load_source_vault(int $entitlement_id): array {
+        if ($entitlement_id<0) return self::account_vault(-$entitlement_id);
         global $wpdb;
         $row=$wpdb->get_row($wpdb->prepare('SELECT * FROM '.self::source_table().' WHERE entitlement_id=%d LIMIT 1',$entitlement_id),ARRAY_A);
         if (!is_array($row)) return ['revision'=>0,'sources'=>[]];
@@ -1071,6 +1084,7 @@ final class NenoTV_Entitlement_Core {
     }
 
     private static function save_source_vault(int $entitlement_id, array $sources, int $base_revision): array {
+        if ($entitlement_id<0) return self::account_save_vault(-$entitlement_id,$sources,$base_revision);
         global $wpdb;
         if($base_revision<0)throw new InvalidArgumentException('Invalid source revision');
         $revision=$base_revision+1;
@@ -1097,17 +1111,17 @@ final class NenoTV_Entitlement_Core {
     private static function source_device_auth(array $p): array|WP_Error {
         $device_id=sanitize_text_field((string)($p['device_id']??''));
         $device_key=(string)($p['device_key']??'');
-        if ($device_id==='' || $device_key==='') return new WP_Error('invalid_device','Missing NenoTV device identity.',['status'=>400]);
+        if ($device_id==='' || $device_key==='') return new WP_Error('invalid_device','Missing SunnyIPTV device identity.',['status'=>400]);
         $dev=self::find_device($device_id);
-        if (!$dev || ($dev['status']??'')!=='active') return new WP_Error('device_not_linked','This device is not linked to NenoTV Pro.',['status'=>403]);
+        if (!$dev || ($dev['status']??'')!=='active') return new WP_Error('device_not_linked','This device is not linked to SunnyIPTV Pro.',['status'=>403]);
         if (!hash_equals((string)$dev['device_key_hash'],self::key_hash($device_key))) return new WP_Error('device_key_mismatch','This device identity could not be verified.',['status'=>403]);
         $ent=self::find_by_id((int)$dev['entitlement_id']);
-        if (!is_array($ent) || !self::entitlement_is_active($ent)) return new WP_Error('pro_inactive','NenoTV Pro is not active for this device.',['status'=>403]);
+        if (!is_array($ent) || !self::entitlement_is_active($ent)) return new WP_Error('pro_inactive','SunnyIPTV Pro is not active for this device.',['status'=>403]);
         return ['device'=>$dev,'entitlement'=>$ent];
     }
 
     public static function app_sources(WP_REST_Request $request, string $action): WP_REST_Response {
-        if (self::mode()!=='live'&&!self::catalog_testing_enabled()) return self::json(['ok'=>false,'error'=>'pro_not_live','message'=>'NenoTV Pro source sync is not live yet.'],403);
+        if (!self::app_services_available()) return self::json(['ok'=>false,'error'=>'pro_not_live','message'=>'SunnyIPTV Pro source sync is not live yet.'],403);
         if(strlen((string)$request->get_body())>1048576)return self::json(['ok'=>false,'error'=>'request_too_large'],413);
         $raw=$request->get_json_params(); if(!is_array($raw))$raw=[];
         $auth=self::source_device_auth($raw); if(is_wp_error($auth))return self::wp_error_json($auth);
@@ -1133,7 +1147,7 @@ final class NenoTV_Entitlement_Core {
         } catch (UnexpectedValueException $e) {
             return self::json(['ok'=>false,'error'=>'source_revision_conflict','revision'=>self::load_source_vault($entitlement_id)['revision']],409);
         } catch (Throwable $e) {
-            return self::json(['ok'=>false,'error'=>'source_sync_failed','message'=>'NenoTV source sync could not be completed.'],503);
+            return self::json(['ok'=>false,'error'=>'source_sync_failed','message'=>'SunnyIPTV source sync could not be completed.'],503);
         }
         return self::json(['ok'=>false,'error'=>'invalid_action'],400);
     }
@@ -1146,7 +1160,7 @@ final class NenoTV_Entitlement_Core {
         $order=wc_get_order($order_id); if(!$order)return self::json(['ok'=>false,'error'=>'order_not_found'],404);
         $r=self::is_upgrade_order($order) ? self::revert_upgrade_order($order,'chargeback') : self::change_order_entitlement_status($order,'revoked');
         if ($r['ok']) {
-            if (method_exists($order,'add_order_note')) $order->add_order_note('NenoTV Entitlement Core: provider chargeback event revoked Pro access automatically.');
+            if (method_exists($order,'add_order_note')) $order->add_order_note('SunnyIPTV Entitlement Core: provider chargeback event revoked Pro access automatically.');
             do_action('nenotv_chargeback_processed',$order_id,$order,$p);
         }
         return self::json(['ok'=>(bool)$r['ok'],'reference'=>$r['reference'],'message'=>$r['message']],$r['ok']?200:409);
@@ -1158,7 +1172,7 @@ final class NenoTV_Entitlement_Core {
     }
 
     private static function json(array $data, int $status): WP_REST_Response {
-        $r=new WP_REST_Response($data,$status); $r->header('Cache-Control','no-store'); $r->header('X-NenoTV-Entitlement-Core',self::VERSION); return $r;
+        $r=new WP_REST_Response($data,$status); $r->header('Cache-Control','no-store'); $r->header('X-SunnyIPTV-Entitlement-Core',self::VERSION); return $r;
     }
 
 
@@ -1188,28 +1202,28 @@ final class NenoTV_Entitlement_Core {
     private static function account_strings(string $lang): array {
         $all = [
             'en' => [
-                'kicker'=>'My NenoTV','title'=>'Access & devices','none'=>'No active NenoTV trial or Pro access is linked to this account yet.','solo'=>'Solo','multi'=>'Multi',
+                'kicker'=>'My SunnyIPTV','title'=>'Access & devices','none'=>'No active SunnyIPTV trial or Pro access is linked to this account yet.','solo'=>'Solo','multi'=>'Multi',
                 'plan'=>'Access','status'=>'Status','devices'=>'Linked devices','expires'=>'Valid until','lifetime'=>'Lifetime',
                 'annual'=>'Yearly','unconfigured'=>'Not configured','active'=>'Active','expired'=>'Expired','shadow'=>'Pre-launch test','suspended'=>'Suspended','revoked'=>'Revoked','renew'=>'Renew Pro','renew_text'=>'Your Yearly plan has expired. Renew the same plan without changing your device tier.','upgrade'=>'Upgrade to Multi','upgrade_text'=>'Move from Solo to Multi when you need up to 5 devices. Upgrade pricing is not active yet.','upgrade_locked'=>'Upgrade coming soon',
                 'used'=>'devices used','last_seen'=>'Last active','app'=>'App','remove'=>'Remove device',
                 'removed'=>'Device removed. You can now link another device.','support'=>'Need help? Create a support ticket',
-                'privacy'=>'Device details are shown here for account management. If you choose Pro source sync, IPTV source credentials are stored encrypted and are not shown back in full.','activate'=>'Link a new device','activate_text'=>'Generate a fresh activation code when you want to link another device.','generate'=>'Generate activation code','code'=>'New activation code','code_note'=>'Use this code in NenoTV. Keep it private; it expires automatically.'
+                'privacy'=>'Device details are shown here for account management. If you choose Pro source sync, IPTV source credentials are stored encrypted and are not shown back in full.','activate'=>'Link a new device','activate_text'=>'Generate a fresh activation code when you want to link another device.','generate'=>'Generate activation code','code'=>'New activation code','code_note'=>'Use this code in SunnyIPTV. Keep it private; it expires automatically.'
             ],
             'nl' => [
-                'kicker'=>'Mijn NenoTV','title'=>'Toegang & apparaten','none'=>'Er is nog geen actieve NenoTV-proefperiode of Pro-toegang aan dit account gekoppeld.','solo'=>'Solo','multi'=>'Multi',
+                'kicker'=>'Mijn SunnyIPTV','title'=>'Toegang & apparaten','none'=>'Er is nog geen actieve SunnyIPTV-proefperiode of Pro-toegang aan dit account gekoppeld.','solo'=>'Solo','multi'=>'Multi',
                 'plan'=>'Toegang','status'=>'Status','devices'=>'Gekoppelde apparaten','expires'=>'Geldig tot','lifetime'=>'Lifetime',
                 'annual'=>'Jaarlijks','unconfigured'=>'Niet geconfigureerd','active'=>'Actief','expired'=>'Verlopen','shadow'=>'Testfase vóór lancering','suspended'=>'Geschorst','revoked'=>'Ingetrokken','renew'=>'Pro verlengen','renew_text'=>'Je Jaarplan is verlopen. Verleng hetzelfde plan zonder je apparaattier te wijzigen.','upgrade'=>'Upgrade naar Multi','upgrade_text'=>'Ga van Solo naar Multi als je maximaal 5 apparaten nodig hebt. De upgradeprijs is nog niet actief.','upgrade_locked'=>'Upgrade binnenkort',
                 'used'=>'apparaten gebruikt','last_seen'=>'Laatst actief','app'=>'App','remove'=>'Apparaat verwijderen',
                 'removed'=>'Apparaat verwijderd. Je kunt nu een ander apparaat koppelen.','support'=>'Hulp nodig? Maak een supportticket aan',
-                'privacy'=>'Hier tonen we apparaatgegevens voor accountbeheer. Kies je voor Pro-bronsynchronisatie, dan worden IPTV-brongegevens versleuteld opgeslagen en nooit opnieuw volledig getoond.','activate'=>'Nieuw apparaat koppelen','activate_text'=>'Genereer een nieuwe activatiecode wanneer je een ander apparaat wilt koppelen.','generate'=>'Activatiecode genereren','code'=>'Nieuwe activatiecode','code_note'=>'Gebruik deze code in NenoTV. Houd hem privé; hij verloopt automatisch.'
+                'privacy'=>'Hier tonen we apparaatgegevens voor accountbeheer. Kies je voor Pro-bronsynchronisatie, dan worden IPTV-brongegevens versleuteld opgeslagen en nooit opnieuw volledig getoond.','activate'=>'Nieuw apparaat koppelen','activate_text'=>'Genereer een nieuwe activatiecode wanneer je een ander apparaat wilt koppelen.','generate'=>'Activatiecode genereren','code'=>'Nieuwe activatiecode','code_note'=>'Gebruik deze code in SunnyIPTV. Houd hem privé; hij verloopt automatisch.'
             ],
             'de' => [
-                'kicker'=>'Mein NenoTV','title'=>'Zugang & Geräte','none'=>'Diesem Konto ist noch keine aktive NenoTV-Testphase oder Pro-Berechtigung zugeordnet.','solo'=>'Solo','multi'=>'Multi',
+                'kicker'=>'Mein SunnyIPTV','title'=>'Zugang & Geräte','none'=>'Diesem Konto ist noch keine aktive SunnyIPTV-Testphase oder Pro-Berechtigung zugeordnet.','solo'=>'Solo','multi'=>'Multi',
                 'plan'=>'Zugang','status'=>'Status','devices'=>'Verknüpfte Geräte','expires'=>'Gültig bis','lifetime'=>'Lifetime',
                 'annual'=>'Jährlich','unconfigured'=>'Nicht konfiguriert','active'=>'Aktiv','expired'=>'Abgelaufen','shadow'=>'Testphase vor dem Start','suspended'=>'Gesperrt','revoked'=>'Widerrufen','renew'=>'Pro verlängern','renew_text'=>'Dein Jahresplan ist abgelaufen. Verlängere denselben Plan, ohne die Gerätestufe zu ändern.','upgrade'=>'Auf Multi upgraden','upgrade_text'=>'Wechsle von Solo zu Multi, wenn du bis zu 5 Geräte brauchst. Der Upgrade-Preis ist noch nicht aktiv.','upgrade_locked'=>'Upgrade demnächst',
                 'used'=>'Geräte verwendet','last_seen'=>'Zuletzt aktiv','app'=>'App','remove'=>'Gerät entfernen',
                 'removed'=>'Gerät entfernt. Du kannst jetzt ein anderes Gerät verbinden.','support'=>'Hilfe nötig? Support-Ticket erstellen',
-                'privacy'=>'Hier werden Gerätedaten für die Kontoverwaltung angezeigt. Wenn du die Pro-Quellensynchronisierung nutzt, werden IPTV-Zugangsdaten verschlüsselt gespeichert und nie vollständig angezeigt.','activate'=>'Neues Gerät verbinden','activate_text'=>'Erstelle einen neuen Aktivierungscode, wenn du ein weiteres Gerät verbinden möchtest.','generate'=>'Aktivierungscode erstellen','code'=>'Neuer Aktivierungscode','code_note'=>'Verwende diesen Code in NenoTV. Halte ihn geheim; er läuft automatisch ab.'
+                'privacy'=>'Hier werden Gerätedaten für die Kontoverwaltung angezeigt. Wenn du die Pro-Quellensynchronisierung nutzt, werden IPTV-Zugangsdaten verschlüsselt gespeichert und nie vollständig angezeigt.','activate'=>'Neues Gerät verbinden','activate_text'=>'Erstelle einen neuen Aktivierungscode, wenn du ein weiteres Gerät verbinden möchtest.','generate'=>'Aktivierungscode erstellen','code'=>'Neuer Aktivierungscode','code_note'=>'Verwende diesen Code in SunnyIPTV. Halte ihn geheim; er läuft automatisch ab.'
             ],
         ];
         return $all[$lang] ?? $all['en'];
@@ -1369,17 +1383,17 @@ final class NenoTV_Entitlement_Core {
             wp_die('Security check failed.');
         }
         if (get_option('nenotv_upgrade_enabled', 'no') !== 'yes' || !function_exists('nenotv_public_sales_ready') || !nenotv_public_sales_ready()) {
-            wp_die('NenoTV upgrades are not available yet.');
+            wp_die('SunnyIPTV upgrades are not available yet.');
         }
 
         $ent = self::find_by_id($entitlement_id);
         if (!is_array($ent) || !self::user_owns_entitlement($ent)) wp_die('You cannot upgrade this entitlement.');
 
         $offer = self::upgrade_offer_for_entitlement($ent);
-        if (empty($offer['eligible'])) wp_die('This NenoTV Pro entitlement is not eligible for a Multi upgrade.');
+        if (empty($offer['eligible'])) wp_die('This SunnyIPTV Pro entitlement is not eligible for a Multi upgrade.');
 
         $product = self::upgrade_product();
-        if (!$product || $product->get_status() !== 'publish') wp_die('The NenoTV Multi upgrade product is not available.');
+        if (!$product || $product->get_status() !== 'publish') wp_die('The SunnyIPTV Multi upgrade product is not available.');
 
         if (function_exists('wc_load_cart') && (!function_exists('WC') || !WC()->cart)) wc_load_cart();
         if (!function_exists('WC') || !WC()->cart || !WC()->session) wp_die('Checkout is not available.');
@@ -1402,7 +1416,7 @@ final class NenoTV_Entitlement_Core {
         $added = WC()->cart->add_to_cart($product->get_id(), 1, 0, [], ['nenotv_upgrade'=>$payload]);
         if (!$added) {
             WC()->session->set('nenotv_upgrade_payload', null);
-            wp_die('The NenoTV Multi upgrade could not be added to checkout.');
+            wp_die('The SunnyIPTV Multi upgrade could not be added to checkout.');
         }
 
         $checkout = wc_get_checkout_url();
@@ -1493,7 +1507,7 @@ final class NenoTV_Entitlement_Core {
         }
 
         if ($order->get_meta('_nenotv_upgrade_applied', true) === 'yes') {
-            return ['handled'=>true,'success'=>true,'message'=>'NenoTV Pro Multi upgrade was already applied.','reference'=>(string)$ent['reference']];
+            return ['handled'=>true,'success'=>true,'message'=>'SunnyIPTV Pro Multi upgrade was already applied.','reference'=>(string)$ent['reference']];
         }
 
         if ((int)$ent['max_devices'] > 1) {
@@ -1525,7 +1539,7 @@ final class NenoTV_Entitlement_Core {
         $order->save();
 
         self::log_event('upgrade_live', (string)$ent['reference'], $source_ref, 'success', 'Solo entitlement upgraded to Multi automatically.');
-        return ['handled'=>true,'success'=>true,'message'=>'NenoTV Pro upgraded from Solo to Multi automatically.','reference'=>(string)$ent['reference']];
+        return ['handled'=>true,'success'=>true,'message'=>'SunnyIPTV Pro upgraded from Solo to Multi automatically.','reference'=>(string)$ent['reference']];
     }
 
     private static function revert_upgrade_order($order, string $reason): array {
@@ -1557,7 +1571,7 @@ final class NenoTV_Entitlement_Core {
         $order->save();
 
         self::log_event('upgrade_revert', (string)$ent['reference'], self::source_ref_for_order($order), 'success', 'Solo-to-Multi upgrade reverted after ' . sanitize_key($reason) . '.');
-        return ['handled'=>true,'success'=>true,'message'=>'NenoTV Pro reverted from Multi to the previous Solo entitlement.','reference'=>(string)$ent['reference']];
+        return ['handled'=>true,'success'=>true,'message'=>'SunnyIPTV Pro reverted from Multi to the previous Solo entitlement.','reference'=>(string)$ent['reference']];
     }
 
     public static function purchase_guard($allowed, $plan) {
@@ -1624,9 +1638,9 @@ final class NenoTV_Entitlement_Core {
             }
         } else {
             if ($status === 'shadow') {
-                $plan_label = $lang === 'nl' ? 'NenoTV-testtoegang' : ($lang === 'de' ? 'NenoTV-Testzugang' : 'NenoTV test access');
+                $plan_label = $lang === 'nl' ? 'SunnyIPTV-testtoegang' : ($lang === 'de' ? 'SunnyIPTV-Testzugang' : 'SunnyIPTV test access');
             } else {
-                $plan_label = 'NenoTV Pro ' . ($max === 1 ? 'Solo' : 'Multi');
+                $plan_label = 'SunnyIPTV Pro ' . ($max === 1 ? 'Solo' : 'Multi');
             }
             $status_label = $is_expired ? $s['expired'] : ($s[$status] ?? ucfirst($status));
         }
@@ -1647,9 +1661,9 @@ final class NenoTV_Entitlement_Core {
                 ? ($lang === 'nl' ? 'Je proefperiode is afgelopen' : ($lang === 'de' ? 'Deine Testphase ist beendet' : 'Your trial has ended'))
                 : ($lang === 'nl' ? 'Je proefperiode is actief' : ($lang === 'de' ? 'Deine Testphase ist aktiv' : 'Your trial is active'));
             $trial_text = $is_expired
-                ? ($lang === 'nl' ? 'Je Pro-proefperiode is afgelopen en NenoTV gaat verder als Light. Je lokale instellingen en spelergegevens blijven staan. Je kunt later Pro activeren in dezelfde app.' : ($lang === 'de' ? 'Deine Pro-Testphase ist beendet und NenoTV läuft als Light weiter. Deine lokalen Einstellungen und Player-Daten bleiben erhalten. Du kannst Pro später in derselben App aktivieren.' : 'Your Pro trial has ended and NenoTV continues as Light. Your local settings and player data remain in place. You can activate Pro later in the same app.'))
-                : ($lang === 'nl' ? 'Na de Pro-proefperiode volgt geen automatische betaling. Zonder Pro-aankoop gaat NenoTV verder als Light; je kunt Pro tijdens de proefperiode of later activeren.' : ($lang === 'de' ? 'Nach der Pro-Testphase erfolgt keine automatische Zahlung. Ohne Pro-Kauf läuft NenoTV als Light weiter; Pro kann während der Testphase oder später aktiviert werden.' : 'There is no automatic payment after the Pro trial. Without a Pro purchase, NenoTV continues as Light; you can activate Pro during the trial or later.'));
-            $trial_button = $lang === 'nl' ? 'Bekijk NenoTV Pro' : ($lang === 'de' ? 'NenoTV Pro ansehen' : 'View NenoTV Pro');
+                ? ($lang === 'nl' ? 'Je Pro-proefperiode is afgelopen en SunnyIPTV gaat verder als Light. Je lokale instellingen en spelergegevens blijven staan. Je kunt later Pro activeren in dezelfde app.' : ($lang === 'de' ? 'Deine Pro-Testphase ist beendet und SunnyIPTV läuft als Light weiter. Deine lokalen Einstellungen und Player-Daten bleiben erhalten. Du kannst Pro später in derselben App aktivieren.' : 'Your Pro trial has ended and SunnyIPTV continues as Light. Your local settings and player data remain in place. You can activate Pro later in the same app.'))
+                : ($lang === 'nl' ? 'Na de Pro-proefperiode volgt geen automatische betaling. Zonder Pro-aankoop gaat SunnyIPTV verder als Light; je kunt Pro tijdens de proefperiode of later activeren.' : ($lang === 'de' ? 'Nach der Pro-Testphase erfolgt keine automatische Zahlung. Ohne Pro-Kauf läuft SunnyIPTV als Light weiter; Pro kann während der Testphase oder später aktiviert werden.' : 'There is no automatic payment after the Pro trial. Without a Pro purchase, SunnyIPTV continues as Light; you can activate Pro during the trial or later.'));
+            $trial_button = $lang === 'nl' ? 'Bekijk SunnyIPTV Pro' : ($lang === 'de' ? 'SunnyIPTV Pro ansehen' : 'View SunnyIPTV Pro');
             $html .= '<div class="nv-license-action is-trial"><div><h3>' . esc_html($trial_title) . '</h3><p>' . esc_html($trial_text) . '</p></div><a href="' . esc_url($pro_url) . '">' . esc_html($trial_button) . '</a></div>';
         }
 
@@ -1671,7 +1685,7 @@ final class NenoTV_Entitlement_Core {
             $html .= '<div class="nv-device-grid">';
             foreach ($devices as $device) {
                 $is_active = ($device['status'] ?? '') === 'active';
-                $platform = trim((string)($device['platform'] ?? '')) ?: 'NenoTV device';
+                $platform = trim((string)($device['platform'] ?? '')) ?: 'SunnyIPTV device';
                 $display_name = trim((string)($device['display_name'] ?? '')) ?: $platform;
                 $public = trim((string)($device['public_device_id'] ?? ''));
                 $app = trim((string)($device['app_version'] ?? ''));
@@ -1760,7 +1774,7 @@ final class NenoTV_Entitlement_Core {
                 'last_seen_at'=>self::now_mysql(),
             ], ['id'=>$device_id,'entitlement_id'=>(int)$ent['id']]);
             if ($updated !== 1) wp_die('Device changed or could not be removed. Reload your account.');
-            self::log_event('device_self_revoke', (string)$ent['reference'], (string)$device['device_id'], 'success', 'Customer removed device from My NenoTV.');
+            self::log_event('device_self_revoke', (string)$ent['reference'], (string)$device['device_id'], 'success', 'Customer removed device from My SunnyIPTV.');
         }
 
         $url = function_exists('wc_get_page_permalink') ? wc_get_page_permalink('myaccount') : home_url('/my-account/');
@@ -1783,8 +1797,8 @@ final class NenoTV_Entitlement_Core {
 
         $ent = self::find_by_id($entitlement_id);
         if (!is_array($ent) || !self::user_owns_entitlement($ent)) wp_die('You cannot manage this entitlement.');
-        if (self::mode() !== 'live' || !self::entitlement_is_active($ent)) wp_die('NenoTV Pro is not active for this account.');
-        if (self::count_active_devices((int)$ent['id']) >= (int)$ent['max_devices']) wp_die('The NenoTV Pro device limit has been reached. Remove a device before generating a new activation code.');
+        if (self::mode() !== 'live' || !self::entitlement_is_active($ent)) wp_die('SunnyIPTV Pro is not active for this account.');
+        if (self::count_active_devices((int)$ent['id']) >= (int)$ent['max_devices']) wp_die('The SunnyIPTV Pro device limit has been reached. Remove a device before generating a new activation code.');
 
         global $wpdb;
         $token = self::activation_code();
@@ -1801,7 +1815,7 @@ final class NenoTV_Entitlement_Core {
             'token'=>$token,
         ], 10 * MINUTE_IN_SECONDS);
 
-        self::log_event('activation_self_regenerate', (string)$ent['reference'], 'account:' . get_current_user_id(), 'success', 'Customer generated a fresh device activation code in My NenoTV.');
+        self::log_event('activation_self_regenerate', (string)$ent['reference'], 'account:' . get_current_user_id(), 'success', 'Customer generated a fresh device activation code in My SunnyIPTV.');
 
         $url = function_exists('wc_get_page_permalink') ? wc_get_page_permalink('myaccount') : home_url('/my-account/');
         if (in_array($lang, ['nl','de'], true)) $url = add_query_arg('lang', $lang, $url);
@@ -1833,58 +1847,58 @@ final class NenoTV_Entitlement_Core {
         $lang=self::normalize_language((string)($ent['language']??'en'));
         $strings=[
             'en'=>[
-                'started_subject'=>'Your 30-day NenoTV Pro trial has started',
-                'started_title'=>'Your NenoTV Pro trial is active',
-                'started_body'=>'You now have 30 days of the complete NenoTV Pro experience with your own authorised source. No payment is taken automatically. Without a Pro purchase, NenoTV will continue as Light after the trial.',
-                '7d_subject'=>'7 days left in your NenoTV Pro trial',
-                '7d_title'=>'Your NenoTV Pro trial has 7 days left',
-                '7d_body'=>'Your settings and player data stay in place. If you do not purchase Pro, NenoTV will continue as Light after the trial. You can purchase Pro now or later.',
-                '1d_subject'=>'1 day left in your NenoTV Pro trial',
-                '1d_title'=>'Your NenoTV Pro trial ends tomorrow',
-                '1d_body'=>'There is no automatic charge. If the Pro trial ends without a Pro purchase, NenoTV switches to Light while your local settings and player data remain in place.',
-                'expired_subject'=>'Your NenoTV Pro trial has ended',
-                'expired_title'=>'Your 30-day NenoTV Pro trial has ended',
-                'expired_body'=>'NenoTV now continues as Light. Your local settings and player data were not deliberately deleted. You can activate Pro later in the same app without rebuilding your local setup.',
-                'followup_subject'=>'Upgrade from NenoTV Light to Pro anytime',
-                'followup_title'=>'NenoTV Light keeps your setup ready',
-                'followup_body'=>'Your Pro trial has ended and NenoTV continues as Light. You can upgrade to Pro later in the same app. NenoTV still does not provide IPTV channels, subscriptions, playlists, movies or series.',
-                'button'=>'View NenoTV Pro',
+                'started_subject'=>'Your 30-day SunnyIPTV Pro trial has started',
+                'started_title'=>'Your SunnyIPTV Pro trial is active',
+                'started_body'=>'You now have 30 days of the complete SunnyIPTV Pro experience with your own authorised source. No payment is taken automatically. Without a Pro purchase, SunnyIPTV will continue as Light after the trial.',
+                '7d_subject'=>'7 days left in your SunnyIPTV Pro trial',
+                '7d_title'=>'Your SunnyIPTV Pro trial has 7 days left',
+                '7d_body'=>'Your settings and player data stay in place. If you do not purchase Pro, SunnyIPTV will continue as Light after the trial. You can purchase Pro now or later.',
+                '1d_subject'=>'1 day left in your SunnyIPTV Pro trial',
+                '1d_title'=>'Your SunnyIPTV Pro trial ends tomorrow',
+                '1d_body'=>'There is no automatic charge. If the Pro trial ends without a Pro purchase, SunnyIPTV switches to Light while your local settings and player data remain in place.',
+                'expired_subject'=>'Your SunnyIPTV Pro trial has ended',
+                'expired_title'=>'Your 30-day SunnyIPTV Pro trial has ended',
+                'expired_body'=>'SunnyIPTV now continues as Light. Your local settings and player data were not deliberately deleted. You can activate Pro later in the same app without rebuilding your local setup.',
+                'followup_subject'=>'Upgrade from SunnyIPTV Light to Pro anytime',
+                'followup_title'=>'SunnyIPTV Light keeps your setup ready',
+                'followup_body'=>'Your Pro trial has ended and SunnyIPTV continues as Light. You can upgrade to Pro later in the same app. SunnyIPTV still does not provide IPTV channels, subscriptions, playlists, movies or series.',
+                'button'=>'View SunnyIPTV Pro',
             ],
             'nl'=>[
-                'started_subject'=>'Je NenoTV Pro-proefperiode van 30 dagen is gestart',
-                'started_title'=>'Je NenoTV Pro-proefperiode is actief',
-                'started_body'=>'Je krijgt nu 30 dagen de volledige NenoTV Pro-ervaring met je eigen geautoriseerde bron. Er wordt niet automatisch betaald. Zonder Pro-aankoop gaat NenoTV daarna verder als Light.',
-                '7d_subject'=>'Nog 7 dagen NenoTV Pro-proefperiode',
-                '7d_title'=>'Je NenoTV Pro-proefperiode duurt nog 7 dagen',
-                '7d_body'=>'Je instellingen en spelergegevens blijven bewaard. Zonder Pro-aankoop gaat NenoTV na de proefperiode verder als Light. Je kunt Pro nu of later kopen.',
-                '1d_subject'=>'Nog 1 dag NenoTV Pro-proefperiode',
-                '1d_title'=>'Je NenoTV Pro-proefperiode eindigt morgen',
-                '1d_body'=>'Er volgt geen automatische afschrijving. Eindigt de Pro-proefperiode zonder Pro-aankoop, dan schakelt NenoTV over naar Light terwijl je lokale instellingen en spelergegevens blijven staan.',
-                'expired_subject'=>'Je NenoTV Pro-proefperiode is afgelopen',
-                'expired_title'=>'Je NenoTV Pro-proefperiode van 30 dagen is afgelopen',
-                'expired_body'=>'NenoTV gaat nu verder als Light. Je lokale instellingen en spelergegevens zijn niet bewust verwijderd. Je kunt later Pro activeren in dezelfde app zonder je lokale setup opnieuw op te bouwen.',
-                'followup_subject'=>'Upgrade NenoTV Light wanneer je wilt naar Pro',
-                'followup_title'=>'NenoTV Light houdt je setup klaar',
-                'followup_body'=>'Je Pro-proefperiode is afgelopen en NenoTV gaat verder als Light. Je kunt later in dezelfde app upgraden naar Pro. NenoTV levert nog steeds geen IPTV-zenders, abonnementen, playlists, films of series.',
-                'button'=>'Bekijk NenoTV Pro',
+                'started_subject'=>'Je SunnyIPTV Pro-proefperiode van 30 dagen is gestart',
+                'started_title'=>'Je SunnyIPTV Pro-proefperiode is actief',
+                'started_body'=>'Je krijgt nu 30 dagen de volledige SunnyIPTV Pro-ervaring met je eigen geautoriseerde bron. Er wordt niet automatisch betaald. Zonder Pro-aankoop gaat SunnyIPTV daarna verder als Light.',
+                '7d_subject'=>'Nog 7 dagen SunnyIPTV Pro-proefperiode',
+                '7d_title'=>'Je SunnyIPTV Pro-proefperiode duurt nog 7 dagen',
+                '7d_body'=>'Je instellingen en spelergegevens blijven bewaard. Zonder Pro-aankoop gaat SunnyIPTV na de proefperiode verder als Light. Je kunt Pro nu of later kopen.',
+                '1d_subject'=>'Nog 1 dag SunnyIPTV Pro-proefperiode',
+                '1d_title'=>'Je SunnyIPTV Pro-proefperiode eindigt morgen',
+                '1d_body'=>'Er volgt geen automatische afschrijving. Eindigt de Pro-proefperiode zonder Pro-aankoop, dan schakelt SunnyIPTV over naar Light terwijl je lokale instellingen en spelergegevens blijven staan.',
+                'expired_subject'=>'Je SunnyIPTV Pro-proefperiode is afgelopen',
+                'expired_title'=>'Je SunnyIPTV Pro-proefperiode van 30 dagen is afgelopen',
+                'expired_body'=>'SunnyIPTV gaat nu verder als Light. Je lokale instellingen en spelergegevens zijn niet bewust verwijderd. Je kunt later Pro activeren in dezelfde app zonder je lokale setup opnieuw op te bouwen.',
+                'followup_subject'=>'Upgrade SunnyIPTV Light wanneer je wilt naar Pro',
+                'followup_title'=>'SunnyIPTV Light houdt je setup klaar',
+                'followup_body'=>'Je Pro-proefperiode is afgelopen en SunnyIPTV gaat verder als Light. Je kunt later in dezelfde app upgraden naar Pro. SunnyIPTV levert nog steeds geen IPTV-zenders, abonnementen, playlists, films of series.',
+                'button'=>'Bekijk SunnyIPTV Pro',
             ],
             'de'=>[
-                'started_subject'=>'Deine 30-tägige NenoTV-Pro-Testphase hat begonnen',
-                'started_title'=>'Deine NenoTV-Pro-Testphase ist aktiv',
-                'started_body'=>'Du erhältst jetzt 30 Tage die vollständige NenoTV-Pro-Erfahrung mit deiner eigenen autorisierten Quelle. Es erfolgt keine automatische Zahlung. Ohne Pro-Kauf läuft NenoTV danach als Light weiter.',
-                '7d_subject'=>'Noch 7 Tage NenoTV-Pro-Testphase',
-                '7d_title'=>'Deine NenoTV-Pro-Testphase läuft noch 7 Tage',
-                '7d_body'=>'Deine Einstellungen und Player-Daten bleiben erhalten. Ohne Pro-Kauf läuft NenoTV nach der Testphase als Light weiter. Du kannst Pro jetzt oder später kaufen.',
-                '1d_subject'=>'Noch 1 Tag NenoTV-Pro-Testphase',
-                '1d_title'=>'Deine NenoTV-Pro-Testphase endet morgen',
-                '1d_body'=>'Es gibt keine automatische Abbuchung. Endet die Pro-Testphase ohne Pro-Kauf, wechselt NenoTV zu Light, während deine lokalen Einstellungen und Player-Daten erhalten bleiben.',
-                'expired_subject'=>'Deine NenoTV-Pro-Testphase ist beendet',
-                'expired_title'=>'Deine 30-tägige NenoTV-Pro-Testphase ist beendet',
-                'expired_body'=>'NenoTV läuft jetzt als Light weiter. Deine lokalen Einstellungen und Player-Daten wurden nicht absichtlich gelöscht. Du kannst Pro später in derselben App aktivieren, ohne deine lokale Einrichtung neu aufzubauen.',
-                'followup_subject'=>'NenoTV Light jederzeit auf Pro upgraden',
-                'followup_title'=>'NenoTV Light hält deine Einrichtung bereit',
-                'followup_body'=>'Deine Pro-Testphase ist beendet und NenoTV läuft als Light weiter. Du kannst später in derselben App auf Pro upgraden. NenoTV liefert weiterhin keine IPTV-Sender, Abonnements, Playlists, Filme oder Serien.',
-                'button'=>'NenoTV Pro ansehen',
+                'started_subject'=>'Deine 30-tägige SunnyIPTV-Pro-Testphase hat begonnen',
+                'started_title'=>'Deine SunnyIPTV-Pro-Testphase ist aktiv',
+                'started_body'=>'Du erhältst jetzt 30 Tage die vollständige SunnyIPTV-Pro-Erfahrung mit deiner eigenen autorisierten Quelle. Es erfolgt keine automatische Zahlung. Ohne Pro-Kauf läuft SunnyIPTV danach als Light weiter.',
+                '7d_subject'=>'Noch 7 Tage SunnyIPTV-Pro-Testphase',
+                '7d_title'=>'Deine SunnyIPTV-Pro-Testphase läuft noch 7 Tage',
+                '7d_body'=>'Deine Einstellungen und Player-Daten bleiben erhalten. Ohne Pro-Kauf läuft SunnyIPTV nach der Testphase als Light weiter. Du kannst Pro jetzt oder später kaufen.',
+                '1d_subject'=>'Noch 1 Tag SunnyIPTV-Pro-Testphase',
+                '1d_title'=>'Deine SunnyIPTV-Pro-Testphase endet morgen',
+                '1d_body'=>'Es gibt keine automatische Abbuchung. Endet die Pro-Testphase ohne Pro-Kauf, wechselt SunnyIPTV zu Light, während deine lokalen Einstellungen und Player-Daten erhalten bleiben.',
+                'expired_subject'=>'Deine SunnyIPTV-Pro-Testphase ist beendet',
+                'expired_title'=>'Deine 30-tägige SunnyIPTV-Pro-Testphase ist beendet',
+                'expired_body'=>'SunnyIPTV läuft jetzt als Light weiter. Deine lokalen Einstellungen und Player-Daten wurden nicht absichtlich gelöscht. Du kannst Pro später in derselben App aktivieren, ohne deine lokale Einrichtung neu aufzubauen.',
+                'followup_subject'=>'SunnyIPTV Light jederzeit auf Pro upgraden',
+                'followup_title'=>'SunnyIPTV Light hält deine Einrichtung bereit',
+                'followup_body'=>'Deine Pro-Testphase ist beendet und SunnyIPTV läuft als Light weiter. Du kannst später in derselben App auf Pro upgraden. SunnyIPTV liefert weiterhin keine IPTV-Sender, Abonnements, Playlists, Filme oder Serien.',
+                'button'=>'SunnyIPTV Pro ansehen',
             ],
         ];
         $s=$strings[$lang]??$strings['en'];
@@ -1893,7 +1907,7 @@ final class NenoTV_Entitlement_Core {
         $title=$s[$key.'_title'];
         $body_text=$s[$key.'_body'];
         $pro=$lang==='nl'?home_url('/language/nl/nenotv-pro-nl/'):($lang==='de'?home_url('/language/de/nenotv-pro-de/'):home_url('/pro/'));
-        $body='<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto"><h2>'.esc_html($title).'</h2><p>'.esc_html($body_text).'</p><p><a href="'.esc_url($pro).'" style="display:inline-block;padding:12px 18px;background:#111820;color:#ffd400;text-decoration:none;border-radius:8px;font-weight:700">'.esc_html($s['button']).'</a></p><p style="color:#64748b;font-size:12px">NenoTV · Tube Beheer B.V.</p></div>';
+        $body='<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto"><h2>'.esc_html($title).'</h2><p>'.esc_html($body_text).'</p><p><a href="'.esc_url($pro).'" style="display:inline-block;padding:12px 18px;background:#111820;color:#ffd400;text-decoration:none;border-radius:8px;font-weight:700">'.esc_html($s['button']).'</a></p><p style="color:#64748b;font-size:12px">SunnyIPTV · Tube Beheer B.V.</p></div>';
         return (bool)wp_mail($email,$subject,$body,['Content-Type: text/html; charset=UTF-8']);
     }
 
@@ -1908,31 +1922,31 @@ final class NenoTV_Entitlement_Core {
         }
         $strings=[
             'en'=>[
-                'soon_subject'=>'Your NenoTV Pro Yearly plan expires soon',
-                'expired_subject'=>'Your NenoTV Pro Yearly plan has expired',
-                'soon_title'=>'Your NenoTV Pro Yearly plan expires in 7 days',
-                'expired_title'=>'Your NenoTV Pro Yearly plan has expired',
-                'soon_body'=>'Your yearly Pro access will end when the current period expires. Your NenoTV settings remain in place; renew Pro to continue playback after the end date.',
-                'expired_body'=>'Your yearly Pro access has ended. Your NenoTV settings remain in place and you can renew the same Solo or Multi tier from My NenoTV.',
-                'button'=>'Open My NenoTV',
+                'soon_subject'=>'Your SunnyIPTV Pro Yearly plan expires soon',
+                'expired_subject'=>'Your SunnyIPTV Pro Yearly plan has expired',
+                'soon_title'=>'Your SunnyIPTV Pro Yearly plan expires in 7 days',
+                'expired_title'=>'Your SunnyIPTV Pro Yearly plan has expired',
+                'soon_body'=>'Your yearly Pro access will end when the current period expires. Your SunnyIPTV settings remain in place; renew Pro to continue playback after the end date.',
+                'expired_body'=>'Your yearly Pro access has ended. Your SunnyIPTV settings remain in place and you can renew the same Solo or Multi tier from My SunnyIPTV.',
+                'button'=>'Open My SunnyIPTV',
             ],
             'nl'=>[
-                'soon_subject'=>'Je NenoTV Pro Jaarplan verloopt binnenkort',
-                'expired_subject'=>'Je NenoTV Pro Jaarplan is verlopen',
-                'soon_title'=>'Je NenoTV Pro Jaarplan verloopt over 7 dagen',
-                'expired_title'=>'Je NenoTV Pro Jaarplan is verlopen',
-                'soon_body'=>'Je jaarlijkse Pro-toegang eindigt wanneer de huidige periode afloopt. Je NenoTV-instellingen blijven staan; verleng Pro om na de einddatum te blijven afspelen.',
-                'expired_body'=>'Je jaarlijkse Pro-toegang is afgelopen. Je NenoTV-instellingen blijven staan en je kunt hetzelfde Solo- of Multi-plan via Mijn NenoTV verlengen.',
-                'button'=>'Open Mijn NenoTV',
+                'soon_subject'=>'Je SunnyIPTV Pro Jaarplan verloopt binnenkort',
+                'expired_subject'=>'Je SunnyIPTV Pro Jaarplan is verlopen',
+                'soon_title'=>'Je SunnyIPTV Pro Jaarplan verloopt over 7 dagen',
+                'expired_title'=>'Je SunnyIPTV Pro Jaarplan is verlopen',
+                'soon_body'=>'Je jaarlijkse Pro-toegang eindigt wanneer de huidige periode afloopt. Je SunnyIPTV-instellingen blijven staan; verleng Pro om na de einddatum te blijven afspelen.',
+                'expired_body'=>'Je jaarlijkse Pro-toegang is afgelopen. Je SunnyIPTV-instellingen blijven staan en je kunt hetzelfde Solo- of Multi-plan via Mijn SunnyIPTV verlengen.',
+                'button'=>'Open Mijn SunnyIPTV',
             ],
             'de'=>[
-                'soon_subject'=>'Dein NenoTV Pro Jahresplan läuft bald ab',
-                'expired_subject'=>'Dein NenoTV Pro Jahresplan ist abgelaufen',
-                'soon_title'=>'Dein NenoTV Pro Jahresplan läuft in 7 Tagen ab',
-                'expired_title'=>'Dein NenoTV Pro Jahresplan ist abgelaufen',
-                'soon_body'=>'Dein jährlicher Pro-Zugang endet mit Ablauf des aktuellen Zeitraums. Deine NenoTV-Einstellungen bleiben erhalten; verlängere Pro, um danach weiterzuschauen.',
-                'expired_body'=>'Dein jährlicher Pro-Zugang ist beendet. Deine NenoTV-Einstellungen bleiben erhalten und du kannst denselben Solo- oder Multi-Tarif in My NenoTV verlängern.',
-                'button'=>'My NenoTV öffnen',
+                'soon_subject'=>'Dein SunnyIPTV Pro Jahresplan läuft bald ab',
+                'expired_subject'=>'Dein SunnyIPTV Pro Jahresplan ist abgelaufen',
+                'soon_title'=>'Dein SunnyIPTV Pro Jahresplan läuft in 7 Tagen ab',
+                'expired_title'=>'Dein SunnyIPTV Pro Jahresplan ist abgelaufen',
+                'soon_body'=>'Dein jährlicher Pro-Zugang endet mit Ablauf des aktuellen Zeitraums. Deine SunnyIPTV-Einstellungen bleiben erhalten; verlängere Pro, um danach weiterzuschauen.',
+                'expired_body'=>'Dein jährlicher Pro-Zugang ist beendet. Deine SunnyIPTV-Einstellungen bleiben erhalten und du kannst denselben Solo- oder Multi-Tarif in My SunnyIPTV verlängern.',
+                'button'=>'My SunnyIPTV öffnen',
             ],
         ];
         $s=$strings[$lang]??$strings['en'];
@@ -1941,7 +1955,7 @@ final class NenoTV_Entitlement_Core {
         $subject=$kind==='expired'?$s['expired_subject']:$s['soon_subject'];
         $title=$kind==='expired'?$s['expired_title']:$s['soon_title'];
         $body_text=$kind==='expired'?$s['expired_body']:$s['soon_body'];
-        $body='<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto"><h2>'.esc_html($title).'</h2><p>'.esc_html($body_text).'</p><p><a href="'.esc_url($account).'" style="display:inline-block;padding:12px 18px;background:#111820;color:#ffd400;text-decoration:none;border-radius:8px;font-weight:700">'.esc_html($s['button']).'</a></p><p style="color:#64748b;font-size:12px">NenoTV · Tube Beheer B.V.</p></div>';
+        $body='<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto"><h2>'.esc_html($title).'</h2><p>'.esc_html($body_text).'</p><p><a href="'.esc_url($account).'" style="display:inline-block;padding:12px 18px;background:#111820;color:#ffd400;text-decoration:none;border-radius:8px;font-weight:700">'.esc_html($s['button']).'</a></p><p style="color:#64748b;font-size:12px">SunnyIPTV · Tube Beheer B.V.</p></div>';
         return (bool)wp_mail($email,$subject,$body,['Content-Type: text/html; charset=UTF-8']);
     }
 
@@ -1981,7 +1995,7 @@ final class NenoTV_Entitlement_Core {
                 if(($ent['status']??'')!=='expired'){
                     $wpdb->update(self::ent_table(),['status'=>'expired','updated_at'=>$now],['id'=>$id]);
                     $ent['status']='expired';
-                    self::log_event('trial_expired',(string)$ent['reference'],(string)$ent['source_ref'],'success','NenoTV trial expired; local player data is not deleted.','evt:trial-expired-state:'.$id);
+                    self::log_event('trial_expired',(string)$ent['reference'],(string)$ent['source_ref'],'success','SunnyIPTV trial expired; local player data is not deleted.','evt:trial-expired-state:'.$id);
                 }
 
                 $expired_event='evt:trial-email-expired:'.$id;
@@ -2044,9 +2058,9 @@ final class NenoTV_Entitlement_Core {
         if($token==='')return;
         $lang=self::order_language($order);
         $all=[
-            'en'=>['title'=>'NenoTV Pro activation','body'=>'Your payment is confirmed. Use this activation code in NenoTV:','note'=>'Keep this code private. It is only used to link your own NenoTV devices.'],
-            'nl'=>['title'=>'NenoTV Pro activeren','body'=>'Je betaling is bevestigd. Gebruik deze activatiecode in NenoTV:','note'=>'Houd deze code privé. De code wordt alleen gebruikt om je eigen NenoTV-apparaten te koppelen.'],
-            'de'=>['title'=>'NenoTV Pro aktivieren','body'=>'Deine Zahlung wurde bestätigt. Verwende diesen Aktivierungscode in NenoTV:','note'=>'Halte diesen Code geheim. Er wird nur verwendet, um deine eigenen NenoTV-Geräte zu verbinden.'],
+            'en'=>['title'=>'SunnyIPTV Pro activation','body'=>'Your payment is confirmed. Use this activation code in SunnyIPTV:','note'=>'Keep this code private. It is only used to link your own SunnyIPTV devices.'],
+            'nl'=>['title'=>'SunnyIPTV Pro activeren','body'=>'Je betaling is bevestigd. Gebruik deze activatiecode in SunnyIPTV:','note'=>'Houd deze code privé. De code wordt alleen gebruikt om je eigen SunnyIPTV-apparaten te koppelen.'],
+            'de'=>['title'=>'SunnyIPTV Pro aktivieren','body'=>'Deine Zahlung wurde bestätigt. Verwende diesen Aktivierungscode in SunnyIPTV:','note'=>'Halte diesen Code geheim. Er wird nur verwendet, um deine eigenen SunnyIPTV-Geräte zu verbinden.'],
         ];$s=$all[$lang]??$all['en'];
         echo '<section class="woocommerce-order-details"><h2>'.esc_html($s['title']).'</h2><p>'.esc_html($s['body']).'</p><p><code style="font-size:1.15em;font-weight:700">'.esc_html($token).'</code></p><p>'.esc_html($s['note']).'</p></section>';
     }
@@ -2061,9 +2075,9 @@ final class NenoTV_Entitlement_Core {
         $token=(string)$order->get_meta('_nenotv_activation_token',true); if($token==='')return;
         $lang=self::order_language($order);
         $all=[
-            'en'=>['title'=>'NenoTV Pro activation','code'=>'Activation code','note'=>'Keep this code private. It expires automatically and can be replaced from My NenoTV.'],
-            'nl'=>['title'=>'NenoTV Pro activeren','code'=>'Activatiecode','note'=>'Houd deze code privé. De code verloopt automatisch en kan via Mijn NenoTV worden vervangen.'],
-            'de'=>['title'=>'NenoTV Pro aktivieren','code'=>'Aktivierungscode','note'=>'Halte diesen Code geheim. Er läuft automatisch ab und kann in My NenoTV ersetzt werden.'],
+            'en'=>['title'=>'SunnyIPTV Pro activation','code'=>'Activation code','note'=>'Keep this code private. It expires automatically and can be replaced from My SunnyIPTV.'],
+            'nl'=>['title'=>'SunnyIPTV Pro activeren','code'=>'Activatiecode','note'=>'Houd deze code privé. De code verloopt automatisch en kan via Mijn SunnyIPTV worden vervangen.'],
+            'de'=>['title'=>'SunnyIPTV Pro aktivieren','code'=>'Aktivierungscode','note'=>'Halte diesen Code geheim. Er läuft automatisch ab und kann in My SunnyIPTV ersetzt werden.'],
         ];$s=$all[$lang]??$all['en'];
         if ($plain_text) echo "\n".$s['title']."\n".$s['code'].": {$token}\n".$s['note']."\n";
         else echo '<h2>'.esc_html($s['title']).'</h2><p>'.esc_html($s['code']).': <strong><code>'.esc_html($token).'</code></strong></p><p>'.esc_html($s['note']).'</p>';
@@ -2079,8 +2093,8 @@ final class NenoTV_Entitlement_Core {
     }
 
     public static function admin_menu(): void {
-        if (class_exists('NenoTV_Admin_Bridge')) add_submenu_page('nenotv-admin','NenoTV Entitlements','Entitlements','manage_options','nenotv-entitlements',[__CLASS__,'admin_page']);
-        else add_management_page('NenoTV Entitlements','NenoTV Entitlements','manage_options','nenotv-entitlements',[__CLASS__,'admin_page']);
+        if (class_exists('NenoTV_Admin_Bridge')) add_submenu_page('nenotv-admin','SunnyIPTV Entitlements','Entitlements','manage_options','nenotv-entitlements',[__CLASS__,'admin_page']);
+        else add_management_page('SunnyIPTV Entitlements','SunnyIPTV Entitlements','manage_options','nenotv-entitlements',[__CLASS__,'admin_page']);
     }
 
     public static function plugin_action_links(array $links): array {
@@ -2101,8 +2115,8 @@ final class NenoTV_Entitlement_Core {
         $reconciled_count = absint(get_option(self::OPT_RECONCILE_LAST_COUNT, 0));
         $bridge_ready = get_option(self::OPT_BRIDGE_ENABLED,'0')==='1' && strlen((string)get_option(self::OPT_BRIDGE_SECRET,''))>=32;
         ?>
-        <div class="wrap"><h1>NenoTV Entitlement Core</h1>
-        <p>This is the central control plane between payments, refunds and NenoTV Pro device access. It is deliberately installed in <strong>shadow mode</strong> until launch.</p>
+        <div class="wrap"><h1>SunnyIPTV Entitlement Core</h1>
+        <p>This is the central control plane between payments, refunds and SunnyIPTV Pro device access. It is deliberately installed in <strong>shadow mode</strong> until launch.</p>
         <table class="widefat striped" style="max-width:960px"><tbody>
         <tr><th>Version</th><td><?php echo esc_html(self::VERSION); ?></td></tr>
         <tr><th>Mode</th><td><strong><?php echo esc_html(strtoupper(self::mode())); ?></strong><?php if(self::mode()==='shadow') echo ' — records test lifecycle but never gives the app fabricated Pro access.'; ?></td></tr>
@@ -2119,7 +2133,7 @@ final class NenoTV_Entitlement_Core {
         <form method="post" action="options.php"><?php settings_fields('nenotv_entitlements'); ?>
         <table class="form-table"><tbody>
         <tr><th>Mode</th><td><select name="<?php echo esc_attr(self::OPT_MODE); ?>"><option value="shadow" <?php selected(self::mode(),'shadow'); ?>>Shadow (safe now)</option><option value="live" <?php selected(self::mode(),'live'); ?>>Live</option></select></td></tr>
-        <tr><th>Pro plans</th><td><code>NENOTV-PRO-1-YEARLY</code> → Solo Annual · <code>NENOTV-PRO-1-LIFETIME</code> → Solo Lifetime<br><code>NENOTV-PRO-5-YEARLY</code> → Multi Annual · <code>NENOTV-PRO-5-LIFETIME</code> → Multi Lifetime<br><span class="description">Legacy pre-launch Yearly/Lifetime SKUs resolve to Multi for backwards compatibility. The €1 <code>NENOTV-PRO</code> test SKU and unknown/mixed NenoTV SKUs cannot grant live Pro access.</span></td></tr>
+        <tr><th>Pro plans</th><td><code>NENOTV-PRO-1-YEARLY</code> → Solo Annual · <code>NENOTV-PRO-1-LIFETIME</code> → Solo Lifetime<br><code>NENOTV-PRO-5-YEARLY</code> → Multi Annual · <code>NENOTV-PRO-5-LIFETIME</code> → Multi Lifetime<br><span class="description">Legacy pre-launch Yearly/Lifetime SKUs resolve to Multi for backwards compatibility. The €1 <code>NENOTV-PRO</code> test SKU and unknown/mixed SunnyIPTV SKUs cannot grant live Pro access.</span></td></tr>
         <tr><th>Fallback/test device limit</th><td><input type="number" min="1" max="25" name="<?php echo esc_attr(self::OPT_MAX_DEVICES); ?>" value="<?php echo esc_attr((string)get_option(self::OPT_MAX_DEVICES,'5')); ?>"> <span class="description">Used only for the €1 test SKU or fallback diagnostics. Commercial Solo/Multi device limits come from the product SKU.</span></td></tr>
         <tr><th>Activation code validity</th><td><input type="number" min="1" max="365" name="<?php echo esc_attr(self::OPT_TOKEN_DAYS); ?>" value="<?php echo esc_attr((string)get_option(self::OPT_TOKEN_DAYS,'30')); ?>"> days</td></tr>
         </tbody></table><?php submit_button('Save'); ?></form>

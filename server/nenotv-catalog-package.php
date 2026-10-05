@@ -19,7 +19,10 @@ trait NenoTV_Catalog_Package {
         if($ent!==null)return ($ent['source']??'')==='internal_catalog_test' && ($tests[(string)$ent['id']]??0)>time() && self::entitlement_is_active($ent);
         foreach($tests as $expires)if(is_int($expires)&&$expires>time())return true;return false;
     }
-    private static function app_service_live(?array $ent): bool {return self::mode()==='live'||($ent!==null&&self::catalog_testing_enabled($ent));}
+    private static function app_service_live(?array $ent): bool {
+        if ($ent!==null && self::is_review_entitlement($ent)) return self::review_access_allowed($ent);
+        return self::mode()==='live'||($ent!==null&&self::catalog_testing_enabled($ent));
+    }
     public static function catalog_enable_internal_test(): WP_REST_Response {
         if(!current_user_can('manage_options')||!is_user_logged_in())return self::json(['ok'=>false,'error'=>'forbidden'],403);
         try{self::catalog_dir();}catch(Throwable $e){return self::json(['ok'=>false,'error'=>'catalog_storage_unavailable'],503);}
@@ -81,13 +84,13 @@ trait NenoTV_Catalog_Package {
         }catch(Throwable $e){/* A catalog failure must not undo a saved source. Status can retry. */}
     }
     public static function catalog_demo_page(): void {
-        if(trim((string)parse_url($_SERVER['REQUEST_URI']??'',PHP_URL_PATH),'/')!=='nenotv-demo.m3u')return;
-        header('Content-Type: application/x-mpegURL; charset=utf-8');header('Cache-Control: public, max-age=3600');
+        if(!in_array(trim((string)parse_url($_SERVER['REQUEST_URI']??'',PHP_URL_PATH),'/'),['sunnyiptv-demo.m3u','nenotv-demo.m3u'],true))return;
+        status_header(200);header('Content-Type: application/x-mpegURL; charset=utf-8');header('Cache-Control: public, max-age=3600');
         readfile(__DIR__.'/nenotv-demo.m3u');exit;
     }
     private static function catalog_fetch(string $url,string $path): void {
         if(!wp_http_validate_url($url))throw new RuntimeException('catalog_provider_unreachable');
-        $r=wp_safe_remote_get($url,['timeout'=>30,'redirection'=>3,'stream'=>true,'filename'=>$path,'limit_response_size'=>NenoTV_Catalog_Format::MAX_BYTES+1,'headers'=>['Accept-Encoding'=>'identity','User-Agent'=>'NenoTV/0.14.4 Catalog']]);
+        $r=wp_safe_remote_get($url,['timeout'=>30,'redirection'=>3,'stream'=>true,'filename'=>$path,'limit_response_size'=>NenoTV_Catalog_Format::MAX_BYTES+1,'headers'=>['Accept-Encoding'=>'identity','User-Agent'=>'SunnyIPTV/0.14.4 Catalog']]);
         if(is_file($path))chmod($path,0600);
         if(is_wp_error($r)||wp_remote_retrieve_response_code($r)!==200||!is_file($path)||filesize($path)>NenoTV_Catalog_Format::MAX_BYTES)throw new RuntimeException('catalog_provider_unreachable');
     }
@@ -96,7 +99,8 @@ trait NenoTV_Catalog_Package {
         if(!is_array($job)||($job['fingerprint']??'')!==$fp||!in_array($job['state']??'',['queued','building'],true))return;
         $lock=null;$raw='';$plain='';
         try{
-            $access=self::find_by_id($ent);if(!$access||!self::app_service_live($access)||!self::entitlement_is_active($access))return;
+            if($ent<0){if(!self::free_customer(-$ent))return;}
+            else{$access=self::find_by_id($ent);if(!$access||!self::app_service_live($access)||!self::entitlement_is_active($access))return;}
             $source=self::catalog_source($ent,$id);if(!$source||!$source['enabled']||self::catalog_fingerprint($source)!==$fp)return;
             $dir=self::catalog_dir();$lock=fopen($dir.'/'.$job['token'].'.lock','c');if(!$lock||!flock($lock,LOCK_EX|LOCK_NB))return;
             // Re-read after lock: an overlapping task may already have advanced the stage.
@@ -106,7 +110,7 @@ trait NenoTV_Catalog_Package {
             $gz=gzopen($plain,'wb6');if(!$gz)throw new RuntimeException('catalog_storage');chmod($plain,0600);
             try{
                 if($step===0)NenoTV_Catalog_Format::line($gz,['kind'=>'header','schema'=>1,'source_id'=>$id,'fingerprint'=>$fp]);
-                if($source['type']==='M3U'&&$source['m3u']==='https://nenotv.com/nenotv-demo.m3u'){
+                if($source['type']==='M3U'&&in_array($source['m3u'],['https://sunnyiptv.com/sunnyiptv-demo.m3u','https://sunnyiptv.com/nenotv-demo.m3u','https://nenotv.com/nenotv-demo.m3u'],true)){
                     $entries=json_decode(file_get_contents(__DIR__.'/nenotv-demo-catalog.json'),true,64,JSON_THROW_ON_ERROR);$groups=[];
                     foreach($entries as $entry){$type=$entry['type'];$job['counts'][$type]++;$groups[$type][$entry['categoryId']]=true;NenoTV_Catalog_Format::line($gz,['kind'=>'item','entry'=>$entry]);}
                     foreach($groups as $type=>$names){foreach(array_keys($names) as $g)NenoTV_Catalog_Format::line($gz,['kind'=>'category','type'=>$type,'id'=>$g,'name'=>$g]);$job['categories'][$type]=count($names);}$last=true;
@@ -138,32 +142,35 @@ trait NenoTV_Catalog_Package {
         finally{if($raw&&is_file($raw))unlink($raw);if($plain&&is_file($plain))unlink($plain);if(is_resource($lock)){flock($lock,LOCK_UN);fclose($lock);}}
     }
     public static function catalog_request(WP_REST_Request $r,string $action): WP_REST_Response {
-        if(self::mode()!=='live'&&!self::catalog_testing_enabled())return self::json(['ok'=>false,'error'=>'pro_not_live'],403);
+        if(!self::app_services_available())return self::json(['ok'=>false,'error'=>'pro_not_live'],403);
         if(strlen($r->get_body())>8192)return self::json(['ok'=>false,'error'=>'request_too_large'],413);
         $p=$r->get_json_params();if(!is_array($p))$p=[];$auth=self::source_device_auth($p);if(is_wp_error($auth))return self::wp_error_json($auth);
         $ent=(array)$auth['entitlement'];if(!self::app_service_live($ent))return self::json(['ok'=>false,'error'=>'pro_not_live'],403);$scope=$p['account_scope']??null;
         if(!is_string($scope)||!hash_equals(self::email_hash((string)$ent['email']),$scope))return self::json(['ok'=>false,'error'=>'source_account_changed'],409);
         if($action==='access')return self::json(['ok'=>true,'entitlement'=>self::pro_payload($ent),'internal_test'=>self::catalog_testing_enabled($ent)],200);
+        return self::catalog_authenticated($p,(int)$ent['id'],$auth['device'],$action);
+    }
+    private static function catalog_authenticated(array $p,int $storage,array $device,string $action): WP_REST_Response {
         $id=$p['source_id']??null;if(!is_string($id)||strlen($id)>80)return self::json(['ok'=>false,'error'=>'invalid_source'],400);
         try{
-            $source=self::catalog_source((int)$ent['id'],$id);if(!$source||!$source['enabled'])return self::json(['ok'=>false,'error'=>'source_unavailable'],404);
-            $key=self::catalog_key((int)$ent['id'],$id);$job=get_option($key,[]);
+            $source=self::catalog_source($storage,$id);if(!$source||!$source['enabled'])return self::json(['ok'=>false,'error'=>'source_unavailable'],404);
+            $key=self::catalog_key($storage,$id);$job=get_option($key,[]);
             if($action==='status'){
-                $job=self::catalog_queue_source((int)$ent['id'],$source);$public=array_intersect_key($job,array_flip(['state','fingerprint','counts','categories','bytes','sha256','updated','step']));
+                $job=self::catalog_queue_source($storage,$source);$public=array_intersect_key($job,array_flip(['state','fingerprint','counts','categories','bytes','sha256','updated','step']));
                 return self::json(['ok'=>true,'schema'=>1,'source_id'=>$id]+$public,200);
             }
             if(($job['state']??'')!=='ready'||($p['fingerprint']??'')!==($job['fingerprint']??'')||self::catalog_fingerprint($source)!==$job['fingerprint'])return self::json(['ok'=>false,'error'=>'catalog_not_ready'],409);
             if($action==='ack'){
                 if(($p['sha256']??'')!==$job['sha256'])return self::json(['ok'=>false,'error'=>'catalog_checksum'],400);
-                update_option('nenotv_catalog_ack_'.hash('sha256',(string)$auth['device']['device_id'].'|'.$id),['fingerprint'=>$job['fingerprint'],'updated'=>time()],false);return self::json(['ok'=>true],200);
+                update_option('nenotv_catalog_ack_'.hash('sha256',(string)$device['device_id'].'|'.$id),['fingerprint'=>$job['fingerprint'],'updated'=>time()],false);return self::json(['ok'=>true],200);
             }
             // Verify every sealed frame before starting the HTTP body.
             foreach($job['parts'] as $part)NenoTV_Catalog_Format::unseal(self::catalog_dir().'/'.$part['name'],self::catalog_secret(),static function($b){});
-            self::$catalog_stream=$job;return new WP_REST_Response(null,200,['Content-Type'=>'application/vnd.nenotv.catalog+gzip','Content-Length'=>(string)$job['bytes'],'Cache-Control'=>'private, no-store','X-NenoTV-SHA256'=>$job['sha256'],'X-Content-Type-Options'=>'nosniff']);
+            self::$catalog_stream=$job;return new WP_REST_Response(null,200,['Content-Type'=>'application/vnd.nenotv.catalog+gzip','Content-Length'=>(string)$job['bytes'],'Cache-Control'=>'private, no-store','X-SunnyIPTV-SHA256'=>$job['sha256'],'X-Content-Type-Options'=>'nosniff']);
         }catch(Throwable $e){return self::json(['ok'=>false,'error'=>'catalog_unavailable'],503);}
     }
     public static function catalog_serve($served,$result,$request,$server): bool {
-        if($served||!self::$catalog_stream||$request->get_route()!=='/'.self::APP_NS.'/catalog/download'||$result->get_status()!==200)return (bool)$served;
+        if($served||!self::$catalog_stream||!in_array($request->get_route(),['/'.self::APP_NS.'/catalog/download','/'.self::APP_NS.'/account/catalog/download'],true)||$result->get_status()!==200)return (bool)$served;
         $job=self::$catalog_stream;self::$catalog_stream=null;foreach($job['parts'] as $part)NenoTV_Catalog_Format::unseal(self::catalog_dir().'/'.$part['name'],self::catalog_secret(),static function($bytes){echo $bytes;});return true;
     }
     public static function catalog_source_notice(array $ent,array $source,string $lang): string {

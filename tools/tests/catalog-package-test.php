@@ -21,6 +21,8 @@ class Harness {
  use NenoTV_Catalog_Package;
  const APP_NS='nenotv/v1';const CRON='daily';
  static function mode(){global $mode;return $mode;}
+ static function app_services_available(){return self::mode()==='live'||self::catalog_testing_enabled();}
+ static function is_review_entitlement($ent){return false;}
  static function find_by_id($id){return ["id"=>1,"email"=>"qa@example.test","source"=>"internal_catalog_test"];}
  static function entitlement_is_active($ent){return true;}
  static function load_source_vault($id){global $vault;return ['sources'=>$vault[$id]??[]];}

@@ -68,7 +68,7 @@ public final class PairingActivity extends Activity {
     void localSetup(){
         if(localSetupLaunched||destroyed||!new com.nenotv.player.storage.AccountLinkStore(this).linked()||com.nenotv.player.storage.FamilyStore.active(this))return;
         localSetupLaunched=true;handler.removeCallbacks(poll);
-        startActivityForResult(new Intent(this,ProfileActivity.class),42);
+        startActivityForResult(new Intent(this,WebsiteSetupActivity.class),42);
     }
 
     @Override protected void onActivityResult(int request,int result,Intent data){
@@ -97,7 +97,8 @@ public final class PairingActivity extends Activity {
 
     @Override protected void onResume(){
         super.onResume();if(com.nenotv.player.storage.FamilyStore.active(this)){finish();return;}resumed=true;
-        if(complete||localSetupLaunched)return;
+        if(localSetupLaunched)return;
+        if(complete){continueSetup();return;}
         if(session!=null)handler.post(poll);
         else if(!busy)startPairing();
     }
@@ -144,13 +145,13 @@ public final class PairingActivity extends Activity {
         worker.execute(()->{
             try{
                 String state=client.status(active);
-                if("complete".equals(state)&&new com.nenotv.player.storage.EntitlementStore(this).isPro()){
-                    try{new com.nenotv.player.entitlement.SourceSyncClient(this).pull();}catch(Exception ignored){/* Source retrieval can retry when the source screen resumes. */}
+                if("complete".equals(state)&&new com.nenotv.player.storage.AccountLinkStore(this).linked()&&firstRun()){
+                    com.nenotv.player.entitlement.WebsiteSetupJob.start(this,false);
                 }
                 runOnUiThread(()->{
                     if(destroyed||current!=generation)return;
                     busy=false;retry.setEnabled(true);
-                    if("complete".equals(state)){complete=true;clearCode();status.setText(text("pair_complete"));retry.setVisibility(android.view.View.GONE);ProModuleInstaller.syncEntitlement(this);if(firstRun()){if(new com.nenotv.player.storage.SecureProfileStore(this).exists()){finishSetup();}else localSetup();}else if(getIntent().getBooleanExtra("setup",false)){setResult(RESULT_OK);finish();}else if(!new com.nenotv.player.storage.SecureProfileStore(this).exists()){startActivity(new Intent(this,ProfileActivity.class));finish();}}
+                    if("complete".equals(state)){complete=true;clearCode();status.setText(text("pair_complete"));retry.setVisibility(android.view.View.GONE);ProModuleInstaller.syncEntitlement(this);if(resumed)continueSetup();}
                     else if("expired".equals(state)||"cancelled".equals(state))expire();
                     else{status.setText(text("pair_waiting"));schedule(active);}
                 });
@@ -161,6 +162,11 @@ public final class PairingActivity extends Activity {
                 if(!(error instanceof EntitlementClient.ServiceException))schedule(active);
             });}
         });
+    }
+    void continueSetup(){
+        if(firstRun())localSetup();
+        else if(getIntent().getBooleanExtra("setup",false)){setResult(RESULT_OK);finish();}
+        else if(!new com.nenotv.player.storage.SecureProfileStore(this).exists()){startActivity(new Intent(this,WebsiteSetupActivity.class));finish();}
     }
     void schedule(PairingClient.Session active){if((resumed||backgroundAllowed())&&!active.expired())handler.postDelayed(poll,active.pollSeconds*1000L);else if(active.expired())expire();}
     void expire(){busy=false;session=null;clearCode();retry.setEnabled(true);status.setText(text("pair_expired"));}
