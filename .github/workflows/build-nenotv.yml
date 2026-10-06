@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -63,6 +63,20 @@ jobs:
           javac -d build/lang $(cat tools/tests/language/sources.txt)
           java -Xmx2g -cp build/lang com.nenotv.player.ContentLanguageEquivalence
           java -cp build/lang com.nenotv.player.storage.IndexTextEquivalence
+      - name: FFmpeg audio decoder cache
+        id: ffmpeg-cache
+        uses: actions/cache@v4
+        with:
+          path: android/app/libs/ffmpeg
+          key: ffmpeg-audio-${{ hashFiles('tools/build-ffmpeg-audio.sh') }}
+      - name: Build FFmpeg audio decoder (LGPL, only when the cache is empty)
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          "$SDKMANAGER" "ndk;26.1.10909125" "cmake;3.22.1" >/dev/null
+          NDK_PATH="$ANDROID_HOME/ndk/26.1.10909125" bash tools/build-ffmpeg-audio.sh android/app/libs/ffmpeg
+      - name: FFmpeg audio decoder licence and sizes
+        run: cat android/app/libs/ffmpeg/licence.txt android/app/libs/ffmpeg/ffmpeg-source.txt android/app/libs/ffmpeg/sizes.txt
       - name: Build the single app source
         working-directory: android
         run: gradle --no-daemon :app:bundleRelease :app:assembleDebugAndroidTest
@@ -109,6 +123,13 @@ jobs:
             heavy=('libvlc.so','libvlcjni.so','libtranslate_jni.so','liblanguage_id_l2c_jni.so')
             assert not any(n.startswith('base/') and any(h in n for h in heavy) for n in names)
             assert any(n.startswith('proextras/') and any(h in n for h in heavy) for n in names)
+            # VLC is removed; Dolby/DTS/TrueHD come from the LGPL FFmpeg audio decoder in the base app.
+            assert not any('libvlc' in n for n in names), 'VLC must not be in the bundle'
+            assert any(n.startswith('base/lib/') and n.endswith('/libffmpegJNI.so') for n in names), 'FFmpeg audio decoder missing from base'
+            sizes=collections.defaultdict(int)
+            for i in z.infolist():
+              if i.filename.startswith('base/lib/') and i.filename.endswith('/libffmpegJNI.so'): sizes[i.filename.split('/')[2]]+=i.file_size
+            print('FFmpeg audio decoder per ABI (MB):',{k:round(v/1048576,2) for k,v in sizes.items()})
           PY
       - uses: actions/upload-artifact@v4
         with:

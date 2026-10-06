@@ -218,7 +218,7 @@ public class ImportInstrumentation extends Instrumentation {
                 runOnMainSync(()->{
                     texture[0]=new android.graphics.SurfaceTexture(0);texture[0].setDefaultBufferSize(1280,720);
                     surface[0]=new android.view.Surface(texture[0]);
-                    player[0]=new androidx.media3.exoplayer.ExoPlayer.Builder(c).setMediaSourceFactory(DemoSource.mediaSourceFactory(c,item)).build();
+                    player[0]=new androidx.media3.exoplayer.ExoPlayer.Builder(c,PlayerAudio.renderers(c)).setMediaSourceFactory(DemoSource.mediaSourceFactory(c,item)).build();
                     player[0].setVideoSurface(surface[0]);
                     player[0].addListener(new androidx.media3.common.Player.Listener(){
                         @Override public void onRenderedFirstFrame(){frame.set(true);}

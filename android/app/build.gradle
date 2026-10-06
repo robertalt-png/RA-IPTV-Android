@@ -44,6 +44,10 @@ dependencies {
     implementation 'androidx.media3:media3-exoplayer:1.11.1'
     implementation 'androidx.media3:media3-exoplayer-hls:1.11.1'
     implementation 'androidx.media3:media3-ui:1.11.1'
+    // Dolby (AC3/E-AC3), DTS (incl. DTS-HD), TrueHD etc. when the device cannot decode or pass them through.
+    // Built by tools/build-ffmpeg-audio.sh (FFmpeg n6.0.1, LGPL 2.1+, audio decoders only).
+    implementation files('libs/ffmpeg/media3-decoder-ffmpeg-audio.aar')
+    implementation 'androidx.media3:media3-decoder:1.11.1'
     implementation 'com.google.android.gms:play-services-cast-framework:22.3.1'
     implementation 'androidx.fragment:fragment:1.8.9'
 }

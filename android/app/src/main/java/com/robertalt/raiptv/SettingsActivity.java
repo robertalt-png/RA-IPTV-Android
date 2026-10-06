@@ -58,11 +58,10 @@ public class SettingsActivity extends Activity {
                 if (pro()) {
                     onOff(g, T("picture_in_picture"), "pip", true);
                     onOff(g, T("autoplay"), "autoplay_next", true);
-                    choice(g, T("player"), "player", new String[]{T("automatic"), "VLC", "Media3"}, new String[]{"auto", "vlc", "media3"});
                     g.add("💬", T("advanced_subtitles"), T("external_subtitle_bridge"), false, v -> editSubtitleBridge());
                     g.finish();
                 } else {
-                    g.add("🔒", "SunnyIPTV Pro", text("Beeld-in-beeld, volgende aflevering automatisch, externe ondertitels en opnemen", "Picture-in-picture, next episode automatically, external subtitles and recording", "Bild-in-Bild, nächste Folge automatisch, externe Untertitel und Aufnahme"), false, v -> ProGate.require(this, T("picture_in_picture")));
+                    g.add("🔒", "SunnyIPTV Pro", text("Beeld-in-beeld, volgende aflevering automatisch en externe ondertitels", "Picture-in-picture, next episode automatically and external subtitles", "Bild-in-Bild, nächste Folge automatisch und externe Untertitel"), false, v -> ProGate.require(this, T("picture_in_picture")));
                     g.finish();
                     Tiles.note(this, box, text("Audio- en ondertiteltaal stel je in onder Taal.", "Set audio and subtitle language under Language.", "Audio- und Untertitelsprache stellst du unter Sprache ein."));
                 }
@@ -88,8 +87,27 @@ public class SettingsActivity extends Activity {
                 g.add("👤", text("Account", "Account", "Konto"), text("Mijn account, uitloggen", "My account, sign out", "Mein Konto, abmelden"), false, v -> open(ACCOUNT));
                 g.finish();
                 Tiles.note(this, box, footer());
+                Tiles.link(this, box, text("Open-sourcesoftware", "Open-source software", "Open-Source-Software"), v -> showOpenSource());
         }
         UiText.applyDirection(this);
+    }
+
+    // LGPL notice for the bundled FFmpeg audio decoder (tools/build-ffmpeg-audio.sh pins FFmpeg n6.0.1).
+    static final String FFMPEG_SOURCE = "https://github.com/FFmpeg/FFmpeg/tree/n6.0.1";
+    void showOpenSource() {
+        String msg = text(
+            "SunnyIPTV gebruikt FFmpeg n6.0.1 voor Dolby-, DTS- en andere geluidsformaten. FFmpeg valt onder de GNU LGPL versie 2.1 of later; wij hebben FFmpeg niet aangepast.",
+            "SunnyIPTV uses FFmpeg n6.0.1 for Dolby, DTS and other audio formats. FFmpeg is licensed under the GNU LGPL version 2.1 or later; we have not modified FFmpeg.",
+            "SunnyIPTV nutzt FFmpeg n6.0.1 für Dolby-, DTS- und andere Audioformate. FFmpeg steht unter der GNU LGPL Version 2.1 oder später; wir haben FFmpeg nicht verändert.")
+            + "\n\n" + text("Broncode", "Source code", "Quellcode") + ": " + FFMPEG_SOURCE
+            + "\n" + text("Licentie", "Licence", "Lizenz") + ": https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html"
+            + "\n\nAndroidX Media3, ZXing, Gson: Apache License 2.0.";
+        new AlertDialog.Builder(this)
+            .setTitle(text("Open-sourcesoftware", "Open-source software", "Open-Source-Software"))
+            .setMessage(msg)
+            .setNeutralButton(text("Broncode", "Source code", "Quellcode"), (d, w) -> Tiles.open(this, FFMPEG_SOURCE))
+            .setPositiveButton(android.R.string.ok, null)
+            .show();
     }
 
     String footer() {
