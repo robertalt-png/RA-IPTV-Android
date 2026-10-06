@@ -4,6 +4,17 @@
 # Output: <output-dir>/media3-decoder-ffmpeg-audio.aar plus licence.txt, decoders.txt, ffmpeg-source.txt
 # FFmpeg is configured WITHOUT --enable-gpl / --enable-version3 / --enable-nonfree; the script fails otherwise.
 set -euo pipefail
+# On failure, surface the failing command and the last log lines as GitHub annotations (readable without log access).
+report_failure() {
+  local code=$? line=$1 cmd=$2
+  if [ -n "${GITHUB_ACTIONS:-}" ]; then
+    echo "::error title=build-ffmpeg-audio.sh line ${line}::exit ${code}: ${cmd}"
+    if [ -n "${LOG:-}" ] && [ -f "${LOG}" ]; then
+      echo "::error title=FFmpeg build log (last 40 lines)::$(tail -n 40 "$LOG" | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')"
+    fi
+  fi
+}
+trap 'report_failure $LINENO "$BASH_COMMAND"' ERR
 
 OUT="$(mkdir -p "$1" && cd "$1" && pwd)"
 MEDIA3_VERSION="${MEDIA3_VERSION:-1.11.1}"   # must match androidx.media3 in android/app/build.gradle
