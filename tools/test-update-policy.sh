@@ -8,3 +8,5 @@ javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/SiteEndpoints
 java -cp "$classes" com.nenotv.player.SiteEndpointsTest
 javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/ExtraPrivacyPolicy.java tools/tests/ExtraPrivacyPolicyTest.java
 java -cp "$classes" com.nenotv.player.ExtraPrivacyPolicyTest
+javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/ExtraPrivacySession.java tools/tests/ExtraPrivacySessionTest.java
+java -cp "$classes" com.nenotv.player.ExtraPrivacySessionTest

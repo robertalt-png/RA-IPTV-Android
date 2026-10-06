@@ -11,7 +11,10 @@ public final class NenoTVCastOptionsProvider implements OptionsProvider {
     public static String receiverApplicationId(){String id=BuildConfig.NENOTV_CAST_RECEIVER_ID;return id==null||id.trim().isEmpty()?CastMediaControlIntent.DEFAULT_MEDIA_RECEIVER_APPLICATION_ID:id.trim();}
     @Override public CastOptions getCastOptions(Context context){
         return new CastOptions.Builder()
-            .setReceiverApplicationId(receiverApplicationId())
+            .setReceiverApplicationId(com.nenotv.player.storage.ExtraPrivacyStore.allowsSdk(context)?receiverApplicationId():null)
+            .setEnableReconnectionService(false)
+            .setResumeSavedSession(false)
+            .setSessionTransferEnabled(false)
             .setStopReceiverApplicationWhenEndingSession(false)
             .build();
     }

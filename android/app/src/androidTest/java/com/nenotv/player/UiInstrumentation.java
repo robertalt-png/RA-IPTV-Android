@@ -91,6 +91,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
     }
     void agePrivacyAccess()throws Exception{
         Context c=getTargetContext();
+        ExtraPrivacyChecks.run(c);
         SharedPreferences prefs=c.getSharedPreferences(com.nenotv.player.storage.ExtraPrivacyStore.PREFS,Context.MODE_PRIVATE);
         Map<String,?> previous=new HashMap<>(prefs.getAll());
         String previousLanguage=SettingsStore.language(c);

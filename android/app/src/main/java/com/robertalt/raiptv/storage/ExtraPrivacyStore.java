@@ -11,12 +11,20 @@ public final class ExtraPrivacyStore {
         return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
     public static boolean answered(Context c) { return prefs(c).getBoolean("answered", false); }
-    public static void clear(Context c) { prefs(c).edit().clear().commit(); }
+    public static void clear(Context c) {
+        synchronized (com.nenotv.player.ExtraPrivacySession.class) {
+            prefs(c).edit().clear().commit();
+            com.nenotv.player.ExtraPrivacySession.invalidate();
+        }
+    }
     public static boolean allowsSdk(Context c) {
         return ExtraPrivacyPolicy.allowsSdk(prefs(c).getString("age_group", "unknown"), FamilyStore.active(c));
     }
     public static void choose(Context c, String group) {
         String safe = "under_13".equals(group) || "13_plus".equals(group) ? group : "unknown";
-        prefs(c).edit().putString("age_group", safe).putBoolean("answered", true).commit();
+        synchronized (com.nenotv.player.ExtraPrivacySession.class) {
+            prefs(c).edit().putString("age_group", safe).putBoolean("answered", true).commit();
+            com.nenotv.player.ExtraPrivacySession.invalidate();
+        }
     }
 }

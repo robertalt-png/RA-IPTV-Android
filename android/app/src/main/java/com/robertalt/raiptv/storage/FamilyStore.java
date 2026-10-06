@@ -61,7 +61,10 @@ public final class FamilyStore {
     private static SharedPreferences.Editor edit(Context c){return prefs(c).edit().putLong("revision",revision(c)+1);}
     public static boolean setActive(Context c,boolean on,String pin){
         if(!SettingsStore.verifyParentalPin(c,pin))return false;
-        if(!edit(c).putBoolean("active",on).commit())return false;
+        synchronized(com.nenotv.player.ExtraPrivacySession.class){
+            if(!edit(c).putBoolean("active",on).commit())return false;
+            com.nenotv.player.ExtraPrivacySession.invalidate();
+        }
         SettingsStore.lockAdults();return true;
     }
     public static boolean approve(Context c,MediaEntry e,String pin){
