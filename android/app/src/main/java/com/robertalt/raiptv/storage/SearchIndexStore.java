@@ -21,8 +21,17 @@ public class SearchIndexStore extends SQLiteOpenHelper {
     SearchIndexStore(Context c,String database){super(c,database,null,VERSION);cipher=new CachePayloadCipher(c,database);maintenance=c.getSharedPreferences("nenotv_cache_maintenance",Context.MODE_PRIVATE);maintenanceKey=StoredMediaKey.of(database);try{setWriteAheadLoggingEnabled(true);}catch(Exception ignored){} }
 
     @Override public void onConfigure(SQLiteDatabase db){super.onConfigure(db);try(Cursor c=db.rawQuery("PRAGMA secure_delete=ON",null)){if(!c.moveToFirst()||c.getInt(0)!=1)throw new IllegalStateException("CACHE_SECURE_DELETE_UNAVAILABLE");}}
+    /**
+     * A full catalogue import writes its rows under a fresh "generation" key in entries and then switches
+     * this pointer in one small transaction, instead of staging every row and copying it again.
+     * A profile without a row here stores its entries under its own name (all installs before v0.14.20),
+     * so no migration is needed. retired = the previous generation, removed afterwards in small batches.
+     */
+    private static final String GENERATIONS="CREATE TABLE IF NOT EXISTS generations(profile TEXT PRIMARY KEY, physical TEXT NOT NULL, retired TEXT NOT NULL DEFAULT '')";
+    private static final int PURGE_BATCH=2000;
     @Override public void onOpen(SQLiteDatabase db){
         super.onOpen(db);
+        if(!db.isReadOnly())db.execSQL(GENERATIONS);
         if(maintenance.getBoolean(maintenanceKey,false)){
             checkpoint(db);db.execSQL("VACUUM");checkpoint(db);
             if(!maintenance.edit().remove(maintenanceKey).commit())throw new IllegalStateException("CACHE_CLEANUP_STATE_FAILED");
@@ -42,7 +51,16 @@ public class SearchIndexStore extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE meta(profile TEXT NOT NULL, section TEXT NOT NULL, updated INTEGER NOT NULL, item_count INTEGER NOT NULL, PRIMARY KEY(profile,section))");
         db.execSQL("CREATE TABLE category_cache(profile TEXT NOT NULL, section TEXT NOT NULL, category_id TEXT NOT NULL, name TEXT NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY(profile,section,category_id))");
         db.execSQL("CREATE TABLE import_progress(profile TEXT NOT NULL, section TEXT NOT NULL, session TEXT NOT NULL, cursor TEXT NOT NULL DEFAULT '', item_count INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL, PRIMARY KEY(profile,section))");
+        db.execSQL(GENERATIONS);
     }
+
+    /** The key under which the visible entries of this profile are stored. */
+    private static String physical(SQLiteDatabase db,String profile){
+        String logical=profile==null?"":profile;
+        try(Cursor c=db.rawQuery("SELECT physical FROM generations WHERE profile=?",new String[]{logical})){return c.moveToFirst()?c.getString(0):logical;}
+        catch(android.database.sqlite.SQLiteException noTableYet){return logical;}
+    }
+    private String physical(String profile){return physical(getWritableDatabase(),profile);}
     @Override public void onUpgrade(SQLiteDatabase db,int oldV,int newV){
         if(oldV<2){
             try{db.execSQL("ALTER TABLE entries ADD COLUMN lang_tag TEXT NOT NULL DEFAULT ''");}catch(Exception ignored){}
@@ -114,8 +132,9 @@ public class SearchIndexStore extends SQLiteOpenHelper {
     public synchronized void replaceSection(String profile,String section,List<MediaEntry> items){
         SQLiteDatabase db=getWritableDatabase(); db.beginTransaction();
         try{
-            db.delete("entries","profile=? AND type=?",new String[]{profile,section});
-            for(MediaEntry e:items) upsertInternal(db,profile,e);
+            String stored=physical(db,profile);
+            db.delete("entries","profile=? AND type=?",new String[]{stored,section});
+            for(MediaEntry e:items) upsertInternal(db,stored,e);
             ContentValues m=new ContentValues();m.put("profile",profile);m.put("section",section);m.put("updated",System.currentTimeMillis());m.put("item_count",items.size());
             db.insertWithOnConflict("meta",null,m,SQLiteDatabase.CONFLICT_REPLACE);
             db.setTransactionSuccessful();
@@ -125,12 +144,13 @@ public class SearchIndexStore extends SQLiteOpenHelper {
     public void upsert(String profile,List<MediaEntry> items){
     if(items==null||items.isEmpty())return;
     SQLiteDatabase db=getWritableDatabase();
+    final String stored=physical(db,profile);
     final int chunk=80;
     for(int start=0;start<items.size()&&!Thread.currentThread().isInterrupted();start+=chunk){
         int end=Math.min(items.size(),start+chunk);boolean complete=true;
         db.beginTransaction();
         try{
-            for(int i=start;i<end;i++){if(Thread.currentThread().isInterrupted()){complete=false;break;}upsertInternal(db,profile,items.get(i));}
+            for(int i=start;i<end;i++){if(Thread.currentThread().isInterrupted()){complete=false;break;}upsertInternal(db,stored,items.get(i));}
             if(complete)db.setTransactionSuccessful();
         }finally{db.endTransaction();}
         if(!complete)break;
@@ -142,17 +162,19 @@ public class SearchIndexStore extends SQLiteOpenHelper {
         upsertInternal(db,"entries",null,profile,e);
     }
     private void upsertInternal(SQLiteDatabase db,String table,String session,String profile,MediaEntry e){
-        upsertInternal(db,table,session,profile,e,false);
+        upsertInternal(db,table,session,profile,e,null);
     }
-    private void upsertInternal(SQLiteDatabase db,String table,String session,String profile,MediaEntry e,boolean visible){
+    /** visibleAs: when non-null, the row is also written to entries under that (physical) key. */
+    private void upsertInternal(SQLiteDatabase db,String table,String session,String profile,MediaEntry e,String visibleAs){
         try{
-            ContentValues v=new ContentValues();v.put("profile",profile);v.put("item_key",StoredMediaKey.of(e));v.put("type",e.type);v.put("name",metadata(e.name));
-            String nameNorm=norm(metadata(e.name));String hay=norm(metadata(e.name)+" "+metadata(e.plot)+" "+metadata(e.group)+" "+metadata(e.seriesTitle)+" "+metadata(e.tvgName));
+            String name=metadata(e.name);
+            ContentValues v=new ContentValues();v.put("profile",profile);v.put("item_key",StoredMediaKey.of(e));v.put("type",e.type);v.put("name",name);
+            String nameNorm=norm(name);String hay=norm(name+" "+metadata(e.plot)+" "+metadata(e.group)+" "+metadata(e.seriesTitle)+" "+metadata(e.tvgName));
             v.put("name_norm",nameNorm);v.put("hay_norm",hay);v.put("lang_tag",ContentLanguage.detectTag(e));v.put("lang_scanned",1);v.put("payload",cipher.encrypt(encode(e)));
             if(session!=null){v.put("session",session);v.put("started",System.currentTimeMillis());}
             if(db.insertWithOnConflict(table,null,v,SQLiteDatabase.CONFLICT_REPLACE)<0)throw new IllegalStateException("cache_write_failed");
-            if(visible){
-                v.remove("session");v.remove("started");
+            if(visibleAs!=null){
+                v.remove("session");v.remove("started");v.put("profile",visibleAs);
                 if(db.insertWithOnConflict("entries",null,v,SQLiteDatabase.CONFLICT_REPLACE)<0)throw new IllegalStateException("cache_write_failed");
             }
         }catch(Exception failure){throw new IllegalStateException("cache_write_failed",failure);}
@@ -225,10 +247,11 @@ public class SearchIndexStore extends SQLiteOpenHelper {
         com.nenotv.player.net.StreamingJsonArray.checkCancelled();
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
         try {
+            String visibleAs=visible?physical(db,profile):null;
             for(MediaEntry e:items){
                 com.nenotv.player.net.StreamingJsonArray.checkCancelled();
                 if(!section.equals(e.type))throw new IllegalArgumentException("import_section_mismatch");
-                upsertInternal(db,"import_entries",session,profile,e,visible);
+                upsertInternal(db,"import_entries",session,profile,e,visibleAs);
             }
             db.setTransactionSuccessful();
         } finally {db.endTransaction();}
@@ -240,8 +263,9 @@ public class SearchIndexStore extends SQLiteOpenHelper {
         try {
             int count;
             try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM import_entries WHERE session=? AND profile=? AND type=?",new String[]{session,profile,section})){c.moveToFirst();count=c.getInt(0);}
-            db.delete("entries","profile=? AND type=?",new String[]{profile,section});
-            db.execSQL("INSERT INTO entries(profile,item_key,type,name,name_norm,hay_norm,lang_tag,lang_scanned,payload) SELECT profile,item_key,type,name,name_norm,hay_norm,lang_tag,lang_scanned,payload FROM import_entries WHERE session=? AND profile=? AND type=?",new Object[]{session,profile,section});
+            String stored=physical(db,profile);
+            db.delete("entries","profile=? AND type=?",new String[]{stored,section});
+            db.execSQL("INSERT INTO entries(profile,item_key,type,name,name_norm,hay_norm,lang_tag,lang_scanned,payload) SELECT ?,item_key,type,name,name_norm,hay_norm,lang_tag,lang_scanned,payload FROM import_entries WHERE session=? AND profile=? AND type=?",new Object[]{stored,session,profile,section});
             ContentValues m=new ContentValues();m.put("profile",profile);m.put("section",section);m.put("updated",System.currentTimeMillis());m.put("item_count",count);
             if(db.insertWithOnConflict("meta",null,m,SQLiteDatabase.CONFLICT_REPLACE)<0)throw new IllegalStateException("import_meta_failed");
             db.delete("import_entries","session=?",new String[]{session});
@@ -252,29 +276,105 @@ public class SearchIndexStore extends SQLiteOpenHelper {
 
     public static MediaEntry decodePackageEntry(String raw){return decodePlain(raw);}
 
-    public synchronized void finishCatalogImport(String session,String profile,Map<String,Integer> counts,Map<String,List<Category>> categories,Runnable guard) throws java.io.InterruptedIOException {
+    /** Starts a full catalogue import into a new, still invisible generation. Returns its storage key. */
+    public String beginCatalogGeneration(String profile){
+        getWritableDatabase();
+        return (profile==null?"":profile)+"#g"+Long.toString(System.currentTimeMillis(),36)+java.util.UUID.randomUUID().toString().substring(0,8);
+    }
+
+    /** Writes one batch of a generation straight into entries; nothing is visible until it is activated. */
+    public void importCatalogBatch(String generation,String section,List<MediaEntry> items) throws java.io.InterruptedIOException {
         com.nenotv.player.net.StreamingJsonArray.checkCancelled();
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
         try{
+            for(MediaEntry e:items){
+                com.nenotv.player.net.StreamingJsonArray.checkCancelled();
+                if(!section.equals(e.type))throw new IllegalArgumentException("import_section_mismatch");
+                upsertInternal(db,"entries",null,generation,e);
+            }
+            db.setTransactionSuccessful();
+        }finally{db.endTransaction();}
+    }
+
+    /**
+     * Makes a completely written generation the visible library in one small transaction: verifies the
+     * counts, points the profile at it and records the previous generation for removal by purgeRetired.
+     */
+    public synchronized void activateCatalogGeneration(String profile,String generation,Map<String,Integer> counts,Map<String,List<Category>> categories,Runnable guard) throws java.io.InterruptedIOException {
+        com.nenotv.player.net.StreamingJsonArray.checkCancelled();
+        SQLiteDatabase db=getWritableDatabase();
+        for(String section:new String[]{"live","vod","series"}){
+            try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM entries WHERE profile=? AND type=?",new String[]{generation,section})){
+                if(!c.moveToFirst()||c.getInt(0)!=counts.get(section))throw new IllegalStateException("catalog_duplicate_or_missing_items");
+            }
+        }
+        db.beginTransaction();
+        try{
+            String previous=physical(db,profile);
+            // Anything that is not the active generation is purged afterwards (see purgeRetired), including
+            // a retired key from an earlier, unfinished purge; this column only records the latest one.
+            ContentValues g=new ContentValues();g.put("profile",profile);g.put("physical",generation);g.put("retired",previous.equals(generation)?"":previous);
+            if(db.insertWithOnConflict("generations",null,g,SQLiteDatabase.CONFLICT_REPLACE)<0)throw new IllegalStateException("catalog_generation_write");
+            long now=System.currentTimeMillis();
             for(String section:new String[]{"live","vod","series"}){
-                if(importCount(session,profile,section)!=counts.get(section))throw new IllegalStateException("catalog_duplicate_or_missing_items");
-                db.delete("entries","profile=? AND type=?",new String[]{profile,section});
-                db.execSQL("INSERT INTO entries(profile,item_key,type,name,name_norm,hay_norm,lang_tag,lang_scanned,payload) SELECT profile,item_key,type,name,name_norm,hay_norm,lang_tag,lang_scanned,payload FROM import_entries WHERE session=? AND profile=? AND type=?",new Object[]{session,profile,section});
-                ContentValues m=new ContentValues();m.put("profile",profile);m.put("section",section);m.put("updated",System.currentTimeMillis());m.put("item_count",counts.get(section));
+                ContentValues m=new ContentValues();m.put("profile",profile);m.put("section",section);m.put("updated",now);m.put("item_count",counts.get(section));
                 if(db.insertWithOnConflict("meta",null,m,SQLiteDatabase.CONFLICT_REPLACE)<0)throw new IllegalStateException("catalog_meta_write");
                 replaceCategories(profile,section,categories.get(section));
                 db.delete("import_progress","profile=? AND section=?",new String[]{profile,section});
             }
-            db.delete("import_entries","session=?",new String[]{session});
             com.nenotv.player.net.StreamingJsonArray.checkCancelled();guard.run();db.setTransactionSuccessful();
         }finally{db.endTransaction();}
+    }
+
+    /** Removes an unfinished generation (cancelled, failed or interrupted import), in small batches. */
+    public void abortCatalogGeneration(String generation){
+        if(generation==null||generation.isEmpty())return;
+        try{deleteStored(getWritableDatabase(),generation);}catch(Exception ignored){/* purgeRetired sweeps leftovers later */}
+    }
+
+    /**
+     * Deletes generations of this profile that are no longer visible: the retired one and any leftover
+     * from an interrupted import. Runs after the new library is already shown, in batches of PURGE_BATCH
+     * rows per transaction, so secure_delete never sits in the customer's wait.
+     */
+    public void purgeRetired(String profile){
+        if(profile==null)return;
+        SQLiteDatabase db=getWritableDatabase();
+        String active=physical(db,profile);
+        String retired="";
+        try(Cursor c=db.rawQuery("SELECT retired FROM generations WHERE profile=?",new String[]{profile})){if(c.moveToFirst())retired=c.getString(0);}
+        java.util.LinkedHashSet<String> stale=new java.util.LinkedHashSet<>();
+        if(retired!=null&&!retired.isEmpty()&&!retired.equals(active))stale.add(retired);
+        // Installs before generations stored the library under the profile name itself; once a generation
+        // is active nothing is written there any more, so those rows are stale too.
+        if(!active.equals(profile))stale.add(profile);
+        try(Cursor c=db.rawQuery("SELECT DISTINCT profile FROM entries WHERE profile>=? AND profile<?",new String[]{profile+"#g",profile+"#h"})){
+            while(c.moveToNext()){String key=c.getString(0);if(!key.equals(active))stale.add(key);}
+        }
+        for(String key:stale){if(Thread.currentThread().isInterrupted())return;deleteStored(db,key);}
+        if(!active.equals(profile)){
+            ContentValues done=new ContentValues();done.put("retired","");
+            db.update("generations",done,"profile=?",new String[]{profile});
+        }
+    }
+
+    private static void deleteStored(SQLiteDatabase db,String key){
+        while(true){
+            int removed;
+            db.beginTransaction();
+            try{
+                removed=db.delete("entries","rowid IN (SELECT rowid FROM entries WHERE profile=? LIMIT "+PURGE_BATCH+")",new String[]{key});
+                db.setTransactionSuccessful();
+            }finally{db.endTransaction();}
+            if(removed<PURGE_BATCH||Thread.currentThread().isInterrupted())return;
+        }
     }
 
     public void abortSectionImport(String session) {
         if(session!=null)getWritableDatabase().delete("import_entries","session=?",new String[]{session});
     }
 
-    public synchronized void clearAll(){try{SQLiteDatabase db=getWritableDatabase();db.delete("entries",null,null);db.delete("meta",null,null);}catch(Exception ignored){}}
+    public synchronized void clearAll(){try{SQLiteDatabase db=getWritableDatabase();db.delete("entries",null,null);db.delete("meta",null,null);db.delete("generations",null,null);}catch(Exception ignored){}}
 
     public synchronized void markSection(String profile,String section,int count){
         try{ContentValues m=new ContentValues();m.put("profile",profile);m.put("section",section);m.put("updated",System.currentTimeMillis());m.put("item_count",Math.max(0,count));getWritableDatabase().insertWithOnConflict("meta",null,m,SQLiteDatabase.CONFLICT_REPLACE);}catch(Exception ignored){}
@@ -286,13 +386,13 @@ public class SearchIndexStore extends SQLiteOpenHelper {
         }
     }
 
-    public synchronized int count(String profile){
+    public synchronized int count(String profile){profile=physical(profile);
         try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM entries WHERE profile=?",new String[]{profile})){
             return c.moveToFirst()?c.getInt(0):0;
         }
     }
 
-    public synchronized int countSection(String profile,String section){
+    public synchronized int countSection(String profile,String section){profile=physical(profile);
         try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM entries WHERE profile=? AND type=?",new String[]{profile,section})){
             return c.moveToFirst()?c.getInt(0):0;
         }catch(Exception e){return 0;}
@@ -312,7 +412,7 @@ public class SearchIndexStore extends SQLiteOpenHelper {
     // Never perform a full decode/write migration from a foreground read.
 }
 
-    public synchronized List<MediaEntry> sectionPage(String profile,String section,int offset,int limit,String sort,String preferredLanguage){
+    public synchronized List<MediaEntry> sectionPage(String profile,String section,int offset,int limit,String sort,String preferredLanguage){profile=physical(profile);
         ArrayList<MediaEntry> out=new ArrayList<>();int safeOffset=Math.max(0,offset),safeLimit=Math.max(1,Math.min(1000,limit));
         String order="rowid ASC";if("az".equals(sort))order="name_norm COLLATE NOCASE ASC";else if("za".equals(sort))order="name_norm COLLATE NOCASE DESC";
         SQLiteDatabase db=getWritableDatabase();ensureLanguageHints(db,profile,section);
@@ -322,24 +422,24 @@ public class SearchIndexStore extends SQLiteOpenHelper {
         return out;
     }
 
-    public synchronized int countLanguage(String profile,String section,String tag){
+    public synchronized int countLanguage(String profile,String section,String tag){profile=physical(profile);
         String t=tag==null?"":tag.trim().toLowerCase(Locale.ROOT);if(t.isEmpty())return 0;
         try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM entries WHERE profile=? AND type=? AND lang_tag=?",new String[]{profile,section,t})){return c.moveToFirst()?c.getInt(0):0;}catch(Exception e){return 0;}
     }
 
-    public synchronized List<String> languageTags(String profile,String section){
+    public synchronized List<String> languageTags(String profile,String section){profile=physical(profile);
         ArrayList<String> out=new ArrayList<>();SQLiteDatabase db=getWritableDatabase();ensureLanguageHints(db,profile,section);
         try(Cursor c=db.rawQuery("SELECT lang_tag,COUNT(*) n FROM entries WHERE profile=? AND type=? AND lang_tag<>'' GROUP BY lang_tag ORDER BY n DESC,lang_tag ASC",new String[]{profile,section})){while(c.moveToNext()){String t=ContentLanguage.normalizeTag(c.getString(0));if(!t.isEmpty()&&!out.contains(t))out.add(t);}}catch(Exception ignored){}
         return out;
     }
 
-    public synchronized int countOther(String profile,String section){SQLiteDatabase db=getWritableDatabase();ensureLanguageHints(db,profile,section);try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM entries WHERE profile=? AND type=? AND (lang_tag='' OR lang_tag IS NULL)",new String[]{profile,section})){return c.moveToFirst()?c.getInt(0):0;}catch(Exception e){return 0;}}
-    public synchronized List<MediaEntry> otherPage(String profile,String section,int offset,int limit,String sort){
+    public synchronized int countOther(String profile,String section){profile=physical(profile);SQLiteDatabase db=getWritableDatabase();ensureLanguageHints(db,profile,section);try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM entries WHERE profile=? AND type=? AND (lang_tag='' OR lang_tag IS NULL)",new String[]{profile,section})){return c.moveToFirst()?c.getInt(0):0;}catch(Exception e){return 0;}}
+    public synchronized List<MediaEntry> otherPage(String profile,String section,int offset,int limit,String sort){profile=physical(profile);
         ArrayList<MediaEntry> out=new ArrayList<>();int safeOffset=Math.max(0,offset),safeLimit=Math.max(1,Math.min(1000,limit));String base="rowid ASC";if("az".equals(sort))base="name_norm COLLATE NOCASE ASC";else if("za".equals(sort))base="name_norm COLLATE NOCASE DESC";
         SQLiteDatabase db=getWritableDatabase();ensureLanguageHints(db,profile,section);try(Cursor c=db.rawQuery("SELECT payload FROM entries WHERE profile=? AND type=? AND (lang_tag='' OR lang_tag IS NULL) ORDER BY "+base+" LIMIT ? OFFSET ?",new String[]{profile,section,String.valueOf(safeLimit),String.valueOf(safeOffset)})){while(c.moveToNext()){MediaEntry e=decode(c.getString(0));if(e!=null)out.add(e);}}catch(Exception ignored){}return out;
     }
 
-    public synchronized List<MediaEntry> languagePage(String profile,String section,String tag,int offset,int limit,String sort){
+    public synchronized List<MediaEntry> languagePage(String profile,String section,String tag,int offset,int limit,String sort){profile=physical(profile);
         ArrayList<MediaEntry> out=new ArrayList<>();String t=tag==null?"":tag.trim().toLowerCase(Locale.ROOT);if(t.isEmpty())return out;
         int safeOffset=Math.max(0,offset),safeLimit=Math.max(1,Math.min(1000,limit));String base="rowid ASC";if("az".equals(sort))base="name_norm COLLATE NOCASE ASC";else if("za".equals(sort))base="name_norm COLLATE NOCASE DESC";
         SQLiteDatabase db=getWritableDatabase();ensureLanguageHints(db,profile,section);
@@ -347,7 +447,7 @@ public class SearchIndexStore extends SQLiteOpenHelper {
         return out;
     }
 
-    public synchronized List<MediaEntry> searchFiltered(String profile,String section,String query,String tag,int limit){
+    public synchronized List<MediaEntry> searchFiltered(String profile,String section,String query,String tag,int limit){profile=physical(profile);
         String q=norm(query);if(q.isEmpty())return Collections.emptyList();String sec=section==null?"":section.trim();String t=tag==null?"":tag.trim().toLowerCase(Locale.ROOT);SQLiteDatabase db=getWritableDatabase();if(!sec.isEmpty())ensureLanguageHints(db,profile,sec);
         StringBuilder where=new StringBuilder("profile=?");ArrayList<String> base=new ArrayList<>();base.add(profile);if(!sec.isEmpty()){where.append(" AND type=?");base.add(sec);}if("other".equals(t)){where.append(" AND (lang_tag='' OR lang_tag IS NULL)");}else if(!t.isEmpty()){where.append(" AND lang_tag=?");base.add(t);}
         LinkedHashMap<String,MediaEntry> out=new LinkedHashMap<>();queryFilteredInto(out,where.toString(),base,"name_norm=?",q,limit);if(out.size()<limit)queryFilteredInto(out,where.toString(),base,"name_norm LIKE ?",q+"%",limit);if(out.size()<limit)queryFilteredInto(out,where.toString(),base,"hay_norm LIKE ?","%"+q+"%",limit*2);
@@ -355,7 +455,7 @@ public class SearchIndexStore extends SQLiteOpenHelper {
     }
     private void queryFilteredInto(LinkedHashMap<String,MediaEntry> out,String where,List<String> base,String extra,String value,int limit){ArrayList<String>a=new ArrayList<>(base);a.add(value);a.add(String.valueOf(limit));try(Cursor c=getReadableDatabase().rawQuery("SELECT payload FROM entries WHERE "+where+" AND "+extra+" LIMIT ?",a.toArray(new String[0]))){while(c.moveToNext()){MediaEntry e=decode(c.getString(0));if(e!=null)out.putIfAbsent(e.uniqueKey(),e);}}catch(Exception ignored){}}
 
-    public synchronized List<MediaEntry> search(String profile,String query,int limit){
+    public synchronized List<MediaEntry> search(String profile,String query,int limit){profile=physical(profile);
         String q=norm(query); if(q.isEmpty())return Collections.emptyList();
         LinkedHashMap<String,MediaEntry> out=new LinkedHashMap<>();
         queryInto(out,"SELECT payload FROM entries WHERE profile=? AND name_norm=? LIMIT ?",new String[]{profile,q,String.valueOf(limit)});
@@ -387,11 +487,16 @@ public class SearchIndexStore extends SQLiteOpenHelper {
     }
     private MediaEntry decode(String raw){try{return decodePlain(cipher.decrypt(raw));}catch(Exception invalid){return null;}}
     private static MediaEntry decodePlain(String raw){
-        try{JSONObject x=new JSONObject(raw);MediaEntry e=new MediaEntry();e.id=x.optString("id");e.streamId=x.optString("streamId");e.seriesId=x.optString("seriesId");e.name=x.optString("name","Untitled");e.logo=x.optString("logo");e.backdrop=x.optString("backdrop");e.categoryId=x.optString("categoryId");e.type=x.optString("type","live");e.rating=x.optString("rating");e.year=x.optString("year");e.plot=x.optString("plot");e.extension=x.optString("extension");e.directSource=x.optString("directSource");e.url=x.optString("url");e.group=x.optString("group");e.tvgId=x.optString("tvgId");e.tvgName=x.optString("tvgName");e.seriesTitle=x.optString("seriesTitle");e.tmdbId=x.optString("tmdbId");e.imdbId=x.optString("imdbId");e.sourceId=x.optString("sourceId");e.sourceName=x.optString("sourceName");e.season=x.optInt("season");e.episode=x.optInt("episode");e.catchup=x.optBoolean("catchup",false);e.catchupDays=x.optInt("catchupDays",0);JSONArray a=x.optJSONArray("candidates");if(a!=null)for(int i=0;i<a.length();i++)e.candidates.add(a.optString(i));return e;}catch(Exception ex){return null;}
+        try{return decodePlain(new JSONObject(raw));}catch(Exception ex){return null;}
     }
-    private static String safe(String s){return s==null?"":s;}
-    private static String metadata(String s){return safe(s).replaceAll("(?i)(?:https?|rtsp|rtmp)://\\S+","");}
-    private static String norm(String s){return safe(s).toLowerCase(Locale.ROOT).replace('|',' ').replaceAll("\\s+"," ").trim();}
+    /** Reads an already parsed object; the catalogue import no longer serialises and re-parses each entry. */
+    public static MediaEntry decodePackageEntry(JSONObject entry){return entry==null?null:decodePlain(entry);}
+    private static MediaEntry decodePlain(JSONObject x){
+        try{MediaEntry e=new MediaEntry();e.id=x.optString("id");e.streamId=x.optString("streamId");e.seriesId=x.optString("seriesId");e.name=x.optString("name","Untitled");e.logo=x.optString("logo");e.backdrop=x.optString("backdrop");e.categoryId=x.optString("categoryId");e.type=x.optString("type","live");e.rating=x.optString("rating");e.year=x.optString("year");e.plot=x.optString("plot");e.extension=x.optString("extension");e.directSource=x.optString("directSource");e.url=x.optString("url");e.group=x.optString("group");e.tvgId=x.optString("tvgId");e.tvgName=x.optString("tvgName");e.seriesTitle=x.optString("seriesTitle");e.tmdbId=x.optString("tmdbId");e.imdbId=x.optString("imdbId");e.sourceId=x.optString("sourceId");e.sourceName=x.optString("sourceName");e.season=x.optInt("season");e.episode=x.optInt("episode");e.catchup=x.optBoolean("catchup",false);e.catchupDays=x.optInt("catchupDays",0);JSONArray a=x.optJSONArray("candidates");if(a!=null)for(int i=0;i<a.length();i++)e.candidates.add(a.optString(i));return e;}catch(Exception ex){return null;}
+    }
+    private static String safe(String s){return IndexText.safe(s);}
+    private static String metadata(String s){return IndexText.metadata(s);}
+    private static String norm(String s){return IndexText.norm(s);}
 }
 
 

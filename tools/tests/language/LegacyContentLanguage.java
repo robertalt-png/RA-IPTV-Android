@@ -4,10 +4,8 @@ import com.nenotv.player.model.MediaEntry;
 import java.util.*;
 
 /** Provider-language classifier. Unknown country/region/provider prefixes stay ungrouped. */
-public final class ContentLanguage {
-    private ContentLanguage(){}
-    // Compiled once: these run for every catalogue item during import (was recompiled per call).
-    private static final java.util.regex.Pattern NON_WORD=java.util.regex.Pattern.compile("[^\\p{L}\\p{Nd}]+");
+final class LegacyContentLanguage {
+    private LegacyContentLanguage(){}
     private static final String[] PREFERRED={"nl","en","de","fr","es","it","pt","tr","pl","ar"};
     private static final LinkedHashMap<String,String> ALIAS=new LinkedHashMap<>();
     static {
@@ -51,35 +49,10 @@ public final class ContentLanguage {
         alias("th","th","tha","thai");
         alias("vi","vi","vie","vietnamese");
     }
-    /**
-     * Word-match table built once from ALIAS: canonical code -> its aliases longer than two characters,
-     * in the same canonical order as new LinkedHashSet<>(ALIAS.values()). Replaces the per-item scan of
-     * every alias for every language (the former wordMatch), with an identical result.
-     */
-    private static final LinkedHashMap<String,List<String>> WORDS=new LinkedHashMap<>();
-    static {
-        for(Map.Entry<String,String> e:ALIAS.entrySet()){
-            List<String> words=WORDS.get(e.getValue());
-            if(words==null){words=new ArrayList<>();WORDS.put(e.getValue(),words);}
-            if(e.getKey().length()>2)words.add(e.getKey());
-        }
-    }
     private static void alias(String canonical,String...values){for(String v:values)ALIAS.put(normToken(v),canonical);}
     private static String safe(String s){return s==null?"":s;}
-    private static String normToken(String s){return NON_WORD.matcher(safe(s).trim().toLowerCase(Locale.ROOT)).replaceAll("");}
-    /** Lower-cased letter/digit runs of raw: exactly the words the former " "+alias+" " search could match. */
-    private static Set<String> words(String raw){
-        HashSet<String> out=new HashSet<>();
-        for(String token:NON_WORD.split(safe(raw).toLowerCase(Locale.ROOT)))if(!token.isEmpty())out.add(token);
-        return out;
-    }
-    /** First canonical (in ALIAS value order) whose long alias occurs as a whole word in raw; "" if none. */
-    private static String wordTag(String raw){
-        Set<String> present=words(raw);
-        if(present.isEmpty())return "";
-        for(Map.Entry<String,List<String>> e:WORDS.entrySet())for(String word:e.getValue())if(present.contains(word))return e.getKey();
-        return "";
-    }
+    private static String normToken(String s){return safe(s).trim().toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{Nd}]+","");}
+    private static String norm(String s){return (" "+safe(s).toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{Nd}]+"," ")+" ").replaceAll("\\s+"," ");}
     private static String prefixToken(String raw){
         if(raw==null)return "";String s=raw.trim(),x="";
         if(s.startsWith("|")){int j=s.indexOf('|',1);if(j>1)x=s.substring(1,j);}
@@ -97,10 +70,11 @@ public final class ContentLanguage {
     private static String explicitTag(String raw){
         String p=prefixToken(raw);if(!p.isEmpty()){String x=ALIAS.get(p);if(x!=null)return x;}
         if(raw!=null){String s=raw.trim(),head="";if(s.startsWith("|")){int j=s.indexOf('|',1);if(j>1)head=s.substring(1,j);}else if(s.startsWith("[")){int j=s.indexOf(']');if(j>1)head=s.substring(1,j);}else if(s.startsWith("(")){int j=s.indexOf(')');if(j>1)head=s.substring(1,j);}else{int best=-1;for(char sep:new char[]{':','-','·','|','/'}){int j=s.indexOf(sep);if(j>0&&j<=16&&(best<0||j<best))best=j;}if(best>0)head=s.substring(0,best);}
-            if(!head.isEmpty())for(String token:NON_WORD.split(head)){String x=ALIAS.get(normToken(token));if(x!=null)return x;}
+            if(!head.isEmpty())for(String token:head.split("[^\\p{L}\\p{Nd}]+")){String x=ALIAS.get(normToken(token));if(x!=null)return x;}
         }
         return aliasTag(raw);
     }
+    private static boolean wordMatch(String raw,String canonical){String n=norm(raw);for(Map.Entry<String,String>e:ALIAS.entrySet())if(canonical.equals(e.getValue())&&e.getKey().length()>2&&n.contains(" "+e.getKey()+" "))return true;return false;}
     public static boolean supported(String code){if(code==null)return false;for(String c:PREFERRED)if(c.equals(code.toLowerCase(Locale.ROOT)))return true;return false;}
     public static String preferenceCode(String code){return supported(code)?code.toLowerCase(Locale.ROOT):"";}
     public static String normalizeTag(String code){if(code==null)return "";String n=normToken(code);if("multi".equals(n)||"dual".equals(n)||"multiaudio".equals(n))return "multi";String x=ALIAS.get(n);return x==null?"":x;}
@@ -110,7 +84,8 @@ public final class ContentLanguage {
     /** Only real/known language aliases become a language group. AFG/AFR/etc stay ungrouped. */
     public static String categoryTag(String raw){
         if(raw==null)return "";if(multiPrefix(raw))return "multi";String x=explicitTag(raw);if(!x.isEmpty())return x;
-        return wordTag(raw);
+        for(String canonical:new LinkedHashSet<>(ALIAS.values()))if(wordMatch(raw,canonical))return canonical;
+        return "";
     }
     public static boolean categoryMatches(String raw,String preferred){String p=normalizeTag(preferred);return !p.isEmpty()&&p.equals(categoryTag(raw));}
     public static boolean categoryMulti(String raw){return "multi".equals(categoryTag(raw));}
@@ -118,7 +93,7 @@ public final class ContentLanguage {
     public static String detectTag(MediaEntry e){
         if(e==null)return "";
         for(String raw:new String[]{e.group,e.name,e.tvgName,e.seriesTitle}){if(multiPrefix(raw))return "multi";String x=explicitTag(raw);if(!x.isEmpty())return x;}
-        for(String raw:new String[]{e.group,e.tvgName}){String x=wordTag(raw);if(!x.isEmpty())return x;}
+        for(String raw:new String[]{e.group,e.tvgName})for(String canonical:new LinkedHashSet<>(ALIAS.values()))if(wordMatch(raw,canonical))return canonical;
         return "";
     }
 

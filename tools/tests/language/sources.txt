@@ -1,0 +1,6 @@
+android/app/src/main/java/com/robertalt/raiptv/ContentLanguage.java
+android/app/src/main/java/com/robertalt/raiptv/model/MediaEntry.java
+tools/tests/language/LegacyContentLanguage.java
+tools/tests/language/ContentLanguageEquivalence.java
+android/app/src/main/java/com/robertalt/raiptv/storage/IndexText.java
+tools/tests/language/IndexTextEquivalence.java

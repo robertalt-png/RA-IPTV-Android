@@ -89,7 +89,10 @@ public final class WebsiteSetupJob {
                     if (ready || (SettingsStore.prefs(context).getBoolean("first_sync_done_" + key, false)
                             && index.isComplete(key,"live") && index.isComplete(key,"vod") && index.isComplete(key,"series"))) {
                         if (!account.equals(new AccountLinkStore(context).accountId()) || sources.syncDirty() || sources.accountChangePending()) { state=State.FAILED; return; }
-                        state = State.READY; return;
+                        state = State.READY;
+                        // The new library is already visible; remove the previous one off the customer's wait.
+                        try { index.purgeRetired(key); } catch (Exception ignored) { /* retried after the next import */ }
+                        return;
                     }
                     state = State.CHOICE; return;
                 } catch (CatalogPackageClient.Pending pending) { state = State.PREPARING; }

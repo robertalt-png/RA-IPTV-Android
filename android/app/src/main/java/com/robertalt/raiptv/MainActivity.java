@@ -161,7 +161,7 @@ public class MainActivity extends Activity {
     addNenoMenuItem(d,box,T("household_profiles"),()->{if(ProGate.require(this,T("household_profiles")))startActivity(new Intent(this,HouseholdProfilesActivity.class));});
     addNenoMenuItem(d,box,T("manage_source"),()->startActivityForResult(ProModuleInstaller.sourcesIntent(this),10));
     addNenoMenuItem(d,box,T("casting"),()->{if(ProGate.require(this,T("casting")))showTvShareMenu();});
-    addNenoMenuItem(d,box,SettingsStore.language(this).equals("nl")?"Netwerk & Privacy":SettingsStore.language(this).equals("de")?"Netzwerk & Datenschutz":"Network & Privacy",()->{if(ProGate.require(this,"Network & Privacy"))startActivity(ProModuleInstaller.networkIntent(this));});
+    addNenoMenuItem(d,box,SettingsStore.language(this).equals("nl")?"Verbindingstest":SettingsStore.language(this).equals("de")?"Verbindungstest":"Connection test",()->{if(ProGate.require(this,SettingsStore.language(this).equals("nl")?"Verbindingstest":SettingsStore.language(this).equals("de")?"Verbindungstest":"Connection test"))startActivity(ProModuleInstaller.networkIntent(this));});
     addNenoMenuItem(d,box,T("settings"),()->startActivity(new Intent(this,SettingsActivity.class)));
     addNenoMenuItem(d,box,FamilyUi.text(this,"Familiefilter","Family filter","Familienfilter"),()->startActivity(new Intent(this,FamilyActivity.class)));
     addNenoMenuItem(d,box,T("close"),()->{});

@@ -25,7 +25,7 @@ public class ProNetworkActivity extends Activity {
         ScrollView sv=new ScrollView(this);sv.setBackgroundColor(0xFF07090D);
         box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(18),dp(18),dp(34));sv.addView(box);
         LinearLayout h=new LinearLayout(this);h.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title=t(L("Network & Privacy","Netwerk & Privacy","Netzwerk & Datenschutz"),24);title.setTypeface(null,Typeface.BOLD);h.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+        TextView title=t(L("Connection test","Verbindingstest","Verbindungstest"),24);title.setTypeface(null,Typeface.BOLD);h.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button close=b(L("Close","Sluiten","Schließen"));close.setOnClickListener(v->finish());h.addView(close);box.addView(h);
         TextView help=t(L("Check whether Android routes SunnyIPTV through a VPN and measure connection latency. Credentials are never included in this test.",
                 "Controleer of Android SunnyIPTV via een VPN routeert en meet de verbindingslatentie. Inloggegevens worden nooit in deze test opgenomen.",

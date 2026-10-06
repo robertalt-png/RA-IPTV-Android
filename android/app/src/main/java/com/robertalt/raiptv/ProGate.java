@@ -39,7 +39,6 @@ public final class ProGate {
         if(f.equals(UiText.t(a,"casting")))return UiText.t(a,"pro_benefit_casting");
         if(f.equals(UiText.t(a,"advanced_epg")))return UiText.t(a,"pro_benefit_epg");
         if(f.equals(UiText.t(a,"recording")))return UiText.t(a,"pro_benefit_recording");
-        if(f.equals(UiText.t(a,"parental_controls")))return UiText.t(a,"pro_benefit_parental");
         if(f.equals(UiText.t(a,"advanced_subtitles")))return UiText.t(a,"pro_benefit_subtitles");
         if(f.equals(UiText.t(a,"picture_in_picture")))return UiText.t(a,"pro_benefit_pip");
         if(f.equals(UiText.t(a,"manage_source")))return UiText.t(a,"pro_benefit_sources");

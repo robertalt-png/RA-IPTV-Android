@@ -10,7 +10,7 @@ import java.security.MessageDigest;
 import java.util.*;
 import java.util.zip.GZIPInputStream;
 
-/** One authenticated, verified gzip download; atomic replacement of the whole catalog. */
+/** One authenticated, verified gzip download; atomic replacement of the whole catalog via a new storage generation. */
 public final class CatalogPackageImporter {
     public static final long MAX_COMPRESSED=100L*1024*1024, MAX_EXPANDED=300L*1024*1024;
     public interface Progress {
@@ -33,7 +33,7 @@ public final class CatalogPackageImporter {
         for(String t:new String[]{"live","vod","series"}){int count=manifest.getJSONObject("counts").getInt(t);if(count<0)throw new IOException("CATALOG_COUNTS");expectedItems+=count;}
         if(expectedItems>500000)throw new IOException("CATALOG_ITEMS");
         progress.importing((int)expectedItems);
-        String session=store.beginSectionImport();Map<String,List<Category>> categories=new LinkedHashMap<>();Map<String,Integer> counts=new LinkedHashMap<>();Map<String,List<MediaEntry>> batches=new LinkedHashMap<>();
+        String generation=store.beginCatalogGeneration(profile);Map<String,List<Category>> categories=new LinkedHashMap<>();Map<String,Integer> counts=new LinkedHashMap<>();Map<String,List<MediaEntry>> batches=new LinkedHashMap<>();
         for(String t:new String[]{"live","vod","series"}){categories.put(t,new ArrayList<>());counts.put(t,0);batches.put(t,new ArrayList<>());}
         boolean header=false,end=false,committed=false;long expanded=0;int total=0,stored=0;
         try(InputStream in=new GZIPInputStream(new BufferedInputStream(new FileInputStream(file),65536),65536)){
@@ -46,17 +46,17 @@ public final class CatalogPackageImporter {
                     if(end)throw new IOException("CATALOG_TRAILING_DATA");
                     if(kind.equals("category")){String t=row.getString("type");if(!categories.containsKey(t))throw new IOException("CATALOG_SECTION");List<Category> cats=categories.get(t);if(cats.size()>=10000)throw new IOException("CATALOG_CATEGORIES");cats.add(new Category(row.getString("id"),row.getString("name"),t));}
                     else if(kind.equals("item")){
-                        MediaEntry e=store.decodePackageEntry(row.getJSONObject("entry").toString());if(e==null||e.id==null||e.id.isEmpty()||!batches.containsKey(e.type)||!e.sourceId.isEmpty())throw new IOException("CATALOG_ITEM");
+                        MediaEntry e=SearchIndexStore.decodePackageEntry(row.getJSONObject("entry"));if(e==null||e.id==null||e.id.isEmpty()||!batches.containsKey(e.type)||!e.sourceId.isEmpty())throw new IOException("CATALOG_ITEM");
                         if(++total>500000)throw new IOException("CATALOG_ITEMS");for(String u:e.candidates)if(!u.startsWith("http://")&&!u.startsWith("https://"))throw new IOException("CATALOG_STREAM_URL");
-                        List<MediaEntry> batch=batches.get(e.type);batch.add(e);counts.put(e.type,counts.get(e.type)+1);if(batch.size()>=240){store.importBatch(session,profile,e.type,batch);stored+=batch.size();batch.clear();progress.update(stored);}
+                        List<MediaEntry> batch=batches.get(e.type);batch.add(e);counts.put(e.type,counts.get(e.type)+1);if(batch.size()>=240){store.importCatalogBatch(generation,e.type,batch);stored+=batch.size();batch.clear();progress.update(stored);}
                     }else if(kind.equals("end")){
                         for(String t:counts.keySet())if(row.getJSONObject("counts").getInt(t)!=counts.get(t)||manifest.getJSONObject("counts").getInt(t)!=counts.get(t)||row.getJSONObject("categories").getInt(t)!=categories.get(t).size())throw new IOException("CATALOG_COUNTS");end=true;
                     }else throw new IOException("CATALOG_RECORD");
                 }
             }
             if(!header||!end||line.size()!=0)throw new IOException("CATALOG_TRUNCATED");
-            for(String t:batches.keySet())if(!batches.get(t).isEmpty()){store.importBatch(session,profile,t,batches.get(t));stored+=batches.get(t).size();progress.update(stored);}
-            progress.committing();guard.run();store.finishCatalogImport(session,profile,counts,categories,guard);committed=true;progress.update(total);return total;
-        }finally{if(!committed)store.abortSectionImport(session);}
+            for(String t:batches.keySet())if(!batches.get(t).isEmpty()){store.importCatalogBatch(generation,t,batches.get(t));stored+=batches.get(t).size();progress.update(stored);}
+            progress.committing();guard.run();store.activateCatalogGeneration(profile,generation,counts,categories,guard);committed=true;progress.update(total);return total;
+        }finally{if(!committed)store.abortCatalogGeneration(generation);}
     }
 }
