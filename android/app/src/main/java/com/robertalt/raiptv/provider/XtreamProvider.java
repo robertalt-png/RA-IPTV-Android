@@ -42,6 +42,7 @@ public class XtreamProvider implements Provider {
     @Override public void authenticate() throws Exception {
         JSONObject x=new JSONObject(HttpText.get(XtreamUrls.api(p.server,p.username,p.password,"","")));
         if(!"1".equals(String.valueOf(x.getJSONObject("user_info").opt("auth"))))throw new Exception("LOGIN_FAILED");
+        XtreamServerZone.remember(p.server,x);
     }
 
     @Override public List<Category> categories(String type)throws Exception{
@@ -241,6 +242,10 @@ public class XtreamProvider implements Provider {
     }
 
     /** Full XMLTV guide of the Xtream server (7 days back and ahead when the provider keeps them). */
+    @Override public List<String> catchupUrls(MediaEntry channel,long startEpoch,long endEpoch){
+        if(channel==null||!channel.catchup||channel.streamId==null||channel.streamId.isEmpty())return Collections.emptyList();
+        return com.nenotv.player.core.CatchupUrls.xtream(p.server,p.username,p.password,channel.streamId,startEpoch,endEpoch,XtreamServerZone.get(p.server,p.username,p.password));
+    }
     @Override public String guideUrl(){if(p.server==null||p.server.trim().isEmpty()||p.username==null||p.username.isEmpty())return "";return XtreamUrls.base(p.server)+"/xmltv.php?username="+XtreamUrls.enc(p.username)+"&password="+XtreamUrls.enc(p.password);}
 
     @Override public List<EpgEntry> epgEntries(MediaEntry item,int limit)throws Exception{

@@ -14,3 +14,5 @@ javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/core/GuideMat
 java -cp "$classes" com.nenotv.player.core.GuideMatcherTest
 javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/core/GuideWindow.java tools/tests/GuideWindowTest.java
 java -cp "$classes" com.nenotv.player.core.GuideWindowTest
+javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/core/XtreamUrls.java android/app/src/main/java/com/robertalt/raiptv/core/CatchupUrls.java tools/tests/CatchupUrlsTest.java
+java -cp "$classes" com.nenotv.player.core.CatchupUrlsTest

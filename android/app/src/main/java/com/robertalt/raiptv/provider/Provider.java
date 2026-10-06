@@ -8,6 +8,13 @@ public interface Provider {
     default List<EpgEntry> epgEntries(MediaEntry item,int limit) throws Exception { return Collections.emptyList(); }
     /** Address of the complete XMLTV guide of this source for the G1 guide database, or "" when there is none. */
     default String guideUrl() { return ""; }
+    /** G3: addresses that replay a past programme of this live channel, best first; empty when the source has no catch-up. */
+    default List<String> catchupUrls(MediaEntry channel,long startEpoch,long endEpoch) throws Exception {
+        if(channel==null||!channel.catchup)return Collections.emptyList();
+        String live=channel.url!=null&&!channel.url.isEmpty()?channel.url:(channel.candidates.isEmpty()?"":channel.candidates.get(0));
+        String[] x=com.nenotv.player.core.CatchupUrls.xtreamParts(live);if(x==null)return Collections.emptyList();
+        return com.nenotv.player.core.CatchupUrls.xtream(x[0],x[1],x[2],x[3],startEpoch,endEpoch,XtreamServerZone.get(x[0],x[1],x[2]));
+    }
     default MediaDetails details(MediaEntry item) throws Exception {
         MediaDetails d=new MediaDetails(); if(item==null)return d; d.title=item.name; d.year=item.year; d.plot=item.plot; d.rating=item.rating; d.imdbId=item.imdbId; d.tmdbId=item.tmdbId; d.backdrop=item.backdrop; d.poster=item.logo; return d;
     }

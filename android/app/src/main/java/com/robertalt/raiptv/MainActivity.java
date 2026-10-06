@@ -585,7 +585,7 @@ void scheduleBackgroundIndex(){
         runOnUiThread(()->{
             if(!isUiAlive()||!"epg".equals(section)||base!=epgBaseEpoch||request!=epgRequestSerial)return;
             timeline.removeAllViews();long horizon=base+7200L;int added=0;
-            for(EpgEntry e:events){long st=e.startEpoch>0?e.startEpoch:base,en=e.endEpoch>st?e.endEpoch:st+1800L;if(en<=base||st>=horizon)continue;long visStart=Math.max(base,st),visEnd=Math.min(horizon,en);int left=(int)Math.round((visStart-base)*timelineDp/7200.0),width=Math.max(1,Math.min(timelineDp-left,(int)Math.round((visEnd-visStart)*timelineDp/7200.0)));String range=e.range();String visibleRange=width<Math.round(120*getResources().getConfiguration().fontScale)?range.replace("–","\n"):range;TextView card=epgTimelineCard((visibleRange.isEmpty()?"":visibleRange+"\n")+e.title,e.isNow());card.setContentDescription((range.isEmpty()?"":range+" · ")+e.title);card.setOnClickListener(v->showEpgDetails(ch));if(width<64){card.setSingleLine(true);card.setText(e.title);card.setPadding(dp(2),dp(5),dp(2),dp(3));}FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(dp(width),dp(62));cp.leftMargin=dp(left);cp.topMargin=dp(2);card.setLayoutParams(cp);timeline.addView(card);added++;}
+            for(EpgEntry e:events){long st=e.startEpoch>0?e.startEpoch:base,en=e.endEpoch>st?e.endEpoch:st+1800L;if(en<=base||st>=horizon)continue;long visStart=Math.max(base,st),visEnd=Math.min(horizon,en);int left=(int)Math.round((visStart-base)*timelineDp/7200.0),width=Math.max(1,Math.min(timelineDp-left,(int)Math.round((visEnd-visStart)*timelineDp/7200.0)));String range=e.range();String visibleRange=width<Math.round(120*getResources().getConfiguration().fontScale)?range.replace("–","\n"):range;TextView card=epgTimelineCard((visibleRange.isEmpty()?"":visibleRange+"\n")+e.title,e.isNow());card.setContentDescription((range.isEmpty()?"":range+" · ")+e.title);card.setOnClickListener(v->showProgramme(ch,e));if(ch.catchup&&e.endEpoch<=System.currentTimeMillis()/1000L&&com.nenotv.player.core.CatchupUrls.available(e.startEpoch,System.currentTimeMillis()/1000L,ch.catchupDays))card.setText("↶ "+card.getText());if(width<64){card.setSingleLine(true);card.setText(e.title);card.setPadding(dp(2),dp(5),dp(2),dp(3));}FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(dp(width),dp(62));cp.leftMargin=dp(left);cp.topMargin=dp(2);card.setLayoutParams(cp);timeline.addView(card);added++;}
             if(added==0){TextView none=epgTimelineCard(T("no_epg"),false);FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(-1,-1);none.setLayoutParams(np);timeline.addView(none);}
             addEpgNowLine(timeline,base,timelineDp);
         });
@@ -595,6 +595,30 @@ void scheduleBackgroundIndex(){
     void addEpgNowLine(FrameLayout timeline,long base,int widthDp){int x=com.nenotv.player.core.GuideWindow.nowLine(System.currentTimeMillis()/1000L,base,widthDp);if(x<0)return;View line=new View(this);line.setBackgroundColor(0xFFFF4D4D);line.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(dp(2),-1);lp.leftMargin=Math.max(0,dp(x)-dp(1));line.setLayoutParams(lp);timeline.addView(line);}
     TextView epgTimelineCard(String text,boolean now){TextView v=new TextView(this);v.setText(text);v.setTextColor(now?0xFF0A0A0A:0xFFF7F8FA);v.setTextSize(11f);v.setMaxLines(3);v.setEllipsize(TextUtils.TruncateAt.END);v.setPadding(dp(6),dp(5),dp(5),dp(3));v.setGravity(Gravity.CENTER_VERTICAL);v.setBackgroundColor(now?getResources().getColor(R.color.accent):0xFF1A1F29);return v;}
 
+    /** G3: one programme from the grid, with watch live, catch-up or "from the start" when the channel has an archive. */
+    void showProgramme(MediaEntry ch,EpgEntry e){
+        long now=System.currentTimeMillis()/1000L;boolean past=e.endEpoch>0&&e.endEpoch<=now,live=e.isNow();
+        boolean replay=ch.catchup&&com.nenotv.player.core.CatchupUrls.available(e.startEpoch,now,ch.catchupDays);
+        StringBuilder m=new StringBuilder(DisplayText.title(ch)).append("\n").append(epgDayLabel(e.startEpoch,now)).append(" · ").append(e.range());
+        if(e.description!=null&&!e.description.trim().isEmpty())m.append("\n\n").append(e.description.trim());
+        if(past&&!replay)m.append("\n\n").append(T("no_catchup"));
+        AlertDialog.Builder b=new AlertDialog.Builder(this).setTitle(e.title).setMessage(m.toString());
+        if(!past)b.setPositiveButton(T("watch"),(d,w)->play(ch));
+        if(replay)b.setNeutralButton((ProGate.allowed(this)?"":"🔒 ")+(live?T("from_start"):T("catchup")),(d,w)->playCatchup(ch,e));
+        b.setNegativeButton(T("close"),null).show();
+    }
+    void playCatchup(MediaEntry ch,EpgEntry prog){
+        if(isAdultLocked(ch)){FamilyUi.blocked(this);return;}
+        if(!ProGate.require(this,T("catchup")))return;
+        status.setText(T("loading"));final EpgRequests requests=epgRequests();
+        exec.execute(()->{List<String> found;try{found=requests.catchupUrls(ch,prog.startEpoch,prog.endEpoch);}catch(Exception unavailable){found=Collections.emptyList();}final List<String> urls=found;
+            runOnUiThread(()->{if(!isUiAlive())return;if(urls.isEmpty()){busy(false,T("no_catchup"));return;}busy(false,T("epg"));play(catchupEntry(ch,prog,urls),ch);});});
+    }
+    static MediaEntry catchupEntry(MediaEntry ch,EpgEntry prog,List<String> urls){
+        MediaEntry c=new MediaEntry();c.type="catchup";c.id="catchup:"+(ch.id==null||ch.id.isEmpty()?ch.streamId:ch.id)+":"+prog.startEpoch;c.streamId=ch.streamId;
+        c.name=DisplayText.title(ch)+" · "+prog.title;c.plot=prog.description==null?"":prog.description;c.logo=ch.logo;c.backdrop=ch.backdrop;c.group=ch.group;c.categoryId=ch.categoryId;
+        c.tvgId=ch.tvgId;c.tvgName=ch.tvgName;c.sourceId=ch.sourceId;c.sourceName=ch.sourceName;c.candidates=new ArrayList<>(urls);c.url=urls.get(0);return c;
+    }
     void showEpgDetails(MediaEntry channel){
         if(isAdultLocked(channel)){FamilyUi.blocked(this);return;}
         if(channel==null)return;busy(true,T("guide_loading"));
@@ -994,13 +1018,15 @@ TextView addInfoBlock(LinearLayout b,String l,String x){TextView h=new TextView(
     String localizeGenreText(String raw){if(raw==null||raw.trim().isEmpty())return raw;String x=raw;String[][]g={{"science fiction",T("genre_scifi")},{"sci-fi",T("genre_scifi")},{"documentary",T("genre_documentary")},{"animation",T("genre_animation")},{"comedy",T("genre_comedy")},{"horror",T("genre_horror")},{"romance",T("genre_romance")},{"fantasy",T("genre_fantasy")},{"family",T("genre_family")},{"crime",T("genre_crime")},{"thriller",T("genre_thriller")},{"drama",T("genre_drama")},{"action",T("genre_action").replace(" / ","/").split("/")[0].trim()}};for(String[]a:g)x=x.replaceAll("(?i)\\b"+java.util.regex.Pattern.quote(a[0])+"\\b",java.util.regex.Matcher.quoteReplacement(a[1]));return x;}
     void openWeb(String url){if(FamilyStore.active(this)){FamilyUi.blocked(this);return;}try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url)));}catch(Exception e){status.setText(T("info_failed"));}}
 
-    void play(MediaEntry e){
-        if(isAdultLocked(e)){FamilyUi.blocked(this);return;}
+    void play(MediaEntry e){play(e,e);}
+    /** {@code lockSubject} is the item the family and adult locks are checked against (the channel for catch-up). */
+    void play(MediaEntry e,MediaEntry lockSubject){
+        if(isAdultLocked(lockSubject)){FamilyUi.blocked(this);return;}
         Profile playbackProfile;
         try{playbackProfile=com.nenotv.player.provider.PlaybackSourceRoute.resolve(this,e,ProLibraryBridge.isActive(this)).profile();}
         catch(Exception unavailable){if(e.sourceId!=null&&!e.sourceId.isEmpty()&&!ProGate.allowed(this)){ProGate.require(this,T("manage_source"));return;}status.setText(T("source_unavailable"));return;}
         pauseIndexForPlayback();
-        if(DemoPolicy.blockPlayback(this)){recreate();return;}library.recent(e);Intent i=ProModuleInstaller.playerIntent(this);i.putExtra("media",e);i.putExtra("profileType",playbackProfile.type.name());
+        if(DemoPolicy.blockPlayback(this)){recreate();return;}if(!"catchup".equals(e.type))library.recent(e);Intent i=ProModuleInstaller.playerIntent(this);i.putExtra("media",e);i.putExtra("profileType",playbackProfile.type.name());
         String queueToken="";
         if("live".equals(e.type)){ArrayList<MediaEntry>q=new ArrayList<>();for(MediaEntry z:all)if("live".equals(z.type)&&!isAdultLocked(z)){q.add(z);if(q.size()>=250)break;}int at=-1;for(int n=0;n<q.size();n++)if(q.get(n).uniqueKey().equals(e.uniqueKey())){at=n;break;}if(at>=0)queueToken=com.nenotv.player.storage.PlaybackQueueStore.put("live",q,at);}
         else if("episode".equals(e.type)&&seriesEpisodeMode){ArrayList<MediaEntry>q=new ArrayList<>();for(MediaEntry z:seriesEpisodes)if("episode".equals(z.type)&&!isAdultLocked(z))q.add(z);int at=-1;for(int n=0;n<q.size();n++)if(q.get(n).uniqueKey().equals(e.uniqueKey())){at=n;break;}if(at>=0)queueToken=com.nenotv.player.storage.PlaybackQueueStore.put("episode",q,at);}

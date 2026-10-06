@@ -59,6 +59,11 @@ public final class EpgRequests {
         if(!namespace.equals(resolver.namespace(item,provider,secondaryAllowed.getAsBoolean(),language)))throw new java.io.IOException("SOURCE_CHANGED");
         return rows;
     }
+    /** G3: catch-up addresses for a past programme of this channel, from the source the channel belongs to. */
+    public List<String> catchupUrls(MediaEntry item,long start,long end)throws Exception{
+        Provider provider=resolver.resolve(item,primary,secondaryAllowed.getAsBoolean(),language);
+        return provider==null?java.util.Collections.emptyList():provider.catchupUrls(item,start,end);
+    }
     /** G2 grid: the programmes in [from,to) from the stored guide, otherwise the regular guide for this channel. */
     public List<EpgEntry> window(MediaEntry item,long from,long to)throws Exception{
         if(store.isClosed())throw new java.io.IOException("EPG_STORE_CLOSED");
