@@ -37,6 +37,15 @@ public final class EntitlementClient {
         body.put("order_id",orderId==null?"":orderId.trim());
         return post("entitlement/claim",body);
     }
+    /** Sends a Google Play purchase to the server, which verifies it with Google, acknowledges it and returns the entitlement. */
+    public JSONObject play(String productId,String purchaseToken) throws Exception {
+        JSONObject body=new JSONObject();
+        body.put("product_id",productId==null?"":productId);
+        body.put("purchase_token",purchaseToken==null?"":purchaseToken);
+        return post("entitlement/play",body);
+    }
+    /** Whether the server sells Pro through Google Play right now, and the trial length. No entitlement change. */
+    public JSONObject offer() throws Exception { return request("entitlement/offer",new JSONObject()); }
     public JSONObject redeemToken(String token) throws Exception {
         JSONObject body=new JSONObject();
         body.put("activation_token",token==null?"":token.trim());

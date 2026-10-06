@@ -15,6 +15,7 @@ require_once __DIR__ . '/nenotv-source-manager.php';
 require_once __DIR__ . '/nenotv-catalog-package.php';
 require_once __DIR__ . '/sunnyiptv-review-access.php';
 require_once __DIR__ . '/sunnyiptv-account-setup.php';
+require_once __DIR__ . '/sunnyiptv-play-billing.php';
 
 final class NenoTV_Entitlement_Core {
     use NenoTV_Pairing;
@@ -22,6 +23,7 @@ final class NenoTV_Entitlement_Core {
     use NenoTV_Catalog_Package;
     use SunnyIPTV_Review_Access;
     use SunnyIPTV_Account_Setup;
+    use SunnyIPTV_Play_Billing;
     const VERSION = '0.1.25';
     const DB_VERSION = '5';
     const NS = 'nenotv-backend/v1';
@@ -48,6 +50,7 @@ final class NenoTV_Entitlement_Core {
     public static function init(): void {
         self::pairing_hooks();
         self::account_setup_hooks();
+        self::play_hooks();
         add_action('wp_enqueue_scripts', static function(){wp_enqueue_style('nenotv-account-flow', plugins_url('account-flow.css',__FILE__), [], self::VERSION . '.' . (string)filemtime(__DIR__.'/account-flow.css'));});
         self::catalog_hooks();
         add_action('init', [__CLASS__, 'review_meta']);
@@ -969,8 +972,9 @@ final class NenoTV_Entitlement_Core {
         }
     }
 
-    public static function app_entitlement(WP_REST_Request $request, string $action): WP_REST_Response {
-        $auth=self::authenticate_backend_request($request); if (is_wp_error($auth)) return self::wp_error_json($auth);
+    public static function app_entitlement(WP_REST_Request $request, string $action, bool $device_auth=false): WP_REST_Response {
+        // nenotv/v1 app routes authenticate with the device identity (SunnyIPTV_Play_Billing); nenotv-backend/v1 needs the signed bridge.
+        if (!$device_auth) { $auth=self::authenticate_backend_request($request); if (is_wp_error($auth)) return self::wp_error_json($auth); }
         $p=self::clean_app_payload($request);
         if (empty($p['device_id']) || empty($p['device_key'])) return self::json(['ok'=>false,'error'=>'invalid_device','message'=>'Missing SunnyIPTV device identity.'],400);
 

@@ -1070,10 +1070,18 @@ void scheduleBackgroundIndex(){
     }
     volatile boolean accountRefreshRunning=false;
     /** Re-checks the account without blocking the viewer; only a server "not linked" answer sends them to sign in. */
+    static long lastEntitlementRefresh=0L;
+    /** Picks up a Pro change made elsewhere (automatic trial at pairing, purchase on another device, expiry) at most every 15 minutes. */
+    void refreshEntitlementQuietly(){
+        long now=android.os.SystemClock.elapsedRealtime();if(lastEntitlementRefresh!=0&&now-lastEntitlementRefresh<15*60_000L)return;lastEntitlementRefresh=now;
+        boolean before=new EntitlementStore(this).isPro();
+        try{new com.nenotv.player.entitlement.EntitlementClient(this).refresh();}catch(Exception unavailable){return;}
+        if(before!=new EntitlementStore(this).isPro())runOnUiThread(()->{if(isUiAlive()){ProModuleInstaller.syncEntitlement(this);updateHeaderBadges();}});
+    }
     void refreshAccountInBackground(){
         if(accountRefreshRunning)return;accountRefreshRunning=true;
         new Thread(()->{
-            try{new com.nenotv.player.entitlement.PairingClient(this).checkAccount();}
+            try{new com.nenotv.player.entitlement.PairingClient(this).checkAccount();refreshEntitlementQuietly();}
             catch(com.nenotv.player.entitlement.EntitlementClient.ServiceException e){
                 if("account_not_linked".equals(e.code)||"invalid_device".equals(e.code))runOnUiThread(()->{if(isUiAlive()){startActivity(new Intent(this,AccountCheckActivity.class));finish();}});
             }catch(Exception offline){/* keep watching; retried on the next resume */}

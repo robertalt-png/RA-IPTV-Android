@@ -43,7 +43,9 @@ public class AccountActivity extends Activity {
         build();ProModuleInstaller.syncEntitlement(this);
         // The status refreshes itself when the screen opens; no separate button needed.
         long now=SystemClock.elapsedRealtime();
-        if(!requestRunning&&(lastAutoRefresh==0||now-lastAutoRefresh>60000)){lastAutoRefresh=now;refreshServer(true);}
+        if(!requestRunning&&(lastAutoRefresh==0||now-lastAutoRefresh>60000)){lastAutoRefresh=now;refreshServer(true);
+            // A paid purchase the server has not confirmed yet (network, app closed) is sent again; silent when there is none.
+            if(ent.level()!=EntitlementStore.Level.PRO)try{play().restore();}catch(RuntimeException noPlay){}}
     }
 
     /** Input fields live in dialogs, but are created once so state and checks stay in one place. */
@@ -75,8 +77,12 @@ public class AccountActivity extends Activity {
 
         Tiles.Grid grid=new Tiles.Grid(this,box);
         grid.add("🌐",myNenoLabel(),text("Apparaten, abonnement en tv-bron","Devices, subscription and TV source","Geräte, Abo und TV-Quelle"),false,v->openWeb(myNenoUrl()));
-        if(ent.isPro())grid.add("⭐",ent.statusLabel(this),text("Bekijk je abonnement","View your subscription","Abo ansehen"),false,v->openWeb(proUrl()));
-        else grid.add("⭐",T("request_trial"),text("Probeer alle Pro-functies gratis","Try every Pro feature for free","Alle Pro-Funktionen gratis testen"),false,v->showTrialDialog());
+        // Google Play policy: the app sells Pro only through Google Play and never links to a payment page.
+        if(ent.level()==EntitlementStore.Level.PRO)grid.add("⭐",ent.statusLabel(this),text("Bekijk je abonnement","View your subscription","Abo ansehen"),false,v->openWeb(myNenoUrl()));
+        else{
+            grid.add("🛒",T("buy_pro"),text("Solo of Multi, via Google Play","Solo or Multi, through Google Play","Solo oder Multi, über Google Play"),false,v->showBuyDialog());
+            if(!ent.isPro())grid.add("⭐",T("request_trial"),text("Probeer alle Pro-functies gratis","Try every Pro feature for free","Alle Pro-Funktionen gratis testen"),false,v->showTrialDialog());
+        }
         grid.add("🔑",T("activation_code"),text("Code uit je e-mail invoeren","Enter the code from your email","Code aus deiner E-Mail eingeben"),false,v->showCodeDialog());
         grid.add("📱",T("this_device"),T("device_code")+": "+ent.publicDeviceId(),false,v->showDeviceDialog());
         if(!new AccountLinkStore(this).linked())grid.add("📲",T("pair_by_phone"),text("Koppel dit apparaat aan je account","Link this device to your account","Dieses Gerät mit deinem Konto verbinden"),false,v->startActivity(new Intent(this,PairingActivity.class)));
@@ -91,16 +97,49 @@ public class AccountActivity extends Activity {
         UiText.applyDirection(this);
     }
 
-    String proUrl(){return "https://sunnyiptv.com/pro?device="+Uri.encode(ent.publicDeviceId());}
+    PlayPurchases play;boolean wantProducts;
+    PlayPurchases play(){
+        if(play==null)play=new PlayPurchases(this,new PlayPurchases.Listener(){
+            @Override public void products(java.util.List<com.android.billingclient.api.ProductDetails> list,String error){if(wantProducts){wantProducts=false;busy(false);showProducts(list,error);}}
+            @Override public void purchase(String result){
+                if(isFinishing()||isDestroyed())return;
+                busy(false);serverText.setText(T(result));Toast.makeText(AccountActivity.this,T(result),Toast.LENGTH_LONG).show();
+                if("purchase_done".equals(result)){build();ProModuleInstaller.syncEntitlement(AccountActivity.this);}
+            }
+        });
+        return play;
+    }
+    /** Asks the server whether Pro is on sale, then shows the Google Play products with their local prices. */
+    void showBuyDialog(){
+        if(requestRunning)return;
+        busy(true);
+        exec.execute(()->{
+            boolean onSale=false;
+            try{onSale=new EntitlementClient(this).offer().optBoolean("play_billing",false);}catch(Exception ignored){}
+            final boolean sale=onSale;
+            runOnUiThread(()->{
+                if(isFinishing()||isDestroyed())return;
+                if(!sale){busy(false);new AlertDialog.Builder(this).setTitle(T("buy_pro")).setMessage(T("pro_coming_soon")).setPositiveButton(T("close"),null).show();return;}
+                wantProducts=true;play().loadProducts();
+            });
+        });
+    }
+    void showProducts(java.util.List<com.android.billingclient.api.ProductDetails> list,String error){
+        if(list.isEmpty()){new AlertDialog.Builder(this).setTitle(T("buy_pro")).setMessage(T(error.isEmpty()?"pro_coming_soon":error)).setPositiveButton(T("close"),null).show();return;}
+        String[] rows=new String[list.size()];
+        for(int i=0;i<rows.length;i++){com.android.billingclient.api.ProductDetails d=list.get(i);int n=PlayPurchases.devices(d);
+            rows[i]=(n==1?"Solo":"Multi")+" · "+n+" "+T(n==1?"device_one":"device_many")+"\n"+PlayPurchases.price(d,T("per_year"),T("lifetime"));}
+        new AlertDialog.Builder(this).setTitle(T("buy_pro")).setItems(rows,(dlg,w)->{serverText.setText(T("checking_status"));play().buy(list.get(w));}).setNegativeButton(T("close"),null).show();
+    }
 
     LinearLayout dialogBox(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(20),dp(8),dp(20),0);return l;}
     void detach(View v){if(v.getParent()!=null)((ViewGroup)v.getParent()).removeView(v);}
 
     void showTrialDialog(){
         LinearLayout l=dialogBox();detach(email);detach(trial);
-        TextView info=new TextView(this);info.setText(text("Vul je e-mailadres in. Je krijgt 30 dagen alle Pro-functies.","Enter your email address. You get every Pro feature for 30 days.","Gib deine E-Mail-Adresse ein. Du bekommst 30 Tage alle Pro-Funktionen."));l.addView(info);
+        TextView info=new TextView(this);info.setText(text("Vul je e-mailadres in. Je krijgt 14 dagen alle Pro-functies.","Enter your email address. You get every Pro feature for 14 days.","Gib deine E-Mail-Adresse ein. Du bekommst 14 Tage alle Pro-Funktionen."));l.addView(info);
         l.addView(email,new LinearLayout.LayoutParams(-1,-2));l.addView(trial,new LinearLayout.LayoutParams(-1,-2));
-        new AlertDialog.Builder(this).setTitle(T("request_trial")).setView(l).setNeutralButton(T("view_pro"),(d,w)->openWeb(proUrl())).setNegativeButton(T("close"),null).show();
+        new AlertDialog.Builder(this).setTitle(T("request_trial")).setView(l).setNegativeButton(T("close"),null).show();
     }
     void showCodeDialog(){
         LinearLayout l=dialogBox();detach(activationCode);detach(link);
@@ -213,5 +252,5 @@ public class AccountActivity extends Activity {
     }
 
     void openWeb(String url){Tiles.open(this,url);}
-    @Override protected void onDestroy(){exec.shutdownNow();super.onDestroy();}
+    @Override protected void onDestroy(){exec.shutdownNow();if(play!=null)play.close();super.onDestroy();}
 }
