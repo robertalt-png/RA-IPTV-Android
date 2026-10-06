@@ -72,6 +72,18 @@ public class EpgStore extends SQLiteOpenHelper {
         catch(InterruptedException interrupted){Thread.currentThread().interrupt();throw new java.io.InterruptedIOException("EPG_FETCH_INTERRUPTED");}
         finally{if(owner)fetches.remove(key,created);}
     }
+    /** G2: programmes overlapping [from,to) from the guide database; empty when the guide is not (yet) on the device. */
+    public List<EpgEntry> guideWindow(com.nenotv.player.provider.Provider provider,com.nenotv.player.model.MediaEntry channel,long from,long to,String language){
+        if(closed||provider==null||channel==null||to<=from)return Collections.emptyList();
+        try{
+            String guideUrl=provider.guideUrl();if(guideUrl==null||guideUrl.trim().isEmpty())return Collections.emptyList();
+            boolean pro=new EntitlementStore(app).isPro();
+            GuideRefresher.ensure(app,guideUrl,pro,language);
+            GuideDatabase guide=GuideDatabase.get(app);String source=GuideDatabase.sourceKey(guideUrl.trim());
+            String id=guide.channelFor(source,channel.tvgId,channel.tvgName,channel.name);if(id.isEmpty())return Collections.emptyList();
+            return com.nenotv.player.EpgTimeline.normalize(guide.entries(source,id,from,to,200));
+        }catch(Exception unavailable){return Collections.emptyList();}
+    }
     /** Programmes from the G1 guide database, from the one on now up to 24 hours (free) or 7 days (Pro) ahead. */
     private List<EpgEntry> fromGuide(String guideUrl,com.nenotv.player.model.MediaEntry channel,boolean pro,String language){
         try{

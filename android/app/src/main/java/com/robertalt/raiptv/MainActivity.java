@@ -37,7 +37,7 @@ public class MainActivity extends Activity {
     volatile boolean activityPaused=false,playbackActive=false;
     boolean seriesEpisodeMode=false,settingCategories=false,autoDefaultGroup=true; volatile boolean indexRefreshRequested=false,indexRefreshRunning=false,resumeIndexAfterPlayback=false,indexCategoryBusy=false; volatile Future<?> indexFuture=null; volatile int fullLibraryToken=0; String appliedLanguage="",appliedContentLanguage="";
     boolean cachePagingActive=false,cachePageLoading=false,autoReindexAfterConnect=false,epgGridMode=true; String cachePagingSection="",cachePagingTag=""; int cachePagingOffset=0,cachePagingTotal=0; static final int CACHE_PAGE_SIZE=240; long lastIndexUiPublish=0L; String indexAutoHeroKey="";
-    int requestSerial=0,heroSerial=0; String latestSearchQuery=""; long epgBaseEpoch=0L;
+    int requestSerial=0,heroSerial=0; String latestSearchQuery=""; long epgBaseEpoch=0L,epgViewStart=0L; List<MediaEntry> epgBoardChannels=new ArrayList<>(); int epgBoardShown=0; TextView epgMoreView;
     Handler ui=new Handler(Looper.getMainLooper()); Runnable pendingSearch,delayedIndexResume; MediaEntry selectedHero;
     private long familyRevision=-1;
     static final long SEARCH_INDEX_TTL_MS=6*60*60*1000L;
@@ -512,7 +512,7 @@ void scheduleBackgroundIndex(){
     List<String> genreTerms(String g){if(g.equals("action"))return Arrays.asList("action","actie","accion","acción","violence","geweld","violencia","martial","war","oorlog","guerra");if(g.equals("crime"))return Arrays.asList("crime","misdaad","crimen","criminal");if(g.equals("scifi"))return Arrays.asList("sci fi","scifi","science fiction","sciencefiction","ciencia ficcion","ciencia ficción");if(g.equals("family"))return Arrays.asList("family","familie","familiar","kids","children","kinder");if(g.equals("comedy"))return Arrays.asList("comedy","komedie","comedia");if(g.equals("romance"))return Arrays.asList("romance","romantiek","romantic","romantico","romántico");if(g.equals("documentary"))return Arrays.asList("documentary","documentaire","documental","docu");if(g.equals("animation"))return Arrays.asList("animation","animatie","animacion","animación","animated","anime");if(g.equals("fantasy"))return Arrays.asList("fantasy","fantasie","fantasia","fantasía");if(g.equals("thriller"))return Arrays.asList("thriller","suspense");if(g.equals("drama"))return Arrays.asList("drama");if(g.equals("horror"))return Arrays.asList("horror","terror");return Collections.singletonList(norm(g));}
     String norm(String s){return safe(s).toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9áéíóúàèëïöü]+"," ").replaceAll("\\s+"," ").trim();}
 
-    void loadEpg(){hideSeasons();
+    void loadEpg(){hideSeasons();epgViewStart=0L;
         pauseBackgroundIndexForUi();stopCachePaging();final int token=nextRequest();section="epg";updateBottomNav("epg");autoDefaultGroup=true;SettingsStore.setLastSection(this,"epg");setHeroHeight(heroHeight());collapseSearch();seriesEpisodeMode=false;latestSearchQuery="";genreButton.setVisibility(View.GONE);sortButton.setVisibility(View.VISIBLE);filterBar.setVisibility(View.VISIBLE);categories.setVisibility(View.VISIBLE);epgModeBar.setVisibility(View.VISIBLE);search.setHint(T("search_channel"));setHeroDefault(T("epg"),T("now_next"));gridAdapter.set(Collections.emptyList(),true);showEpgByMode(Collections.emptyList());busy(true,T("epg_categories_loading"));
         exec.execute(()->{try{List<Category>loaded=searchIndex.cachedCategories(profileKey(),"live");if(loaded.isEmpty()){loaded=new ArrayList<>(provider.categories("live"));searchIndex.replaceCategories(profileKey(),"live",loaded);}List<Category>raw=visibleCategories(loaded);runOnUiThread(()->{if(!current(token)||!section.equals("epg"))return;currentCategories=raw;setCategorySpinner(raw,true);if(raw.isEmpty()&&!FamilyStore.active(this)){busy(false,T("no_live_categories"));return;}String start=defaultGroupId(raw);selectSpinner(start);currentCategoryId=start;currentCategoryName=groupLabel(start);if(start.startsWith("lang:"))loadLanguageGroup(start.substring(5),false);else if("multi".equals(start))loadLanguageGroup("multi",false);else loadEpgChannels(start);scheduleBackgroundIndex();});}catch(Exception e){runOnUiThread(()->{if(current(token))busy(false,T("epg_error")+": "+friendly(e));});}});
     }
@@ -523,20 +523,56 @@ void scheduleBackgroundIndex(){
     void setEpgMode(boolean gridMode){epgGridMode=gridMode;epgGridButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(getResources().getColor(gridMode?R.color.accent:R.color.panel2)));epgListButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(getResources().getColor(gridMode?R.color.panel2:R.color.accent)));if("epg".equals(section))showEpgByMode(all);}
     void showEpgByMode(List<MediaEntry>channels){if(epgGridMode)renderEpgBoard(channels);else{showEpgList();epgAdapter.configure(epgRequests());epgAdapter.set(channels==null?Collections.emptyList():channels);}}
     void renderEpgBoard(List<MediaEntry>channels){
-    epgRequestSerial++;try{epgExec.getQueue().clear();}catch(Exception ignored){}
-    hideContentViews();epgBoard.setVisibility(View.VISIBLE);epgBoardContainer.removeAllViews();
     List<MediaEntry>src=new ArrayList<>(channels==null?Collections.emptyList():channels);
     src.sort((a,b)->{int ar=isRadioChannel(a)?1:0,br=isRadioChannel(b)?1:0;return ar!=br?Integer.compare(ar,br):0;});
-    epgBaseEpoch=(System.currentTimeMillis()/1000L/1800L)*1800L;addEpgTimelineHeader();
-    int cap=getResources().getConfiguration().screenWidthDp>=600?18:10;
-    int n=Math.min(cap,src.size());for(int i=0;i<n;i++)addEpgBoardRow(src.get(i));
-    if(src.size()>n){TextView more=new TextView(this);more.setText("+ "+(src.size()-n)+" "+T("channels")+" · "+T("list"));more.setTextColor(getResources().getColor(R.color.muted));more.setTextSize(12);more.setGravity(Gravity.CENTER);more.setPadding(dp(8),dp(14),dp(8),dp(18));more.setOnClickListener(v->setEpgMode(false));epgBoardContainer.addView(more);}
+    epgBoardChannels=src;drawEpgBoard();
+}
+    /** G2: Pro gets a navigable 2-hour grid over 7 days back and ahead from the stored guide; free keeps now + 2 hours. */
+    void drawEpgBoard(){
+    epgRequestSerial++;try{epgExec.getQueue().clear();}catch(Exception ignored){}
+    hideContentViews();epgBoard.setVisibility(View.VISIBLE);epgBoardContainer.removeAllViews();epgMoreView=null;epgBoardShown=0;
+    boolean pro=ProGate.allowed(this);long now=System.currentTimeMillis()/1000L;
+    epgBaseEpoch=com.nenotv.player.core.GuideWindow.clamp(pro?epgViewStart:0L,now,pro);epgViewStart=pro?epgBaseEpoch:0L;
+    if(pro)addEpgNavigation(now);
+    addEpgTimelineHeader();
+    appendEpgRows(pro?40:(getResources().getConfiguration().screenWidthDp>=600?18:10));
+    epgBoard.scrollTo(0,0);
+}
+    void appendEpgRows(int count){
+    if(epgMoreView!=null){epgBoardContainer.removeView(epgMoreView);epgMoreView=null;}
+    List<MediaEntry>src=epgBoardChannels;int end=Math.min(src.size(),epgBoardShown+count);
+    for(int i=epgBoardShown;i<end;i++)addEpgBoardRow(src.get(i));
+    epgBoardShown=end;
+    if(src.size()>end){boolean pro=ProGate.allowed(this);TextView more=new TextView(this);more.setText("+ "+(src.size()-end)+" "+T("channels")+(pro?"":" · "+T("list")));more.setTextColor(getResources().getColor(R.color.muted));more.setTextSize(12);more.setGravity(Gravity.CENTER);more.setPadding(dp(8),dp(14),dp(8),dp(18));more.setFocusable(true);more.setOnClickListener(v->{if(ProGate.allowed(this))appendEpgRows(40);else setEpgMode(false);});epgMoreView=more;epgBoardContainer.addView(more);}
+}
+    void moveEpgView(long start){epgViewStart=start;drawEpgBoard();}
+    String epgDayLabel(long epoch,long now){int off=com.nenotv.player.core.GuideWindow.dayOffset(epoch,now,java.time.ZoneId.systemDefault());if(off==0)return T("today");try{return java.time.Instant.ofEpochSecond(epoch).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM",SettingsStore.appLocale(this)));}catch(Exception e){return "";}}
+    Button epgNavButton(String text,View.OnClickListener click){Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setTextSize(12);b.setTextColor(getResources().getColor(R.color.text));b.setMinWidth(0);b.setMinimumWidth(0);b.setMinHeight(0);b.setMinimumHeight(0);b.setPadding(dp(10),dp(6),dp(10),dp(6));b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(getResources().getColor(R.color.panel2)));b.setOnClickListener(click);return b;}
+    void addEpgNavigation(long now){
+    LinearLayout bar=new LinearLayout(this);bar.setOrientation(LinearLayout.HORIZONTAL);bar.setGravity(Gravity.CENTER_VERTICAL);bar.setPadding(0,dp(2),0,dp(6));
+    final long base=epgBaseEpoch,step=com.nenotv.player.core.GuideWindow.SPAN;
+    Button back=epgNavButton("◀ "+T("two_hours"),v->moveEpgView(base-step));back.setContentDescription(T("earlier"));
+    Button day=epgNavButton("📅 "+epgDayLabel(base,now),v->showEpgDayPicker());
+    Button nowButton=epgNavButton(T("now"),v->moveEpgView(0L));
+    Button next=epgNavButton(T("two_hours")+" ▶",v->moveEpgView(base+step));next.setContentDescription(T("later"));
+    long min=com.nenotv.player.core.GuideWindow.clamp(1L,now,true);back.setEnabled(base>min);back.setAlpha(base>min?1f:.4f);
+    long max=com.nenotv.player.core.GuideWindow.clamp(Long.MAX_VALUE/2,now,true);next.setEnabled(base<max);next.setAlpha(base<max?1f:.4f);
+    LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(38));lp.rightMargin=dp(6);
+    bar.addView(back,lp);bar.addView(day,new LinearLayout.LayoutParams(lp));bar.addView(nowButton,new LinearLayout.LayoutParams(lp));bar.addView(next,new LinearLayout.LayoutParams(lp));
+    HorizontalScrollView scroll=new HorizontalScrollView(this);scroll.setHorizontalScrollBarEnabled(false);scroll.addView(bar);epgBoardContainer.addView(scroll);
+}
+    void showEpgDayPicker(){
+    long now=System.currentTimeMillis()/1000L;java.time.ZoneId zone=java.time.ZoneId.systemDefault();int days=(int)com.nenotv.player.core.GuideWindow.PRO_DAYS;
+    String[]labels=new String[days*2+1];long[]starts=new long[labels.length];
+    for(int i=-days;i<=days;i++){long st=com.nenotv.player.core.GuideWindow.clamp(com.nenotv.player.core.GuideWindow.onDay(epgBaseEpoch,i,now,zone),now,true);starts[i+days]=st;labels[i+days]=epgDayLabel(com.nenotv.player.core.GuideWindow.onDay(epgBaseEpoch,i,now,zone),now);}
+    int checked=Math.max(0,Math.min(labels.length-1,com.nenotv.player.core.GuideWindow.dayOffset(epgBaseEpoch,now,zone)+days));
+    new AlertDialog.Builder(this).setTitle(T("epg")).setSingleChoiceItems(labels,checked,(d,w)->{d.dismiss();moveEpgView(starts[w]);}).setNegativeButton(T("close"),null).show();
 }
 
     boolean isRadioChannel(MediaEntry e){String x=(safe(e==null?"":e.group)+" "+safe(e==null?"":e.name)).toLowerCase(Locale.ROOT);return x.contains("radio")||x.matches(".*\\b(?:fm|dab)\\b.*");}
     int epgTimelineWidth(){int sw=getResources().getConfiguration().screenWidthDp;return Math.max(120,sw-132);}
     String clockAt(long epoch){try{return java.time.Instant.ofEpochSecond(epoch).atZone(java.time.ZoneId.systemDefault()).toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));}catch(Exception e){return "";}}
-    void addEpgTimelineHeader(){LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);TextView blank=new TextView(this);blank.setText(T("now"));blank.setTextColor(getResources().getColor(R.color.muted));blank.setTextSize(10);blank.setGravity(Gravity.CENTER_VERTICAL);row.addView(blank,new LinearLayout.LayoutParams(dp(105),dp(28)));FrameLayout times=new FrameLayout(this);int w=epgTimelineWidth(),labelW=44;for(int i=0;i<=4;i++){TextView t=new TextView(this);t.setText(clockAt(epgBaseEpoch+i*1800L));t.setTextColor(getResources().getColor(R.color.muted));t.setTextSize(9);FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(dp(labelW),dp(28));lp.leftMargin=dp(Math.max(0,(w-labelW)*i/4));t.setLayoutParams(lp);times.addView(t);}row.addView(times,new LinearLayout.LayoutParams(dp(w),dp(28)));epgBoardContainer.addView(row);}
+    void addEpgTimelineHeader(){LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);TextView blank=new TextView(this);blank.setText(ProGate.allowed(this)?epgDayLabel(epgBaseEpoch,System.currentTimeMillis()/1000L):T("now"));blank.setTextColor(getResources().getColor(R.color.muted));blank.setTextSize(10);blank.setGravity(Gravity.CENTER_VERTICAL);row.addView(blank,new LinearLayout.LayoutParams(dp(105),dp(28)));FrameLayout times=new FrameLayout(this);int w=epgTimelineWidth(),labelW=44;for(int i=0;i<=4;i++){TextView t=new TextView(this);t.setText(clockAt(epgBaseEpoch+i*1800L));t.setTextColor(getResources().getColor(R.color.muted));t.setTextSize(9);FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(dp(labelW),dp(28));lp.leftMargin=dp(Math.max(0,(w-labelW)*i/4));t.setLayoutParams(lp);times.addView(t);}row.addView(times,new LinearLayout.LayoutParams(dp(w),dp(28)));epgBoardContainer.addView(row);}
     void addEpgBoardRow(MediaEntry ch){
     LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(3),dp(2),dp(3),dp(2));
     TextView name=new TextView(this);name.setText(DisplayText.title(ch));name.setTextColor(getResources().getColor(R.color.text));name.setTextSize(10.5f);name.setTypeface(null,Typeface.BOLD);name.setMaxLines(2);name.setEllipsize(TextUtils.TruncateAt.END);name.setGravity(Gravity.CENTER_VERTICAL);row.addView(name,new LinearLayout.LayoutParams(dp(105),dp(66)));
@@ -545,16 +581,18 @@ void scheduleBackgroundIndex(){
     final long base=epgBaseEpoch;final int request=epgRequestSerial;
     epgExec.execute(()->{try{
         if(request!=epgRequestSerial)return;
-        List<EpgEntry>events=epgRequests().load(ch);
+        final boolean pro=ProGate.allowed(this);List<EpgEntry>events=pro?epgRequests().window(ch,base,base+com.nenotv.player.core.GuideWindow.SPAN):epgRequests().load(ch);
         runOnUiThread(()->{
             if(!isUiAlive()||!"epg".equals(section)||base!=epgBaseEpoch||request!=epgRequestSerial)return;
             timeline.removeAllViews();long horizon=base+7200L;int added=0;
             for(EpgEntry e:events){long st=e.startEpoch>0?e.startEpoch:base,en=e.endEpoch>st?e.endEpoch:st+1800L;if(en<=base||st>=horizon)continue;long visStart=Math.max(base,st),visEnd=Math.min(horizon,en);int left=(int)Math.round((visStart-base)*timelineDp/7200.0),width=Math.max(1,Math.min(timelineDp-left,(int)Math.round((visEnd-visStart)*timelineDp/7200.0)));String range=e.range();String visibleRange=width<Math.round(120*getResources().getConfiguration().fontScale)?range.replace("–","\n"):range;TextView card=epgTimelineCard((visibleRange.isEmpty()?"":visibleRange+"\n")+e.title,e.isNow());card.setContentDescription((range.isEmpty()?"":range+" · ")+e.title);card.setOnClickListener(v->showEpgDetails(ch));if(width<64){card.setSingleLine(true);card.setText(e.title);card.setPadding(dp(2),dp(5),dp(2),dp(3));}FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(dp(width),dp(62));cp.leftMargin=dp(left);cp.topMargin=dp(2);card.setLayoutParams(cp);timeline.addView(card);added++;}
             if(added==0){TextView none=epgTimelineCard(T("no_epg"),false);FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(-1,-1);none.setLayoutParams(np);timeline.addView(none);}
+            addEpgNowLine(timeline,base,timelineDp);
         });
     }catch(Exception ignored){runOnUiThread(()->{if(isUiAlive()&&"epg".equals(section)&&request==epgRequestSerial){timeline.removeAllViews();TextView none=epgTimelineCard(T("no_epg"),false);FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(-1,-1);none.setLayoutParams(np);timeline.addView(none);}});}});
 }
 
+    void addEpgNowLine(FrameLayout timeline,long base,int widthDp){int x=com.nenotv.player.core.GuideWindow.nowLine(System.currentTimeMillis()/1000L,base,widthDp);if(x<0)return;View line=new View(this);line.setBackgroundColor(0xFFFF4D4D);line.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(dp(2),-1);lp.leftMargin=Math.max(0,dp(x)-dp(1));line.setLayoutParams(lp);timeline.addView(line);}
     TextView epgTimelineCard(String text,boolean now){TextView v=new TextView(this);v.setText(text);v.setTextColor(now?0xFF0A0A0A:0xFFF7F8FA);v.setTextSize(11f);v.setMaxLines(3);v.setEllipsize(TextUtils.TruncateAt.END);v.setPadding(dp(6),dp(5),dp(5),dp(3));v.setGravity(Gravity.CENTER_VERTICAL);v.setBackgroundColor(now?getResources().getColor(R.color.accent):0xFF1A1F29);return v;}
 
     void showEpgDetails(MediaEntry channel){

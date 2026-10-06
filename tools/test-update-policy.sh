@@ -12,3 +12,5 @@ javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/ExtraPrivacyS
 java -cp "$classes" com.nenotv.player.ExtraPrivacySessionTest
 javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/core/GuideMatcher.java tools/tests/GuideMatcherTest.java
 java -cp "$classes" com.nenotv.player.core.GuideMatcherTest
+javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/core/GuideWindow.java tools/tests/GuideWindowTest.java
+java -cp "$classes" com.nenotv.player.core.GuideWindowTest

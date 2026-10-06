@@ -59,4 +59,11 @@ public final class EpgRequests {
         if(!namespace.equals(resolver.namespace(item,provider,secondaryAllowed.getAsBoolean(),language)))throw new java.io.IOException("SOURCE_CHANGED");
         return rows;
     }
+    /** G2 grid: the programmes in [from,to) from the stored guide, otherwise the regular guide for this channel. */
+    public List<EpgEntry> window(MediaEntry item,long from,long to)throws Exception{
+        if(store.isClosed())throw new java.io.IOException("EPG_STORE_CLOSED");
+        Provider provider=resolver.resolve(item,primary,secondaryAllowed.getAsBoolean(),language);
+        List<EpgEntry> rows=store.guideWindow(provider,item,from,to,language);
+        return rows.isEmpty()?load(item):rows;
+    }
 }

@@ -45,6 +45,9 @@ final class GuideChecks {
             check(db.channelFor(source, "", "Unknown Channel", "Unknown Channel").isEmpty(), "Unknown channel matched a guide");
             List<EpgEntry> past = db.entries(source, npo, now - 7 * GuideDatabase.DAY, now, 50);
             check(past.size() == 2 && "Twee dagen geleden".equals(past.get(0).title), "Pro guide lost the past days: " + titles(past));
+            // G2 grid: a 2-hour view two days back shows exactly that programme.
+            List<EpgEntry> view = db.entries(source, npo, now - 2 * GuideDatabase.DAY - 1800, now - 2 * GuideDatabase.DAY + 5400, 200);
+            check(view.size() == 1 && "Twee dagen geleden".equals(view.get(0).title), "2-hour view two days back: " + titles(view));
             List<EpgEntry> ahead = db.entries(source, npo, now, now + 7 * GuideDatabase.DAY, 50);
             check(ahead.size() == 3 && "Journaal nu".equals(ahead.get(0).title) && "Over vijf dagen".equals(ahead.get(2).title), "Pro guide ahead: " + titles(ahead));
             check("Omschrijving".equals(ahead.get(0).description), "Description lost");
