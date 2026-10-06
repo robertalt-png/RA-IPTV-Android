@@ -420,6 +420,8 @@ public final class UiInstrumentation extends ImportInstrumentation {
             }
             Intent first=MainActivity.firstRunIntent(getTargetContext());
             new com.nenotv.player.storage.AccountLinkStore(getTargetContext()).clear();
+            // Signing out also clears the age answer (AccountLinkStore.clear); answer it so this check isolates the login gate.
+            com.nenotv.player.storage.ExtraPrivacyStore.choose(getTargetContext(),"unknown");
             android.app.Instrumentation.ActivityMonitor loginMonitor=addMonitor(PairingActivity.class.getName(),null,false);
             MainActivity blocked=(MainActivity)startActivitySync(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             try{android.app.Activity login=waitForMonitorWithTimeout(loginMonitor,5000);check(login instanceof PairingActivity&&blocked.isFinishing(),"Main screen bypassed required login");if(login!=null)runOnMainSync(login::finish);}finally{removeMonitor(loginMonitor);runOnMainSync(blocked::finish);verifiedAccount();}
