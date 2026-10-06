@@ -453,6 +453,24 @@ public class SearchIndexStore extends SQLiteOpenHelper {
         LinkedHashMap<String,MediaEntry> out=new LinkedHashMap<>();queryFilteredInto(out,where.toString(),base,"name_norm=?",q,limit);if(out.size()<limit)queryFilteredInto(out,where.toString(),base,"name_norm LIKE ?",q+"%",limit);if(out.size()<limit)queryFilteredInto(out,where.toString(),base,"hay_norm LIKE ?","%"+q+"%",limit*2);
         List<MediaEntry> result=new ArrayList<>(out.values());result.sort((a,b)->Integer.compare(score(b,q),score(a,q)));if(result.size()>limit)return new ArrayList<>(result.subList(0,limit));return result;
     }
+    /**
+     * Master search (0.14.24): every language, optionally one section (live, vod, series; empty = all).
+     * Order: titles in the app language first, then best name match (score), so the language category
+     * shown while browsing never hides results from other languages.
+     */
+    public synchronized List<MediaEntry> searchAll(String profile,String section,String query,String preferredTag,int limit){profile=physical(profile);
+        String q=norm(query);if(q.isEmpty())return Collections.emptyList();String sec=section==null?"":section.trim();String pref=preferredTag==null?"":preferredTag.trim().toLowerCase(Locale.ROOT);
+        SQLiteDatabase db=getWritableDatabase();if(sec.isEmpty()){for(String t:new String[]{"live","vod","series"})ensureLanguageHints(db,profile,t);}else ensureLanguageHints(db,profile,sec);
+        StringBuilder where=new StringBuilder("profile=?");ArrayList<String> base=new ArrayList<>();base.add(profile);if(!sec.isEmpty()){where.append(" AND type=?");base.add(sec);}
+        LinkedHashMap<String,MediaEntry> out=new LinkedHashMap<>();HashMap<String,String> tags=new HashMap<>();
+        queryTaggedInto(out,tags,where.toString(),base,"name_norm=?",q,limit);
+        if(out.size()<limit)queryTaggedInto(out,tags,where.toString(),base,"name_norm LIKE ?",q+"%",limit);
+        if(out.size()<limit)queryTaggedInto(out,tags,where.toString(),base,"hay_norm LIKE ?","%"+q+"%",limit*2);
+        List<MediaEntry> result=new ArrayList<>(out.values());
+        result.sort((a,b)->{boolean pa=!pref.isEmpty()&&pref.equals(tags.get(a.uniqueKey())),pb=!pref.isEmpty()&&pref.equals(tags.get(b.uniqueKey()));if(pa!=pb)return pa?-1:1;return Integer.compare(score(b,q),score(a,q));});
+        if(result.size()>limit)return new ArrayList<>(result.subList(0,limit));return result;
+    }
+    private void queryTaggedInto(LinkedHashMap<String,MediaEntry> out,Map<String,String> tags,String where,List<String> base,String extra,String value,int limit){ArrayList<String>a=new ArrayList<>(base);a.add(value);a.add(String.valueOf(limit));try(Cursor c=getReadableDatabase().rawQuery("SELECT payload,lang_tag FROM entries WHERE "+where+" AND "+extra+" LIMIT ?",a.toArray(new String[0]))){while(c.moveToNext()){MediaEntry e=decode(c.getString(0));if(e!=null&&out.putIfAbsent(e.uniqueKey(),e)==null){String t=c.getString(1);tags.put(e.uniqueKey(),t==null?"":t.toLowerCase(Locale.ROOT));}}}catch(Exception ignored){}}
     private void queryFilteredInto(LinkedHashMap<String,MediaEntry> out,String where,List<String> base,String extra,String value,int limit){ArrayList<String>a=new ArrayList<>(base);a.add(value);a.add(String.valueOf(limit));try(Cursor c=getReadableDatabase().rawQuery("SELECT payload FROM entries WHERE "+where+" AND "+extra+" LIMIT ?",a.toArray(new String[0]))){while(c.moveToNext()){MediaEntry e=decode(c.getString(0));if(e!=null)out.putIfAbsent(e.uniqueKey(),e);}}catch(Exception ignored){}}
 
     public synchronized List<MediaEntry> search(String profile,String query,int limit){profile=physical(profile);

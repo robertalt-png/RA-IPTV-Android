@@ -43,7 +43,6 @@ public final class ProGate {
         if(f.equals(UiText.t(a,"picture_in_picture")))return UiText.t(a,"pro_benefit_pip");
         if(f.equals(UiText.t(a,"manage_source")))return UiText.t(a,"pro_benefit_sources");
         if(f.equals(UiText.t(a,"household_profiles")))return UiText.t(a,"pro_benefit_profiles");
-        if(f.equals(UiText.t(a,"search_everywhere")))return UiText.t(a,"pro_benefit_search");
         return "";
     }
 }
