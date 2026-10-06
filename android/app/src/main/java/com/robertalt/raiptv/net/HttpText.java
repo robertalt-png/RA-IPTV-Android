@@ -85,7 +85,10 @@ public final class HttpText {
                 if (isRedirect(code)) {
                     String location = c.getHeaderField("Location");
                     if (location == null || location.trim().isEmpty()) throw new IOException("HTTP_" + code + "_NO_LOCATION");
-                    current = new URL(current, location);
+                    URL next = new URL(current, location);
+                    // Never follow a secure address to an insecure one: provider logins travel in the URL.
+                    if ("https".equalsIgnoreCase(current.getProtocol()) && !"https".equalsIgnoreCase(next.getProtocol())) throw new IOException("insecure_redirect");
+                    current = next;
                     if (code == HttpURLConnection.HTTP_SEE_OTHER) { method = "GET"; payload = null; }
                     continue;
                 }

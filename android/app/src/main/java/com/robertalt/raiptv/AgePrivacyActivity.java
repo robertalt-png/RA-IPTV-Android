@@ -45,4 +45,5 @@ public class AgePrivacyActivity extends Activity {
         finish();
     }
     @Override public void onBackPressed() { choose("unknown"); }
+    @Override protected void onPostCreate(Bundle saved) { super.onPostCreate(saved); BackCompat.route(this); }
 }

@@ -26,6 +26,9 @@ public final class AccountLinkStore {
     }
     public boolean linked(){return prefs.getString("account_id","").matches("[a-f0-9]{64}")&&binding().equals(prefs.getString("binding",""));}
     public String accountId(){return linked()?prefs.getString("account_id",""):"";}
+    /** Offline grace period: a linked device keeps working this long without reaching the server. */
+    public static final long GRACE_MS=7L*24*60*60*1000;
+    public boolean usable(){long age=System.currentTimeMillis()-prefs.getLong("checked_at",0);return linked()&&age>=0&&age<GRACE_MS;}
     public boolean recent(){long age=System.currentTimeMillis()-prefs.getLong("checked_at",0);return linked()&&age>=0&&age<15*60*1000L;}
     public void clear(){ExtraPrivacyStore.clear(context);prefs.edit().clear().commit();}
 }

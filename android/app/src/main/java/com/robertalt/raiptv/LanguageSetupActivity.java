@@ -26,5 +26,4 @@ public class LanguageSetupActivity extends Activity {
         setContentView(sv);sv.requestApplyInsets();
     }
     void choose(String code){SettingsStore.setPrimaryLanguage(this,code);Intent i=new Intent(this,MainActivity.class);i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK);startActivity(i);finish();}
-    @Override public void onBackPressed(){}
 }

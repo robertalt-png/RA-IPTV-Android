@@ -47,9 +47,9 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle b){
         super.onCreate(b);InfoTranslator.init(this);CrashGuard.install(this);SettingsStore.migrateLanguagePreferences(this);if(!SettingsStore.hasLanguageProfile(this)){startActivity(new Intent(this,LanguageSetupActivity.class));finish();return;}
         if(!com.nenotv.player.storage.ExtraPrivacyStore.answered(this)&&!FamilyStore.active(this)){startActivity(new Intent(this,AgePrivacyActivity.class));finish();return;}
-        AccountLinkStore account=new AccountLinkStore(this);if(!account.recent()){startActivity(!account.linked()&&!FamilyStore.active(this)?firstRunIntent(this):new Intent(this,AccountCheckActivity.class));finish();return;}
-        setContentView(R.layout.activity_main);UiText.applyDirection(this);
-        profiles=new SecureProfileStore(this);library=new LibraryStore(this);searchIndex=new SearchIndexStore(this);epgStore=new EpgStore(this);
+        AccountLinkStore account=new AccountLinkStore(this);if(!account.usable()){startActivity(!account.linked()&&!FamilyStore.active(this)?firstRunIntent(this):new Intent(this,AccountCheckActivity.class));finish();return;}
+        setContentView(R.layout.activity_main);UiText.applyDirection(this);BackCompat.route(this);
+        resetViewerWithoutPro();profiles=new SecureProfileStore(this);library=new LibraryStore(this);searchIndex=new SearchIndexStore(this);epgStore=new EpgStore(this);
         categories=findViewById(R.id.categorySpinner);list=findViewById(R.id.itemList);grid=findViewById(R.id.itemGrid);search=findViewById(R.id.searchBox);searchToggle=findViewById(R.id.searchToggle);settingsButton=findViewById(R.id.settingsButton);tvShareButton=findViewById(R.id.tvShareButton);status=findViewById(R.id.status);indexBanner=findViewById(R.id.indexBanner);indexBannerText=findViewById(R.id.indexBannerText);indexBannerProgress=findViewById(R.id.indexBannerProgress);languageBadge=findViewById(R.id.languageBadge);planBadge=findViewById(R.id.planBadge);title=findViewById(R.id.title);heroTitle=findViewById(R.id.heroTitle);heroSubtitle=findViewById(R.id.heroSubtitle);heroImage=findViewById(R.id.heroImage);heroAction=findViewById(R.id.heroAction);heroInfo=findViewById(R.id.heroInfo);progress=findViewById(R.id.progress);genreButton=findViewById(R.id.genreButton);sortButton=findViewById(R.id.sortButton);browseScroll=findViewById(R.id.browseScroll);browseContainer=findViewById(R.id.browseContainer);filterBar=findViewById(R.id.filterBar);epgModeBar=findViewById(R.id.epgModeBar);epgGridButton=findViewById(R.id.epgGridButton);epgListButton=findViewById(R.id.epgListButton);epgBoard=findViewById(R.id.epgBoard);epgBoardContainer=findViewById(R.id.epgBoardContainer);
         ScreenInsets.browsing(this);
         adapter=new MediaRowAdapter(this,library);gridAdapter=new MediaGridAdapter(this,library);epgAdapter=new EpgAdapter(this,epgStore);list.setAdapter(adapter);grid.setAdapter(gridAdapter);appliedLanguage=SettingsStore.language(this);appliedContentLanguage=SettingsStore.contentLanguage(this);applyStaticLanguage();wire();wireSeasons();updateHeaderBadges();restoreFirstSyncBanner();
@@ -74,6 +74,7 @@ public class MainActivity extends Activity {
     @Override protected void onPostResume(){
         super.onPostResume();
         if(isFinishing()||isDestroyed())return;
+        resetViewerWithoutPro();
         if(library!=null&&!library.viewerId.equals(new HouseholdProfileStore(this).activeId())){recreate();return;}
         android.content.SharedPreferences settings=SettingsStore.prefs(this);
         if(settings.getBoolean("account_sources_changed",false)){
@@ -627,6 +628,8 @@ void scheduleBackgroundIndex(){
             try{
                 android.content.SharedPreferences sp=SettingsStore.prefs(this);
                 final int schema=4;
+                // On mobile data or a hotspot, keep using a complete list instead of re-downloading it every 6 hours.
+                final long indexTtl=isMeteredNetwork()?30L*24*60*60*1000:SEARCH_INDEX_TTL_MS;
                 boolean migration=sp.getInt("language_index_version_"+key,0)<schema;
                 if(migration&&!sp.getBoolean("language_index_rebuild_started_"+key,false)){
                     sp.edit().putBoolean("language_index_rebuild_started_"+key,true).putBoolean("first_sync_done_"+key,false)
@@ -634,7 +637,7 @@ void scheduleBackgroundIndex(){
                       .putInt("first_sync_done_count_"+key,0).putInt("first_sync_total_count_"+key,0).putInt("first_sync_titles_"+key,0).apply();
                 }
                 if(indexProvider instanceof M3uProvider){
-                    if(requestedForce||!searchIndex.isFresh(key,"live",SEARCH_INDEX_TTL_MS)){
+                    if(requestedForce||!searchIndex.isFresh(key,"live",indexTtl)){
                         indexProvider.authenticate();
                         if(DemoPolicy.isDemo(profile)){
                             for(String type:new String[]{"live","vod","series"}){
@@ -664,7 +667,7 @@ void scheduleBackgroundIndex(){
                     int globalDone=0;
                     for(String type:baseTypes){
                         List<Category> cats=catMap.get(type);
-                        if(!migration&&!requestedForce&&searchIndex.isFresh(key,type,SEARCH_INDEX_TTL_MS)){globalDone+=cats.size();continue;}
+                        if(!migration&&!requestedForce&&searchIndex.isFresh(key,type,indexTtl)){globalDone+=cats.size();continue;}
                         String cursor=SettingsStore.prefs(this).getString(cacheCursorKey(key,type),"");
                         int startAt=0;
                         if(cursor!=null&&!cursor.isEmpty()){
@@ -681,7 +684,7 @@ void scheduleBackgroundIndex(){
 
                     for(String type:order){
                         if(Thread.currentThread().isInterrupted())break;
-                        if(!migration&&!requestedForce&&searchIndex.isFresh(key,type,SEARCH_INDEX_TTL_MS))continue;
+                        if(!migration&&!requestedForce&&searchIndex.isFresh(key,type,indexTtl))continue;
                         List<Category> cats=catMap.get(type);
                         boolean categoryCacheFresh=searchIndex.categoriesFresh(key,type,30L*60L*1000L);
                         if(cats==null)cats=new ArrayList<>();
@@ -859,9 +862,24 @@ void scheduleBackgroundIndex(){
         });
     }
 
-    void waitWhilePaused(){while(activityPaused&&!playbackActive&&!isFinishing()&&!isDestroyed()&&!Thread.currentThread().isInterrupted()){try{Thread.sleep(250);}catch(InterruptedException e){Thread.currentThread().interrupt();break;}}}
+    void waitWhilePaused(){while((activityPaused||playbackActive)&&!isFinishing()&&!isDestroyed()&&!Thread.currentThread().isInterrupted()){try{Thread.sleep(250);}catch(InterruptedException e){Thread.currentThread().interrupt();break;}}}
     void waitForLibraryLoad(){while(fullLibraryToken!=0&&!isFinishing()&&!isDestroyed()&&!Thread.currentThread().isInterrupted()){try{Thread.sleep(180);}catch(InterruptedException e){Thread.currentThread().interrupt();break;}}}
     boolean isUiAlive(){return !isFinishing()&&!isDestroyed();}
+    /** Viewer profiles are Pro: when Pro ends, go back to the main profile instead of staying stuck in another one. */
+    void resetViewerWithoutPro(){try{HouseholdProfileStore viewers=new HouseholdProfileStore(this);if(!new EntitlementStore(this).isPro()&&!HouseholdProfileStore.DEFAULT_ID.equals(viewers.activeId()))viewers.select(HouseholdProfileStore.DEFAULT_ID);}catch(Exception ignored){}}
+    boolean isMeteredNetwork(){try{android.net.ConnectivityManager cm=(android.net.ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);return cm!=null&&cm.isActiveNetworkMetered();}catch(Exception e){return false;}}
+    volatile boolean accountRefreshRunning=false;
+    /** Re-checks the account without blocking the viewer; only a server "not linked" answer sends them to sign in. */
+    void refreshAccountInBackground(){
+        if(accountRefreshRunning)return;accountRefreshRunning=true;
+        new Thread(()->{
+            try{new com.nenotv.player.entitlement.PairingClient(this).checkAccount();}
+            catch(com.nenotv.player.entitlement.EntitlementClient.ServiceException e){
+                if("account_not_linked".equals(e.code)||"invalid_device".equals(e.code))runOnUiThread(()->{if(isUiAlive()){startActivity(new Intent(this,AccountCheckActivity.class));finish();}});
+            }catch(Exception offline){/* keep watching; retried on the next resume */}
+            finally{accountRefreshRunning=false;}
+        },"SunnyIPTV-account-refresh").start();
+    }
 
 
     void showLocal(List<MediaEntry>x,String label){nextRequest();section="local";categories.setVisibility(View.GONE);genreButton.setVisibility(View.GONE);sortButton.setVisibility(View.GONE);filterBar.setVisibility(View.GONE);showMediaGrid(false);all=x;gridAdapter.set(x,false);setHeroDefault(label,x.isEmpty()?"":T("tap_preview"));busy(false,x.size()+" "+T("results"));}
@@ -921,14 +939,14 @@ TextView addInfoBlock(LinearLayout b,String l,String x){TextView h=new TextView(
         if(isAdultLocked(e)){FamilyUi.blocked(this);return;}
         Profile playbackProfile;
         try{playbackProfile=com.nenotv.player.provider.PlaybackSourceRoute.resolve(this,e,ProLibraryBridge.isActive(this)).profile();}
-        catch(Exception unavailable){status.setText(T("source_unavailable"));return;}
+        catch(Exception unavailable){if(e.sourceId!=null&&!e.sourceId.isEmpty()&&!ProGate.allowed(this)){ProGate.require(this,T("manage_source"));return;}status.setText(T("source_unavailable"));return;}
         pauseIndexForPlayback();
         if(DemoPolicy.blockPlayback(this)){recreate();return;}library.recent(e);Intent i=ProModuleInstaller.playerIntent(this);i.putExtra("media",e);i.putExtra("profileType",playbackProfile.type.name());
         String queueToken="";
         if("live".equals(e.type)){ArrayList<MediaEntry>q=new ArrayList<>();for(MediaEntry z:all)if("live".equals(z.type)&&!isAdultLocked(z)){q.add(z);if(q.size()>=250)break;}int at=-1;for(int n=0;n<q.size();n++)if(q.get(n).uniqueKey().equals(e.uniqueKey())){at=n;break;}if(at>=0)queueToken=com.nenotv.player.storage.PlaybackQueueStore.put("live",q,at);}
         else if("episode".equals(e.type)&&seriesEpisodeMode){ArrayList<MediaEntry>q=new ArrayList<>();for(MediaEntry z:seriesEpisodes)if("episode".equals(z.type)&&!isAdultLocked(z))q.add(z);int at=-1;for(int n=0;n<q.size();n++)if(q.get(n).uniqueKey().equals(e.uniqueKey())){at=n;break;}if(at>=0)queueToken=com.nenotv.player.storage.PlaybackQueueStore.put("episode",q,at);}
         if(!queueToken.isEmpty())i.putExtra("queueToken",queueToken);
-        try{startActivity(i);}catch(RuntimeException ex){playbackActive=false;activityPaused=false;resumeIndexAfterPlayback=true;resumeIndexSoon();throw ex;}
+        try{startActivity(i);}catch(RuntimeException ex){playbackActive=false;activityPaused=false;resumeIndexAfterPlayback=true;resumeIndexSoon();Toast.makeText(this,T("play_err_generic"),Toast.LENGTH_LONG).show();}
     }
     void pauseIndexForPlayback(){
         playbackActive=true;activityPaused=true;resumeIndexAfterPlayback=false;
@@ -995,7 +1013,7 @@ TextView addInfoBlock(LinearLayout b,String l,String x){TextView h=new TextView(
     String label(String s){return s.equals("live")?T("live_tv"):s.equals("vod")?T("movies"):s.equals("series")?T("series"):s.equals("epg")?T("epg"):"SunnyIPTV";} String friendly(Exception e){String m=e.getMessage();if(m==null||m.trim().isEmpty())return T("unknown_error");if("SOURCE_UNAVAILABLE".equals(m))return T("source_unavailable");if("SOURCE_CHANGED".equals(m))return T("source_changed");return m.replace("LOGIN_FAILED",T("login_failed"));} String friendlyThrowable(Throwable e){if(e instanceof OutOfMemoryError)return T("low_memory");String m=e==null?null:e.getMessage();return m==null||m.trim().isEmpty()?e.getClass().getSimpleName():m;} void busy(boolean b,String s){progress.setVisibility(b?View.VISIBLE:View.GONE);status.setText(s);}
     static Intent firstRunIntent(android.content.Context context){return new Intent(context,PairingActivity.class).putExtra("first_run",true).putExtra("mandatory_login",true);}
     @Override protected void onActivityResult(int r,int c,Intent d){super.onActivityResult(r,c,d);if(updateNotifier!=null)updateNotifier.onActivityResult(r,c);if(r==10&&profiles.exists())openProfile();}
-    @Override protected void onResume(){super.onResume();if(isFinishing())return;if(!new AccountLinkStore(this).recent()){startActivity(new Intent(this,AccountCheckActivity.class));finish();return;}long familyNow=FamilyStore.revision(this);if(familyRevision>=0&&familyRevision!=familyNow){familyRevision=familyNow;recreate();return;}familyRevision=familyNow;if(!isFinishing()){try{if(updateNotifier==null)updateNotifier=new PlayUpdateNotifier(this,()->{ProModuleInstaller.syncEntitlement(this);updateHeaderBadges();});updateNotifier.onResume();}catch(Exception ignored){}}if(provider!=null&&expireDemoProfileIfNeeded()){recreate();return;}ProModuleInstaller.syncEntitlement(this);playbackActive=false;activityPaused=false;updateHeaderBadges();if(!profileReady)return;restoreFirstSyncBanner();resumeIndexSoon();String nowLang=SettingsStore.language(this);if(appliedLanguage!=null&&!appliedLanguage.isEmpty()&&!appliedLanguage.equals(nowLang)){recreate();return;}String nowContent=SettingsStore.contentLanguage(this);if(appliedContentLanguage!=null&&!appliedContentLanguage.isEmpty()&&!appliedContentLanguage.equals(nowContent)){appliedContentLanguage=nowContent;if(provider!=null){if("home".equals(section)||"local".equals(section))loadHome();else if("epg".equals(section))loadEpg();else loadSection(section);}return;}if(provider!=null){EpgRequests requests=epgRequests();adapter.setEpg(requests);gridAdapter.setEpg(requests);epgAdapter.configure(requests);gridAdapter.notifyDataSetChanged();epgAdapter.notifyDataSetChanged();if(seriesEpisodeMode){MediaEntry next=EpisodeOrder.next(seriesEpisodes,library);if(next!=null){selectedHero=next;heroSubtitle.setText((library.progress(next)>0?T("continue"):T("next_episode"))+" · S"+next.season+"E"+next.episode);heroAction.setText(library.progress(next)>0?T("continue"):T("next_episode"));heroAction.setVisibility(View.VISIBLE);}else heroAction.setVisibility(View.GONE);adapter.notifyDataSetChanged();}else if("home".equals(section)||"local".equals(section))loadHome();setHeroHeight(heroHeight());android.content.SharedPreferences sp=SettingsStore.prefs(this);if(sp.getBoolean("force_reindex",false)){sp.edit().putBoolean("force_reindex",false).apply();refreshSearchIndex(true);}}}
+    @Override protected void onResume(){super.onResume();if(isFinishing())return;AccountLinkStore resumedAccount=new AccountLinkStore(this);if(!resumedAccount.usable()){startActivity(new Intent(this,AccountCheckActivity.class));finish();return;}if(!resumedAccount.recent())refreshAccountInBackground();long familyNow=FamilyStore.revision(this);if(familyRevision>=0&&familyRevision!=familyNow){familyRevision=familyNow;recreate();return;}familyRevision=familyNow;if(!isFinishing()){try{if(updateNotifier==null)updateNotifier=new PlayUpdateNotifier(this,()->{ProModuleInstaller.syncEntitlement(this);updateHeaderBadges();});updateNotifier.onResume();}catch(Exception ignored){}}if(provider!=null&&expireDemoProfileIfNeeded()){recreate();return;}ProModuleInstaller.syncEntitlement(this);playbackActive=false;activityPaused=false;updateHeaderBadges();if(!profileReady)return;restoreFirstSyncBanner();resumeIndexSoon();String nowLang=SettingsStore.language(this);if(appliedLanguage!=null&&!appliedLanguage.isEmpty()&&!appliedLanguage.equals(nowLang)){recreate();return;}String nowContent=SettingsStore.contentLanguage(this);if(appliedContentLanguage!=null&&!appliedContentLanguage.isEmpty()&&!appliedContentLanguage.equals(nowContent)){appliedContentLanguage=nowContent;if(provider!=null){if("home".equals(section)||"local".equals(section))loadHome();else if("epg".equals(section))loadEpg();else loadSection(section);}return;}if(provider!=null){EpgRequests requests=epgRequests();adapter.setEpg(requests);gridAdapter.setEpg(requests);epgAdapter.configure(requests);gridAdapter.notifyDataSetChanged();epgAdapter.notifyDataSetChanged();if(seriesEpisodeMode){MediaEntry next=EpisodeOrder.next(seriesEpisodes,library);if(next!=null){selectedHero=next;heroSubtitle.setText((library.progress(next)>0?T("continue"):T("next_episode"))+" · S"+next.season+"E"+next.episode);heroAction.setText(library.progress(next)>0?T("continue"):T("next_episode"));heroAction.setVisibility(View.VISIBLE);}else heroAction.setVisibility(View.GONE);adapter.notifyDataSetChanged();}else if("home".equals(section)||"local".equals(section))loadHome();setHeroHeight(heroHeight());android.content.SharedPreferences sp=SettingsStore.prefs(this);if(sp.getBoolean("force_reindex",false)){sp.edit().putBoolean("force_reindex",false).apply();refreshSearchIndex(true);}}}
     @Override protected void onPause(){if(updateNotifier!=null)updateNotifier.onPause();activityPaused=true;super.onPause();}
     @Override public void onTrimMemory(int level){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW){HERO_CACHE.evictAll();MediaRowAdapter.clearArtworkCache();}}
     @Override public void onBackPressed(){if(seriesEpisodeMode){loadSection("series");}else super.onBackPressed();}
