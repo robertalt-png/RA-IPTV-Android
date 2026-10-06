@@ -47,7 +47,7 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle b){
         super.onCreate(b);InfoTranslator.init(this);CrashGuard.install(this);SettingsStore.migrateLanguagePreferences(this);if(!SettingsStore.hasLanguageProfile(this)){startActivity(new Intent(this,LanguageSetupActivity.class));finish();return;}
         AccountLinkStore account=new AccountLinkStore(this);if(!account.usable()){startActivity(!account.linked()&&!FamilyStore.active(this)?firstRunIntent(this):new Intent(this,AccountCheckActivity.class));finish();return;}
-        setContentView(R.layout.activity_main);UiText.applyDirection(this);BackCompat.route(this);
+        setContentView(R.layout.activity_main);UiText.applyDirection(this);AppVisibility.install(getApplication());Reminders.rescheduleAll(this);pendingReminderId=getIntent()==null?null:getIntent().getStringExtra(Reminders.EXTRA_ID);pendingReminderTap=getIntent()!=null&&getIntent().getBooleanExtra(Reminders.EXTRA_TAP,false);BackCompat.route(this);
         resetViewerWithoutPro();profiles=new SecureProfileStore(this);library=new LibraryStore(this);searchIndex=new SearchIndexStore(this);epgStore=new EpgStore(this);
         categories=findViewById(R.id.categorySpinner);list=findViewById(R.id.itemList);grid=findViewById(R.id.itemGrid);search=findViewById(R.id.searchBox);searchToggle=findViewById(R.id.searchToggle);settingsButton=findViewById(R.id.settingsButton);tvShareButton=findViewById(R.id.tvShareButton);status=findViewById(R.id.status);indexBanner=findViewById(R.id.indexBanner);indexBannerText=findViewById(R.id.indexBannerText);indexBannerProgress=findViewById(R.id.indexBannerProgress);languageBadge=findViewById(R.id.languageBadge);planBadge=findViewById(R.id.planBadge);title=findViewById(R.id.title);heroTitle=findViewById(R.id.heroTitle);heroSubtitle=findViewById(R.id.heroSubtitle);heroImage=findViewById(R.id.heroImage);heroAction=findViewById(R.id.heroAction);heroInfo=findViewById(R.id.heroInfo);progress=findViewById(R.id.progress);genreButton=findViewById(R.id.genreButton);sortButton=findViewById(R.id.sortButton);browseScroll=findViewById(R.id.browseScroll);browseContainer=findViewById(R.id.browseContainer);filterBar=findViewById(R.id.filterBar);epgModeBar=findViewById(R.id.epgModeBar);epgGridButton=findViewById(R.id.epgGridButton);epgListButton=findViewById(R.id.epgListButton);epgBoard=findViewById(R.id.epgBoard);epgBoardContainer=findViewById(R.id.epgBoardContainer);
         ScreenInsets.browsing(this);
@@ -262,7 +262,29 @@ void scheduleBackgroundIndex(){
         return "nl".equals(l)?"Je bibliotheek kon niet worden geopend. Probeer opnieuw; je bestaande lijst blijft behouden.":"de".equals(l)?"Deine Bibliothek konnte nicht geöffnet werden. Versuche es erneut; die vorhandene Liste bleibt erhalten.":"Your library could not be opened. Try again; your existing list is preserved.";
     }
 
-    void openStart(){String x=SettingsStore.startScreen(this);if("last".equals(x))x=SettingsStore.lastSection(this);if("live".equals(x))loadSection("live");else if("epg".equals(x))loadEpg();else if("vod".equals(x))loadSection("vod");else if("series".equals(x))loadSection("series");else loadHome();}
+    String pendingReminderId; boolean pendingReminderTap;
+    @Override protected void onNewIntent(Intent i){super.onNewIntent(i);setIntent(i);String id=i==null?null:i.getStringExtra(Reminders.EXTRA_ID);if(id!=null){pendingReminderId=id;pendingReminderTap=i.getBooleanExtra(Reminders.EXTRA_TAP,false);if(profileReady)runPendingReminder();}}
+    /** G5: a reminder that fired while the app was open switches after a 10-second countdown; a tapped notification switches at once. */
+    void runPendingReminder(){
+        String id=pendingReminderId;boolean tap=pendingReminderTap;pendingReminderId=null;pendingReminderTap=false;if(id==null)return;
+        com.nenotv.player.storage.ReminderStore.Reminder r=com.nenotv.player.storage.ReminderStore.get(this,id);Reminders.remove(this,id);
+        if(r==null||r.start<System.currentTimeMillis()/1000L-3600)return;
+        if(tap){play(r.channel);return;}
+        final String head=T("starts_on")+" "+DisplayText.title(r.channel)+"\n"+T("switching_in")+" ";
+        final int[] left={10};
+        AlertDialog dlg=new AlertDialog.Builder(this).setTitle("🔔 "+r.title).setMessage(head+left[0]+" s").setPositiveButton(T("watch"),(d,w)->play(r.channel)).setNegativeButton(T("cancel"),null).create();
+        Runnable tick=new Runnable(){public void run(){if(!dlg.isShowing()||!isUiAlive())return;left[0]--;if(left[0]<=0){dlg.dismiss();play(r.channel);return;}dlg.setMessage(head+left[0]+" s");ui.postDelayed(this,1000);}};
+        dlg.setOnDismissListener(d->ui.removeCallbacks(tick));dlg.show();ui.postDelayed(tick,1000);
+    }
+    void toggleReminder(MediaEntry ch,EpgEntry e){
+        if(com.nenotv.player.storage.ReminderStore.has(this,ch,e.startEpoch)){Reminders.remove(this,com.nenotv.player.storage.ReminderStore.id(ch,e.startEpoch));Toast.makeText(this,T("reminder_removed"),Toast.LENGTH_SHORT).show();refreshEpgBoardIfShown();return;}
+        if(!ProGate.require(this,T("reminders")))return;
+        if(Build.VERSION.SDK_INT>=33&&checkSelfPermission("android.permission.POST_NOTIFICATIONS")!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"},4105);
+        Reminders.add(this,ch,e);Toast.makeText(this,T("reminder_set"),Toast.LENGTH_SHORT).show();refreshEpgBoardIfShown();
+    }
+    void runPendingReminderSoon(){if(pendingReminderId!=null)ui.postDelayed(()->{if(isUiAlive()&&profileReady)runPendingReminder();},600);}
+    void refreshEpgBoardIfShown(){if("epg".equals(section)&&epgGridMode&&epgBoard.getVisibility()==View.VISIBLE)drawEpgBoard();}
+    void openStart(){runPendingReminderSoon();String x=SettingsStore.startScreen(this);if("last".equals(x))x=SettingsStore.lastSection(this);if("live".equals(x))loadSection("live");else if("epg".equals(x))loadEpg();else if("vod".equals(x))loadSection("vod");else if("series".equals(x))loadSection("series");else loadHome();}
 
     void loadHome(){
         pauseBackgroundIndexForUi();stopCachePaging();nextRequest();hideSeasons();section="home";updateBottomNav("home");SettingsStore.setLastSection(this,"home");epgModeBar.setVisibility(View.GONE);setHeroHeight(heroHeight());seriesEpisodeMode=false;currentCategories.clear();genreButton.setVisibility(View.GONE);sortButton.setVisibility(View.GONE);categories.setVisibility(View.GONE);filterBar.setVisibility(View.GONE);collapseSearch();showBrowse();browseContainer.removeAllViews();setHeroDefault(T("watch_without_search"),T("one_place"));search.setHint(T("search_all"));
@@ -587,7 +609,7 @@ void scheduleBackgroundIndex(){
         runOnUiThread(()->{
             if(!isUiAlive()||!"epg".equals(section)||base!=epgBaseEpoch||request!=epgRequestSerial)return;
             timeline.removeAllViews();long horizon=base+7200L;int added=0;
-            for(EpgEntry e:events){long st=e.startEpoch>0?e.startEpoch:base,en=e.endEpoch>st?e.endEpoch:st+1800L;if(en<=base||st>=horizon)continue;long visStart=Math.max(base,st),visEnd=Math.min(horizon,en);int left=(int)Math.round((visStart-base)*timelineDp/7200.0),width=Math.max(1,Math.min(timelineDp-left,(int)Math.round((visEnd-visStart)*timelineDp/7200.0)));String range=e.range();String visibleRange=width<Math.round(120*getResources().getConfiguration().fontScale)?range.replace("–","\n"):range;TextView card=epgTimelineCard((visibleRange.isEmpty()?"":visibleRange+"\n")+e.title,e.isNow());card.setContentDescription((range.isEmpty()?"":range+" · ")+e.title);card.setOnClickListener(v->showProgramme(ch,e));if(ch.catchup&&e.endEpoch<=System.currentTimeMillis()/1000L&&com.nenotv.player.core.CatchupUrls.available(e.startEpoch,System.currentTimeMillis()/1000L,ch.catchupDays))card.setText("↶ "+card.getText());if(width<64){card.setSingleLine(true);card.setText(e.title);card.setPadding(dp(2),dp(5),dp(2),dp(3));}FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(dp(width),dp(62));cp.leftMargin=dp(left);cp.topMargin=dp(2);card.setLayoutParams(cp);timeline.addView(card);added++;}
+            for(EpgEntry e:events){long st=e.startEpoch>0?e.startEpoch:base,en=e.endEpoch>st?e.endEpoch:st+1800L;if(en<=base||st>=horizon)continue;long visStart=Math.max(base,st),visEnd=Math.min(horizon,en);int left=(int)Math.round((visStart-base)*timelineDp/7200.0),width=Math.max(1,Math.min(timelineDp-left,(int)Math.round((visEnd-visStart)*timelineDp/7200.0)));String range=e.range();String visibleRange=width<Math.round(120*getResources().getConfiguration().fontScale)?range.replace("–","\n"):range;TextView card=epgTimelineCard((visibleRange.isEmpty()?"":visibleRange+"\n")+e.title,e.isNow());card.setContentDescription((range.isEmpty()?"":range+" · ")+e.title);card.setOnClickListener(v->showProgramme(ch,e));if(e.startEpoch>System.currentTimeMillis()/1000L&&com.nenotv.player.storage.ReminderStore.has(this,ch,e.startEpoch))card.setText("🔔 "+card.getText());if(ch.catchup&&e.endEpoch<=System.currentTimeMillis()/1000L&&com.nenotv.player.core.CatchupUrls.available(e.startEpoch,System.currentTimeMillis()/1000L,ch.catchupDays))card.setText("↶ "+card.getText());if(width<64){card.setSingleLine(true);card.setText(e.title);card.setPadding(dp(2),dp(5),dp(2),dp(3));}FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(dp(width),dp(62));cp.leftMargin=dp(left);cp.topMargin=dp(2);card.setLayoutParams(cp);timeline.addView(card);added++;}
             if(added==0){TextView none=epgTimelineCard(T("no_epg"),false);FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(-1,-1);none.setLayoutParams(np);timeline.addView(none);}
             addEpgNowLine(timeline,base,timelineDp);
         });
@@ -649,7 +671,9 @@ void scheduleBackgroundIndex(){
         if(e.description!=null&&!e.description.trim().isEmpty())m.append("\n\n").append(e.description.trim());
         if(past&&!replay)m.append("\n\n").append(T("no_catchup"));
         AlertDialog.Builder b=new AlertDialog.Builder(this).setTitle(e.title).setMessage(m.toString());
-        if(!past)b.setPositiveButton(T("watch"),(d,w)->play(ch));
+        boolean upcoming=e.startEpoch>now;
+        if(upcoming){boolean set=com.nenotv.player.storage.ReminderStore.has(this,ch,e.startEpoch);b.setPositiveButton(set?"🔕 "+T("reminder_remove"):(ProGate.allowed(this)?"🔔 ":"🔒 ")+T("remind_me"),(d,w)->toggleReminder(ch,e));b.setNeutralButton(T("watch"),(d,w)->play(ch));}
+        else if(!past)b.setPositiveButton(T("watch"),(d,w)->play(ch));
         if(replay)b.setNeutralButton((ProGate.allowed(this)?"":"🔒 ")+(live?T("from_start"):T("catchup")),(d,w)->playCatchup(ch,e));
         b.setNegativeButton(T("close"),null).show();
     }

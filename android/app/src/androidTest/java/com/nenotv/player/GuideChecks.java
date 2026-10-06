@@ -83,6 +83,16 @@ final class GuideChecks {
             EpgEntry prog = past.get(0);
             com.nenotv.player.model.MediaEntry cu = MainActivity.catchupEntry(ch, prog, Arrays.asList("http://p.invalid/timeshift/u/p/60/x/42.m3u8", "http://p.invalid/timeshift/u/p/60/x/42.ts"));
             check("catchup".equals(cu.type) && "second".equals(cu.sourceId) && cu.candidates.size() == 2 && cu.url.endsWith(".m3u8") && !cu.uniqueKey().equals(ch.uniqueKey()), "Catch-up item: " + cu.type + " " + cu.sourceId + " " + cu.candidates);
+            // G5: a reminder survives a round trip (channel encrypted), is scheduled and can be removed.
+            EpgEntry later = ahead.get(1);
+            com.nenotv.player.storage.ReminderStore.Reminder r = Reminders.add(c, ch, later);
+            com.nenotv.player.storage.ReminderStore.Reminder back = com.nenotv.player.storage.ReminderStore.get(c, r.id);
+            check(back != null && "NPO 1".equals(back.channel.name) && "second".equals(back.channel.sourceId) && back.start == later.startEpoch && "Vanavond".equals(back.title), "Reminder round trip");
+            check(com.nenotv.player.storage.ReminderStore.has(c, ch, later.startEpoch), "Reminder not found");
+            boolean listed = false; for (com.nenotv.player.storage.ReminderStore.Reminder x : com.nenotv.player.storage.ReminderStore.upcoming(c, now)) listed |= x.id.equals(r.id);
+            check(listed, "Reminder not upcoming");
+            Reminders.remove(c, r.id);
+            check(!com.nenotv.player.storage.ReminderStore.has(c, ch, later.startEpoch), "Reminder not removed");
         } finally { db.forget(source); }
         check(db.entries(source, "NPO1.nl", 0, Long.MAX_VALUE, 10).isEmpty(), "Guide not removed");
     }
