@@ -145,12 +145,23 @@ public class AccountActivity extends Activity {
         });
     }
 
+    volatile boolean quietRefreshRunning;
     void refreshServer(boolean quiet){
-        if(requestRunning)return;
-        busy(true);if(quiet)serverText.setText("");
+        if(requestRunning||quietRefreshRunning)return;
+        if(quiet){
+            // Background refresh on open: never blocks the buttons or shows "checking".
+            quietRefreshRunning=true;
+            exec.execute(()->{
+                boolean ok=false;try{new EntitlementClient(this).refresh();ok=true;}catch(Exception ignored){}
+                final boolean updated=ok;
+                runOnUiThread(()->{quietRefreshRunning=false;if(updated&&!isFinishing()&&!isDestroyed()&&!requestRunning){build();ProModuleInstaller.syncEntitlement(this);}});
+            });
+            return;
+        }
+        busy(true);
         exec.execute(()->{
-            try{new EntitlementClient(this).refresh();accountResult(quiet?"":"status_updated",true);}
-            catch(Exception ex){accountResult(quiet?"":"server_unavailable",false);}
+            try{new EntitlementClient(this).refresh();accountResult("status_updated",true);}
+            catch(Exception ex){accountResult("server_unavailable",false);}
         });
     }
 
@@ -187,7 +198,7 @@ public class AccountActivity extends Activity {
     void accountResult(String message,boolean updated){
         runOnUiThread(()->{
             if(isFinishing()||isDestroyed())return;
-            busy(false);serverText.setText(message.isEmpty()?"":T(message));
+            busy(false);serverText.setText(T(message));
             if(updated){email.setText(ent.accountEmail());build();ProModuleInstaller.syncEntitlement(this);}
         });
     }
