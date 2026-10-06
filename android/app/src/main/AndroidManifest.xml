@@ -28,7 +28,6 @@
         <activity android:name=".NetworkTestActivity" android:exported="false" />
         <activity android:name=".HouseholdProfilesActivity" android:exported="false" />
         <activity android:name=".LanguageSetupActivity" android:exported="false" />
-        <activity android:name=".AgePrivacyActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" android:exported="false" />
 <activity android:name=".SplashActivity" android:exported="true">
     <intent-filter>

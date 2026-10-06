@@ -41,9 +41,11 @@ public final class ExtraPrivacyChecks {
                 else if ("account_logout".equals(change)) account.clear();
                 else if ("account_switch".equals(change)) account.apply(new org.json.JSONObject().put("status", "active").put("kind", "account").put("account_id", second));
                 else ExtraPrivacyStore.choose(c, change);
-                check(revoked.get() == count + 1 && !ExtraPrivacyStore.allowsSdk(c), "Privacy change did not revoke " + change);
+                boolean restricted = "family".equals(change);
+                check(revoked.get() == count + 1 && ExtraPrivacyStore.allowsSdk(c) != restricted, "Privacy change did not restart session " + change);
                 String receiver = new NenoTVCastOptionsProvider().getCastOptions(c).getReceiverApplicationId();
-                check(receiver == null || receiver.isEmpty(), "Restricted Cast options discover receivers");
+                if (restricted) check(receiver == null || receiver.isEmpty(), "Restricted Cast options discover receivers");
+                else check(NenoTVCastOptionsProvider.receiverApplicationId().equals(receiver), "Cast unavailable without family filter after " + change);
                 check(!ExtraPrivacySession.run(old, () -> { throw new AssertionError("Old task ran"); }), "Old generation accepted");
                 if (request != null) verifyRequest(request);
             }
