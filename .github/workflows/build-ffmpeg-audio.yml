@@ -1,0 +1,86 @@
+name: SunnyIPTV FFmpeg audio extension (LGPL)
+
+# Builds the Media3 FFmpeg audio decoder as an AAR so the app can play Dolby (AC3/E-AC3),
+# DTS (incl. DTS-HD), TrueHD and other audio formats without VLC.
+# FFmpeg is configured WITHOUT --enable-gpl / --enable-nonfree, so it stays LGPL 2.1+.
+
+on:
+  push:
+    branches: [sunnyiptv-ffmpeg-audio]
+    paths: ['.github/workflows/build-ffmpeg-audio.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  MEDIA3_VERSION: '1.11.1'          # must match androidx.media3 in android/app/build.gradle
+  FFMPEG_BRANCH: 'release/6.0'      # version recommended by the Media3 FFmpeg README
+  NDK_VERSION: '26.1.10909125'      # NDK r26b, tested by Media3
+  ANDROID_ABI: '26'                 # = app minSdk
+  DECODERS: 'aac mp3 mp2 ac3 eac3 dca truehd mlp flac alac opus vorbis'
+
+jobs:
+  ffmpeg-audio:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android NDK and CMake
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "ndk;${NDK_VERSION}" "cmake;3.22.1" "platforms;android-36" "build-tools;36.0.0" >/dev/null
+          echo "NDK_PATH=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+      - name: Media3 source
+        uses: actions/checkout@v4
+        with:
+          repository: androidx/media
+          ref: ${{ env.MEDIA3_VERSION }}
+          path: media
+      - name: FFmpeg source
+        run: |
+          git clone --depth 1 --branch "${FFMPEG_BRANCH}" https://github.com/FFmpeg/FFmpeg.git \
+            media/libraries/decoder_ffmpeg/src/main/jni/ffmpeg
+          git -C media/libraries/decoder_ffmpeg/src/main/jni/ffmpeg log -1 --format='FFmpeg commit %H (%cd)'
+      - name: Build FFmpeg (audio decoders only)
+        run: |
+          MODULE="$PWD/media/libraries/decoder_ffmpeg/src/main"
+          cd "$MODULE/jni"
+          LOG="$GITHUB_WORKSPACE/ffmpeg-build.log"
+          ./build_ffmpeg.sh "$MODULE" "$NDK_PATH" linux-x86_64 "$ANDROID_ABI" $DECODERS > "$LOG" 2>&1 || { tail -n 80 "$LOG"; exit 1; }
+          grep -E "^License:|ANDROID_ABI is|Enabled decoders" "$LOG" | sort -u
+      - name: Licence check (must be LGPL, no GPL, no nonfree)
+        run: |
+          CFG=media/libraries/decoder_ffmpeg/src/main/jni/ffmpeg/config.h
+          grep -E "#define CONFIG_(GPL|VERSION3|NONFREE) " "$CFG" | tee licence.txt
+          grep -q "#define CONFIG_GPL 0" "$CFG"
+          grep -q "#define CONFIG_NONFREE 0" "$CFG"
+          grep -q "#define CONFIG_VERSION3 0" "$CFG"
+          grep -E "^License:" ffmpeg-build.log | sort -u | tee -a licence.txt
+          grep -E "#define CONFIG_[A-Z0-9_]+_DECODER 1" "$CFG" | tee decoders.txt
+      - name: Build the AAR
+        working-directory: media
+        run: ./gradlew --no-daemon -q :lib-decoder-ffmpeg:assembleRelease
+      - name: Collect output and sizes
+        run: |
+          mkdir -p out
+          AAR="$(find media -path '*decoder_ffmpeg*' -name '*release*.aar' | head -n 1)"
+          test -n "$AAR"
+          cp "$AAR" out/media3-decoder-ffmpeg-audio-${MEDIA3_VERSION}.aar
+          cp licence.txt decoders.txt out/
+          git -C media/libraries/decoder_ffmpeg/src/main/jni/ffmpeg log -1 --format='%H' > out/ffmpeg-commit.txt
+          unzip -l out/*.aar | awk '/\.so$/{printf "%8.2f MB  %s\n",$1/1048576,$4}' | tee out/sizes.txt
+          ls -l out
+          {
+            echo "### FFmpeg audio extension"
+            echo '```'; cat out/licence.txt; echo; cat out/sizes.txt; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: media3-decoder-ffmpeg-audio-${{ env.MEDIA3_VERSION }}
+          path: out/
+          retention-days: 90
