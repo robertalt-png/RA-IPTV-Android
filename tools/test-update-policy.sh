@@ -18,6 +18,10 @@ javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/core/XtreamUr
 java -cp "$classes" com.nenotv.player.core.CatchupUrlsTest
 javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/core/GuideSources.java tools/tests/GuideSourcesTest.java
 java -cp "$classes" com.nenotv.player.core.GuideSourcesTest
+javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/core/CatchupTemplate.java tools/tests/CatchupTemplateTest.java
+java -cp "$classes" com.nenotv.player.core.CatchupTemplateTest
+javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/model/MediaEntry.java android/app/src/main/java/com/robertalt/raiptv/core/M3uParser.java tools/tests/M3uCatchupTest.java
+java -cp "$classes" com.nenotv.player.core.M3uCatchupTest
 # UiText must stay under the JVM 64 KB method limit (one initialiser method per language).
 mkdir -p "$classes/uitext"
 python3 - "$classes/uitext/UiText.java" <<'PY'

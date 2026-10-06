@@ -14,6 +14,12 @@ public interface Provider {
     default List<String> catchupUrls(MediaEntry channel,long startEpoch,long endEpoch) throws Exception {
         if(channel==null||!channel.catchup)return Collections.emptyList();
         String live=channel.url!=null&&!channel.url.isEmpty()?channel.url:(channel.candidates.isEmpty()?"":channel.candidates.get(0));
+        // P3: an M3U catch-up template wins over guessing an Xtream address.
+        String kind=channel.catchupType==null?"":channel.catchupType.trim().toLowerCase(java.util.Locale.ROOT);
+        if(!kind.equals("xc")&&(!kind.isEmpty()&&!kind.equals("1")&&!kind.equals("true")||channel.catchupSource!=null&&!channel.catchupSource.isEmpty())){
+            String url=com.nenotv.player.core.CatchupTemplate.url(kind,channel.catchupSource,live,startEpoch,endEpoch,System.currentTimeMillis()/1000L,java.time.ZoneId.systemDefault());
+            if(!url.isEmpty())return Collections.singletonList(url);
+        }
         String[] x=com.nenotv.player.core.CatchupUrls.xtreamParts(live);if(x==null)return Collections.emptyList();
         return com.nenotv.player.core.CatchupUrls.xtream(x[0],x[1],x[2],x[3],startEpoch,endEpoch,XtreamServerZone.get(x[0],x[1],x[2]));
     }

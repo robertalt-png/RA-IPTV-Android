@@ -4,9 +4,13 @@ import java.io.Serializable;
 import java.util.ArrayList;
 
 public class MediaEntry implements Serializable {
+    /** Fixed so that stored reminders (ReminderStore) survive new fields in later versions. */
+    private static final long serialVersionUID = 1L;
     public String id="", streamId="", seriesId="", name="Untitled", logo="", backdrop="", categoryId="", type="live", rating="", year="", plot="", extension="", directSource="", url="", group="", tvgId="", tvgName="", seriesTitle="", tmdbId="", imdbId="", sourceId="", sourceName="";
     public int season=0, episode=0, catchupDays=0;
     public boolean catchup=false;
+    /** P3: M3U catch-up kind (default, append, shift, flussonic, xc) and catchup-source template. */
+    public String catchupType="", catchupSource="";
     public ArrayList<String> candidates = new ArrayList<>();
     public String uniqueKey(){
         String legacy=type+":"+(id.isEmpty()?url:id);
