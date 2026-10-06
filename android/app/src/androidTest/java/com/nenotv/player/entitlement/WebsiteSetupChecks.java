@@ -71,9 +71,12 @@ public final class WebsiteSetupChecks {
                     public SourceSyncClient sources(Context c){return new SourceSyncClient(c,new EntitlementClient(c,fixture.url()));}
                     public CatalogPackageClient catalog(Context c){return new CatalogPackageClient(c,fixture.url());}
                 };
-                job=WebsiteSetupJob.start(context,false);long end=android.os.SystemClock.elapsedRealtime()+30000;
+                // Android Keystore encryption is substantially slower on some hosted phone emulators.
+                job=WebsiteSetupJob.start(context,false);long started=android.os.SystemClock.elapsedRealtime(),end=started+120000;
                 while(android.os.SystemClock.elapsedRealtime()<end&&(job.state==WebsiteSetupJob.State.WAITING||job.state==WebsiteSetupJob.State.PREPARING||job.state==WebsiteSetupJob.State.IMPORTING))Thread.sleep(100);
-                check(job.state==(corrupt?WebsiteSetupJob.State.FAILED:WebsiteSetupJob.State.READY),"Website setup did not reach verified outcome: "+job.state);
+                check(job.state==(corrupt?WebsiteSetupJob.State.FAILED:WebsiteSetupJob.State.READY),"Website setup did not reach verified outcome: "+job.state
+                        +"; elapsed_ms="+(android.os.SystemClock.elapsedRealtime()-started)+"; pulls="+fixture.pulls
+                        +"; statuses="+fixture.statuses+"; downloads="+fixture.downloads);
                 try(SearchIndexStore index=new SearchIndexStore(context)){
                     String key=ProfileCacheKey.of(secure.load());
                     check(index.countSection(key,"live")== (corrupt?0:1000),"Website import exposed a partial or corrupt library");
