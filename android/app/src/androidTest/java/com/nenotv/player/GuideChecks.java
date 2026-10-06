@@ -69,8 +69,8 @@ final class GuideChecks {
             com.nenotv.player.model.MediaEntry ch = new com.nenotv.player.model.MediaEntry();
             ch.id = "42"; ch.streamId = "42"; ch.name = "NPO 1"; ch.sourceId = "second"; ch.catchup = true; ch.catchupDays = 7;
             EpgEntry prog = past.get(0);
-            com.nenotv.player.model.MediaEntry c = MainActivity.catchupEntry(ch, prog, Arrays.asList("http://p.invalid/timeshift/u/p/60/x/42.m3u8", "http://p.invalid/timeshift/u/p/60/x/42.ts"));
-            check("catchup".equals(c.type) && "second".equals(c.sourceId) && c.candidates.size() == 2 && c.url.endsWith(".m3u8") && !c.uniqueKey().equals(ch.uniqueKey()), "Catch-up item: " + c.type + " " + c.sourceId + " " + c.candidates);
+            com.nenotv.player.model.MediaEntry cu = MainActivity.catchupEntry(ch, prog, Arrays.asList("http://p.invalid/timeshift/u/p/60/x/42.m3u8", "http://p.invalid/timeshift/u/p/60/x/42.ts"));
+            check("catchup".equals(cu.type) && "second".equals(cu.sourceId) && cu.candidates.size() == 2 && cu.url.endsWith(".m3u8") && !cu.uniqueKey().equals(ch.uniqueKey()), "Catch-up item: " + cu.type + " " + cu.sourceId + " " + cu.candidates);
         } finally { db.forget(source); }
         check(db.entries(source, "NPO1.nl", 0, Long.MAX_VALUE, 10).isEmpty(), "Guide not removed");
     }
