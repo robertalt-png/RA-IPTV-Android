@@ -16,3 +16,14 @@ javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/core/GuideWin
 java -cp "$classes" com.nenotv.player.core.GuideWindowTest
 javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/core/XtreamUrls.java android/app/src/main/java/com/robertalt/raiptv/core/CatchupUrls.java tools/tests/CatchupUrlsTest.java
 java -cp "$classes" com.nenotv.player.core.CatchupUrlsTest
+# UiText must stay under the JVM 64 KB method limit (one initialiser method per language).
+mkdir -p "$classes/uitext"
+python3 - "$classes/uitext/UiText.java" <<'PY'
+import re, sys
+s = open('android/app/src/main/java/com/robertalt/raiptv/UiText.java', encoding='utf-8').read()
+s = re.sub(r'^import (android|com\.nenotv).*\n', '', s, flags=re.M)
+i = s.index('    public static String t(Context c')
+open(sys.argv[1], 'w', encoding='utf-8').write(s[:i] + '}')
+PY
+javac -d "$classes/uitext" "$classes/uitext/UiText.java"
+echo "UiText: compiles within the method size limit"

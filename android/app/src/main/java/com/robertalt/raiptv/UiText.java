@@ -9,7 +9,9 @@ import java.util.*;
 public final class UiText {
     private UiText(){}
     private static Map<String,String> map(String[][] rows){LinkedHashMap<String,String> m=new LinkedHashMap<>();for(String[] r:rows)m.put(r[0],r[1]);return Collections.unmodifiableMap(m);}
-    private static final Map<String,String> EN=map(new String[][]{
+    private static final Map<String,String> EN=en();
+    // One method per language: a single static initialiser for all languages exceeds the JVM 64 KB method limit.
+    private static Map<String,String> en(){return map(new String[][]{
         {"source_unavailable","This source is no longer available"},
         {"source_changed","This source changed. Please try again"},
         {"pair_by_phone","Link via phone"},
@@ -372,8 +374,10 @@ public final class UiText {
         {"err_network","No connection to your TV provider. Check your internet and try again."},
         {"err_provider","Your TV provider is not responding right now. Try again later."},
         {"err_insecure","Your TV provider redirects to an insecure address. This was blocked to protect your login."},
-    });
-    private static final Map<String,String> NL=map(new String[][]{
+    });}
+    private static final Map<String,String> NL=nl();
+    // One method per language: a single static initialiser for all languages exceeds the JVM 64 KB method limit.
+    private static Map<String,String> nl(){return map(new String[][]{
         {"source_unavailable","Deze bron is niet meer beschikbaar"},
         {"source_changed","Deze bron is gewijzigd. Probeer het opnieuw"},
         {"pair_by_phone","Koppelen via telefoon"},
@@ -736,8 +740,10 @@ public final class UiText {
         {"err_network","Geen verbinding met je tv-aanbieder. Controleer je internet en probeer het opnieuw."},
         {"err_provider","Je tv-aanbieder reageert nu niet. Probeer het later opnieuw."},
         {"err_insecure","Je tv-aanbieder stuurt door naar een onveilig adres. Dat is geblokkeerd om je inlog te beschermen."},
-    });
-    private static final Map<String,String> ES=map(new String[][]{
+    });}
+    private static final Map<String,String> ES=es();
+    // One method per language: a single static initialiser for all languages exceeds the JVM 64 KB method limit.
+    private static Map<String,String> es(){return map(new String[][]{
         {"season","Temporada"},
         {"all_seasons","Todas las temporadas"},
         {"remaining","restantes"},
@@ -1043,8 +1049,10 @@ public final class UiText {
         {"seconds","segundos"},
         {"profile_required","Configura primero una fuente de TV"},
         {"household_profiles","Perfiles de espectador"},
-    });
-    private static final Map<String,String> DE=map(new String[][]{
+    });}
+    private static final Map<String,String> DE=de();
+    // One method per language: a single static initialiser for all languages exceeds the JVM 64 KB method limit.
+    private static Map<String,String> de(){return map(new String[][]{
         {"source_unavailable","Diese Quelle ist nicht mehr verfügbar"},
         {"source_changed","Diese Quelle wurde geändert. Bitte erneut versuchen"},
         {"pair_by_phone","Per Telefon verbinden"},
@@ -1391,8 +1399,10 @@ public final class UiText {
         {"err_network","Keine Verbindung zu deinem TV-Anbieter. Prüfe dein Internet und versuche es erneut."},
         {"err_provider","Dein TV-Anbieter antwortet gerade nicht. Versuche es später erneut."},
         {"err_insecure","Dein TV-Anbieter leitet zu einer unsicheren Adresse weiter. Das wurde zum Schutz deiner Anmeldung blockiert."},
-    });
-    private static final Map<String,String> FR=map(new String[][]{
+    });}
+    private static final Map<String,String> FR=fr();
+    // One method per language: a single static initialiser for all languages exceeds the JVM 64 KB method limit.
+    private static Map<String,String> fr(){return map(new String[][]{
         {"season","Saison"},
         {"all_seasons","Toutes les saisons"},
         {"remaining","restantes"},
@@ -1698,8 +1708,10 @@ public final class UiText {
         {"seconds","secondes"},
         {"profile_required","Configurez d’abord une source TV"},
         {"household_profiles","Profils de spectateur"},
-    });
-    private static final Map<String,String> IT=map(new String[][]{
+    });}
+    private static final Map<String,String> IT=it();
+    // One method per language: a single static initialiser for all languages exceeds the JVM 64 KB method limit.
+    private static Map<String,String> it(){return map(new String[][]{
         {"season","Stagione"},
         {"all_seasons","Tutte le stagioni"},
         {"remaining","rimanenti"},
@@ -2005,8 +2017,10 @@ public final class UiText {
         {"seconds","secondi"},
         {"profile_required","Configura prima una sorgente TV"},
         {"household_profiles","Profili spettatore"},
-    });
-    private static final Map<String,String> PT=map(new String[][]{
+    });}
+    private static final Map<String,String> PT=pt();
+    // One method per language: a single static initialiser for all languages exceeds the JVM 64 KB method limit.
+    private static Map<String,String> pt(){return map(new String[][]{
         {"season","Temporada"},
         {"all_seasons","Todas as temporadas"},
         {"remaining","restantes"},
@@ -2312,8 +2326,10 @@ public final class UiText {
         {"seconds","segundos"},
         {"profile_required","Configure primeiro uma fonte de TV"},
         {"household_profiles","Perfis de espectador"},
-    });
-    private static final Map<String,String> TR=map(new String[][]{
+    });}
+    private static final Map<String,String> TR=tr();
+    // One method per language: a single static initialiser for all languages exceeds the JVM 64 KB method limit.
+    private static Map<String,String> tr(){return map(new String[][]{
         {"season","Sezon"},
         {"all_seasons","Tüm sezonlar"},
         {"remaining","kaldı"},
@@ -2619,8 +2635,10 @@ public final class UiText {
         {"seconds","saniye"},
         {"profile_required","Önce bir TV kaynağı ayarlayın"},
         {"household_profiles","İzleyici profilleri"},
-    });
-    private static final Map<String,String> PL=map(new String[][]{
+    });}
+    private static final Map<String,String> PL=pl();
+    // One method per language: a single static initialiser for all languages exceeds the JVM 64 KB method limit.
+    private static Map<String,String> pl(){return map(new String[][]{
         {"season","Sezon"},
         {"all_seasons","Wszystkie sezony"},
         {"remaining","pozostało"},
@@ -2926,8 +2944,10 @@ public final class UiText {
         {"seconds","sekund"},
         {"profile_required","Najpierw skonfiguruj źródło TV"},
         {"household_profiles","Profile widzów"},
-    });
-    private static final Map<String,String> AR=map(new String[][]{
+    });}
+    private static final Map<String,String> AR=ar();
+    // One method per language: a single static initialiser for all languages exceeds the JVM 64 KB method limit.
+    private static Map<String,String> ar(){return map(new String[][]{
         {"season","الموسم"},
         {"all_seasons","كل المواسم"},
         {"remaining","متبقية"},
@@ -3233,7 +3253,7 @@ public final class UiText {
         {"seconds","ثوانٍ"},
         {"profile_required","أعدّ مصدر التلفاز أولاً"},
         {"household_profiles","ملفات المشاهدين"},
-    });
+    });}
     public static String t(Context c,String key){return t(SettingsStore.language(c),key);}
     public static String t(String lang,String key){Map<String,String> m;switch(lang==null?"en":lang){case "nl":m=NL;break;case "es":m=ES;break;case "de":m=DE;break;case "fr":m=FR;break;case "it":m=IT;break;case "pt":m=PT;break;case "tr":m=TR;break;case "pl":m=PL;break;case "ar":m=AR;break;default:m=EN;}String v=m.get(key);if(v==null)v=EN.get(key);return v==null?key:v;}
     public static void applyDirection(Activity a){if(a==null)return;boolean rtl="ar".equals(SettingsStore.language(a));View v=a.getWindow().getDecorView();v.setLayoutDirection(rtl?View.LAYOUT_DIRECTION_RTL:View.LAYOUT_DIRECTION_LTR);v.setTextDirection(View.TEXT_DIRECTION_LOCALE);}

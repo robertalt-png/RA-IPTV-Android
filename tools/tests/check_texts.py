@@ -10,7 +10,8 @@ UITEXT = f'{ROOT}/app/src/main/java/com/robertalt/raiptv/UiText.java'
 REQUIRED = ('NL', 'EN')
 
 src = open(UITEXT, encoding='utf-8').read()
-starts = [(m.group(1), m.start()) for m in re.finditer(r'private static final Map<String,String> (\w+)=map', src)]
+# Each language is either 'XX=map(...)' or, since 0.14.27, a method 'xx(){return map(...)}'.
+starts = [(m.group(1).upper(), m.start()) for m in re.finditer(r'private static (?:final )?Map<String,String> (\w+)(?:=map|\(\)\{return map)', src)]
 maps = {}
 for i, (name, start) in enumerate(starts):
     end = starts[i + 1][1] if i + 1 < len(starts) else len(src)
