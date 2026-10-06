@@ -18,7 +18,11 @@ public final class WebsiteSetupActivity extends Activity {
     private TextView status;
     private TextView counter;
     private ProgressBar progress;
-    private Button retry;
+    private Button retry, website, manual;
+    private SunLoader sun;
+    private TextView tip;
+    private int tipIndex=-1;
+    private long tipShownAt;
     private boolean resumed, finished;
     private String language;
     private String t(String nl, String en, String de) { return "nl".equals(language) ? nl : "de".equals(language) ? de : en; }
@@ -37,13 +41,15 @@ public final class WebsiteSetupActivity extends Activity {
         LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setGravity(Gravity.CENTER_HORIZONTAL); box.setPadding(dp(20),dp(28),dp(20),dp(20)); scroll.addView(box);
         TextView title = new TextView(this); title.setText(t("Mijn SunnyIPTV","My SunnyIPTV","Mein SunnyIPTV")); title.setTextColor(0xFFF7F8FA); title.setTextSize(24); box.addView(title);
         status = new TextView(this); status.setTextColor(0xFFF7F8FA); status.setTextSize(18); status.setGravity(Gravity.CENTER); status.setPadding(0,dp(24),0,dp(24)); status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); box.addView(status,new LinearLayout.LayoutParams(-1,-2));
+        sun = new SunLoader(this); LinearLayout.LayoutParams sunSize=new LinearLayout.LayoutParams(dp(150),dp(150)); sunSize.bottomMargin=dp(20); box.addView(sun,sunSize);
         progress = new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal); progress.setMax(100); box.addView(progress,new LinearLayout.LayoutParams(-1,dp(16)));
         counter = new TextView(this); counter.setTextColor(0xFFF7F8FA); counter.setTextSize(16); counter.setGravity(Gravity.CENTER); counter.setMinHeight(dp(84)); counter.setPadding(0,dp(12),0,dp(12)); box.addView(counter,new LinearLayout.LayoutParams(-1,-2));
-        Button website = button(t("Vul je tv-aanbieder in","Enter your TV provider","TV-Anbieter eingeben")); website.setTextColor(0xFF07090D); website.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD600));
+        tip = new TextView(this); tip.setTextColor(0xFFFFD600); tip.setTextSize(17); tip.setGravity(Gravity.CENTER); tip.setMinHeight(dp(72)); tip.setPadding(dp(8),dp(16),dp(8),dp(8)); box.addView(tip,new LinearLayout.LayoutParams(-1,-2));
+        website = button(t("Vul je tv-aanbieder in","Enter your TV provider","TV-Anbieter eingeben")); website.setTextColor(0xFF07090D); website.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFFD600));
         website.setOnClickListener(v -> { try { startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(websiteUrl(this)))); } catch (Exception e) { status.setText(t("Open Mijn SunnyIPTV op je telefoon.","Open My SunnyIPTV on your phone.","Mein SunnyIPTV auf dem Handy oeffnen.")); } });
         LinearLayout.LayoutParams wide = new LinearLayout.LayoutParams(-1,-2); wide.topMargin=dp(24); box.addView(website,wide);
         retry = button(t("Opnieuw proberen","Retry","Erneut versuchen")); retry.setOnClickListener(v -> restart()); box.addView(retry,new LinearLayout.LayoutParams(-1,-2));
-        Button manual = button(t("Demo of invoeren op dit apparaat","Demo or enter on this device","Demo oder auf diesem Geraet eingeben")); manual.setOnClickListener(v -> startActivity(new Intent(this,ProfileActivity.class))); box.addView(manual,new LinearLayout.LayoutParams(-1,-2));
+        manual = button(t("Demo of invoeren op dit apparaat","Demo or enter on this device","Demo oder auf diesem Geraet eingeben")); manual.setOnClickListener(v -> startActivity(new Intent(this,ProfileActivity.class))); box.addView(manual,new LinearLayout.LayoutParams(-1,-2));
         setContentView(scroll); ScreenInsets.browsing(this); UiText.applyDirection(this); job = WebsiteSetupJob.start(this,false);
     }
     private void restart() {
@@ -58,6 +64,13 @@ public final class WebsiteSetupActivity extends Activity {
         WebsiteSetupJob.State s = job.state;
         if (!job.valid(WebsiteSetupActivity.this)) s=WebsiteSetupJob.State.FAILED;
         boolean busy=WebsiteSetupJob.busy(s);
+        // While the list is really loading the customer has nothing to choose: show the sun and tips instead of buttons.
+        boolean loading=busy && s!=WebsiteSetupJob.State.WAITING;
+        website.setVisibility(loading ? View.GONE : View.VISIBLE);
+        manual.setVisibility(loading ? View.GONE : View.VISIBLE);
+        sun.setVisibility(loading ? View.VISIBLE : View.GONE);
+        tip.setVisibility(loading ? View.VISIBLE : View.GONE);
+        if(loading){ sun.start(); showTip(); } else sun.stop();
         progress.setVisibility(busy ? View.VISIBLE : View.GONE);
         counter.setVisibility(busy ? View.VISIBLE : View.GONE);
         boolean measured=s==WebsiteSetupJob.State.DOWNLOADING || s==WebsiteSetupJob.State.IMPORTING;
@@ -96,8 +109,21 @@ public final class WebsiteSetupActivity extends Activity {
         }
         handler.postDelayed(this,750);
     }};
+    private String[] tips(){return new String[]{
+            t("Tip: zoek in één keer in zenders, films en series.","Tip: search channels, movies and series in one go.","Tipp: Sender, Filme und Serien in einem Schritt durchsuchen."),
+            t("Tip: met het familiefilter bepaal jij wat de kinderen zien. Gratis.","Tip: the family filter lets you decide what the children see. Free.","Tipp: Mit dem Familienfilter bestimmst du, was die Kinder sehen. Kostenlos."),
+            t("Tip: tik op het hartje om iets aan je favorieten toe te voegen.","Tip: tap the heart to add something to your favourites.","Tipp: Tippe auf das Herz, um etwas zu deinen Favoriten hinzuzufügen."),
+            t("Tip: films en series gaan verder waar je gebleven was.","Tip: movies and series continue where you left off.","Tipp: Filme und Serien laufen dort weiter, wo du aufgehört hast."),
+            t("Tip: je eigen taal staat bovenaan in de lijst.","Tip: your own language is at the top of the list.","Tipp: Deine eigene Sprache steht oben in der Liste."),
+            t("Tip: in Mijn SunnyIPTV zie je je apparaten en je account.","Tip: My SunnyIPTV shows your devices and your account.","Tipp: In Mein SunnyIPTV siehst du deine Geräte und dein Konto.")};}
+    private void showTip(){
+        long now=SystemClock.elapsedRealtime();
+        if(tipIndex>=0 && now-tipShownAt<6000) return;
+        String[] all=tips(); tipIndex=(tipIndex+1)%all.length; tipShownAt=now;
+        tip.setAlpha(0f); tip.setText(all[tipIndex]); tip.animate().alpha(1f).setDuration(400).start();
+    }
     private static String duration(long millis){long seconds=Math.max(0,millis)/1000;return String.format(java.util.Locale.ROOT,"%d:%02d",seconds/60,seconds%60);}
     @Override protected void onResume() { super.onResume(); resumed=true; handler.post(tick); }
-    @Override protected void onPause() { resumed=false; handler.removeCallbacks(tick); super.onPause(); }
+    @Override protected void onPause() { resumed=false; handler.removeCallbacks(tick); if(sun!=null)sun.stop(); super.onPause(); }
     @Override protected void onDestroy() { handler.removeCallbacksAndMessages(null); super.onDestroy(); }
 }

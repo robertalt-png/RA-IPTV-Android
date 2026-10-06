@@ -34,7 +34,7 @@ public final class SettingsStore {
     public static boolean autoplay(Context c){return prefs(c).getBoolean("autoplay_next",true);}
     public static int bufferMs(Context c){String b=buffer(c);return "max".equals(b)?5000:"normal".equals(b)?1200:2500;}
     public static String sort(Context c){return prefs(c).getString("sort","provider");}
-    public static String startScreen(Context c){return prefs(c).getString("start_screen","home");}
+    public static String startScreen(Context c){return prefs(c).getString("start_screen","live");}
     public static String lastSection(Context c){return prefs(c).getString("last_section","home");}
     public static void setLastSection(Context c,String s){if(s!=null&&!s.isEmpty())prefs(c).edit().putString("last_section",s).apply();}
     public static boolean parental(Context c){return prefs(c).getBoolean("parental_enabled",false);}
