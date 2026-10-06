@@ -105,7 +105,7 @@ final class GuideChecks {
         GuideDatabase db = GuideDatabase.get(c);
         long now = System.currentTimeMillis() / 1000L;
         String fullSource = GuideDatabase.sourceKey(full), emptySource = GuideDatabase.sourceKey(empty);
-        db.importXmltv(emptySource, new ByteArrayInputStream("<tv><channel id=\"other\"><display-name>Other</display-name></channel><programme start=\"" + t(now - 600) + "\" stop=\"" + t(now + 600) + "\" channel=\"other\"><title>Other show</title></programme></tv>".getBytes(StandardCharsets.UTF_8)), now, GuideRefresher.backSeconds(true), GuideRefresher.aheadSeconds(true), "nl");
+        db.importXmltv(emptySource, new ByteArrayInputStream(("<tv><channel id=\"other\"><display-name>Other</display-name></channel><programme start=\"" + t(now - 600) + "\" stop=\"" + t(now + 600) + "\" channel=\"other\"><title>Other show</title></programme></tv>").getBytes(StandardCharsets.UTF_8)), now, GuideRefresher.backSeconds(true), GuideRefresher.aheadSeconds(true), "nl");
         db.importXmltv(fullSource, new ByteArrayInputStream(xml(now).getBytes(StandardCharsets.UTF_8)), now, GuideRefresher.backSeconds(true), GuideRefresher.aheadSeconds(true), "nl");
         com.nenotv.player.provider.Provider two = new com.nenotv.player.provider.Provider() {
             public void authenticate() {}
