@@ -94,34 +94,29 @@ public final class UiInstrumentation extends ImportInstrumentation {
         ExtraPrivacyChecks.run(c);
         SharedPreferences prefs=c.getSharedPreferences(com.nenotv.player.storage.ExtraPrivacyStore.PREFS,Context.MODE_PRIVATE);
         Map<String,?> previous=new HashMap<>(prefs.getAll());
-        String previousLanguage=SettingsStore.language(c);
+        SharedPreferences family=c.getSharedPreferences("sunnyiptv_family_v1",Context.MODE_PRIVATE);
+        Map<String,?> oldFamily=new HashMap<>(family.getAll());
+        SharedPreferences settings=c.getSharedPreferences("nenotv_settings",Context.MODE_PRIVATE);
+        Map<String,?> oldSettings=new HashMap<>(settings.getAll());
         SharedPreferences entitlement=c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE);
         Map<String,?> oldEntitlement=new HashMap<>(entitlement.getAll());
         try{
             entitlement.edit().putString("level","PRO").putLong("expires_at",0L).commit();
-            for(String language:new String[]{"nl","en","de"}){
-                SettingsStore.setPrimaryLanguage(c,language);
-                AgePrivacyActivity screen=(AgePrivacyActivity)startActivitySync(new Intent(c,AgePrivacyActivity.class).putExtra("settings",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                try{waitForIdleSync();runOnMainSync(()->{
-                    for(String group:new String[]{"under_13","13_plus","unknown"}){
-                        Button button=screen.box.findViewWithTag("age_"+group);
-                        check(button!=null&&button.isEnabled()&&button.hasOnClickListeners(),"Missing age choice "+group);
-                        assertUnclippedText(button);
-                    }
-                });snapshot("age-privacy-"+language);
-                runOnMainSync(()->screen.choose("unknown"));
-                check(com.nenotv.player.storage.ExtraPrivacyStore.answered(c)&&!com.nenotv.player.storage.ExtraPrivacyStore.allowsSdk(c),"Unknown age enables SDKs");
-                }finally{runOnMainSync(screen::finish);waitForIdleSync();}
-            }
-            InfoTranslator.init(c);
-            for(String group:new String[]{"under_13","unknown"}){
+            family.edit().clear().commit();
+            // No age question any more (13+ audience): only the family filter restricts Google services.
+            for(String group:new String[]{"unknown","under_13","13_plus"}){
                 com.nenotv.player.storage.ExtraPrivacyStore.choose(c,group);
-                java.util.concurrent.atomic.AtomicReference<String> translated=new java.util.concurrent.atomic.AtomicReference<>();
-                InfoTranslator.translate("Original text","nl",translated::set);
-                check("Original text".equals(translated.get()),"Restricted translation started instead of original text");
-                check(prefs.getAll().size()==2,"Age choice stored extra personal data");
+                check(com.nenotv.player.storage.ExtraPrivacyStore.allowsSdk(c),"Google services blocked without family filter: "+group);
+                check(prefs.getAll().size()==2,"Privacy store kept extra personal data");
             }
-        }finally{FamilyChecks.restore(prefs,previous);FamilyChecks.restore(entitlement,oldEntitlement);SettingsStore.setPrimaryLanguage(c,previousLanguage);}
+            SettingsStore.setParentalPin(c,"2468");
+            check(FamilyStore.setActive(c,true,"2468"),"Family filter could not be enabled");
+            check(!com.nenotv.player.storage.ExtraPrivacyStore.allowsSdk(c),"Family filter enables Google services");
+            InfoTranslator.init(c);
+            java.util.concurrent.atomic.AtomicReference<String> translated=new java.util.concurrent.atomic.AtomicReference<>();
+            InfoTranslator.translate("Original text","nl",translated::set);
+            check("Original text".equals(translated.get()),"Restricted translation started instead of original text");
+        }finally{FamilyChecks.restore(prefs,previous);FamilyChecks.restore(family,oldFamily);FamilyChecks.restore(settings,oldSettings);FamilyChecks.restore(entitlement,oldEntitlement);}
     }
     void privacyAccess()throws Exception{
         agePrivacyAccess();

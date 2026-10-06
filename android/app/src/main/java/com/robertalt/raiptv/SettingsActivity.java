@@ -74,7 +74,6 @@ public class SettingsActivity extends Activity {
                 break;
             case ACCOUNT:
                 g.add("👤", T("account_and_pro"), text("Status, Pro en dit apparaat", "Status, Pro and this device", "Status, Pro und dieses Gerät"), false, v -> startActivity(new Intent(this, AccountActivity.class)));
-                g.add("🎂", text("Leeftijdsgroep", "Age group", "Altersgruppe"), text("Bepaalt welke extra diensten mogen", "Decides which extra services may be used", "Bestimmt, welche Zusatzdienste erlaubt sind"), false, v -> startActivity(new Intent(this, AgePrivacyActivity.class).putExtra("settings", true)));
                 g.add("🚪", text("Uitloggen", "Sign out", "Abmelden"), "", false, v -> signOut());
                 g.finish();
                 break;
