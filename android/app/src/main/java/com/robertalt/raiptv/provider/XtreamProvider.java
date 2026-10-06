@@ -246,6 +246,7 @@ public class XtreamProvider implements Provider {
         if(channel==null||!channel.catchup||channel.streamId==null||channel.streamId.isEmpty())return Collections.emptyList();
         return com.nenotv.player.core.CatchupUrls.xtream(p.server,p.username,p.password,channel.streamId,startEpoch,endEpoch,XtreamServerZone.get(p.server,p.username,p.password));
     }
+    @Override public List<String> guideUrls(){return com.nenotv.player.core.GuideSources.merge(Collections.singletonList(guideUrl()),Collections.singletonList(p.epgUrl==null?"":p.epgUrl));}
     @Override public String guideUrl(){if(p.server==null||p.server.trim().isEmpty()||p.username==null||p.username.isEmpty())return "";return XtreamUrls.base(p.server)+"/xmltv.php?username="+XtreamUrls.enc(p.username)+"&password="+XtreamUrls.enc(p.password);}
 
     @Override public List<EpgEntry> epgEntries(MediaEntry item,int limit)throws Exception{

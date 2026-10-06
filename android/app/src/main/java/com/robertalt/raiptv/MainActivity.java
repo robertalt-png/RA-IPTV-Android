@@ -631,17 +631,25 @@ void scheduleBackgroundIndex(){
     }
     /** G4: programmes in the stored guide whose title matches, paired with the playlist channel they are on. */
     List<Object[]> guideHits(String query){
-        Provider p=provider;if(p==null)return Collections.emptyList();String url=p.guideUrl();if(url==null||url.trim().isEmpty())return Collections.emptyList();
+        Provider p=provider;if(p==null)return Collections.emptyList();
+        List<String> sources=epgStore.guideSources(p,null);if(sources.isEmpty())return Collections.emptyList();
         boolean pro=new EntitlementStore(this).isPro();long now=System.currentTimeMillis()/1000L;
-        GuideDatabase db=GuideDatabase.get(this);String src=GuideDatabase.sourceKey(url.trim());
-        List<GuideDatabase.Hit> hits=db.search(src,query,now-GuideRefresher.backSeconds(pro),now,200);if(hits.isEmpty())return Collections.emptyList();
-        Map<String,MediaEntry> channels=guideChannels();HashMap<String,MediaEntry> resolved=new HashMap<>();List<Object[]> out=new ArrayList<>();
-        for(GuideDatabase.Hit h:hits){
-            if(!resolved.containsKey(h.channel)){MediaEntry found=null;for(String k:db.keysOf(src,h.channel)){found=channels.get(k);if(found!=null)break;}resolved.put(h.channel,found);}
-            MediaEntry ch=resolved.get(h.channel);if(ch==null||isAdultLocked(ch))continue;
-            out.add(new Object[]{ch,h.entry});if(out.size()>=100)break;
+        GuideDatabase db=GuideDatabase.get(this);Map<String,MediaEntry> channels=null;
+        LinkedHashMap<String,Object[]> merged=new LinkedHashMap<>();
+        for(String url:sources){
+            String src=GuideDatabase.sourceKey(url.trim());
+            List<GuideDatabase.Hit> hits=db.search(src,query,now-GuideRefresher.backSeconds(pro),now,200);if(hits.isEmpty())continue;
+            if(channels==null)channels=guideChannels();HashMap<String,MediaEntry> resolved=new HashMap<>();
+            for(GuideDatabase.Hit h:hits){
+                if(!resolved.containsKey(h.channel)){MediaEntry found=null;for(String k:db.keysOf(src,h.channel)){found=channels.get(k);if(found!=null)break;}resolved.put(h.channel,found);}
+                MediaEntry ch=resolved.get(h.channel);if(ch==null||isAdultLocked(ch))continue;
+                merged.putIfAbsent(ch.uniqueKey()+"|"+h.entry.startEpoch,new Object[]{ch,h.entry});
+            }
         }
-        return out;
+        List<Object[]> out=new ArrayList<>(merged.values());final String q=query.trim().toLowerCase(Locale.ROOT);
+        out.sort((x,y)->{EpgEntry a=(EpgEntry)x[1],b=(EpgEntry)y[1];int pa=a.title.toLowerCase(Locale.ROOT).startsWith(q)?0:1,pb=b.title.toLowerCase(Locale.ROOT).startsWith(q)?0:1;if(pa!=pb)return pa-pb;
+            boolean ua=a.endEpoch>now,ub=b.endEpoch>now;if(ua!=ub)return ua?-1:1;return ua?Long.compare(a.startEpoch,b.startEpoch):Long.compare(b.startEpoch,a.startEpoch);});
+        return out.size()>100?new ArrayList<>(out.subList(0,100)):out;
     }
     void setGuideHits(List<Object[]> hits){
         guideHitChannels=new ArrayList<>();guideHitEntries=new ArrayList<>();

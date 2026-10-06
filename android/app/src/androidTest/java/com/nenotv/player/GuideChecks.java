@@ -95,6 +95,31 @@ final class GuideChecks {
             check(!com.nenotv.player.storage.ReminderStore.has(c, ch, later.startEpoch), "Reminder not removed");
         } finally { db.forget(source); }
         check(db.entries(source, "NPO1.nl", 0, Long.MAX_VALUE, 10).isEmpty(), "Guide not removed");
+        multipleSources(c);
+    }
+
+    /** G6: a channel missing from the first guide is found in the next guide of the same source. */
+    static void multipleSources(Context c) throws Exception {
+        String id = UUID.randomUUID().toString();
+        final String empty = "https://qa.invalid/empty-" + id, full = "https://qa.invalid/full-" + id;
+        GuideDatabase db = GuideDatabase.get(c);
+        long now = System.currentTimeMillis() / 1000L;
+        String fullSource = GuideDatabase.sourceKey(full), emptySource = GuideDatabase.sourceKey(empty);
+        db.importXmltv(emptySource, new ByteArrayInputStream("<tv><channel id=\"other\"><display-name>Other</display-name></channel><programme start=\"" + t(now - 600) + "\" stop=\"" + t(now + 600) + "\" channel=\"other\"><title>Other show</title></programme></tv>".getBytes(StandardCharsets.UTF_8)), now, GuideRefresher.backSeconds(true), GuideRefresher.aheadSeconds(true), "nl");
+        db.importXmltv(fullSource, new ByteArrayInputStream(xml(now).getBytes(StandardCharsets.UTF_8)), now, GuideRefresher.backSeconds(true), GuideRefresher.aheadSeconds(true), "nl");
+        com.nenotv.player.provider.Provider two = new com.nenotv.player.provider.Provider() {
+            public void authenticate() {}
+            public List<com.nenotv.player.model.Category> categories(String type) { return Collections.emptyList(); }
+            public List<com.nenotv.player.model.MediaEntry> items(String type, String category) { return Collections.emptyList(); }
+            public List<String> guideUrls() { return Arrays.asList(empty, full); }
+        };
+        com.nenotv.player.model.MediaEntry ch = new com.nenotv.player.model.MediaEntry();
+        ch.name = "NL: NPO 1 HD"; ch.tvgName = "NL: NPO 1 HD";
+        try (com.nenotv.player.storage.EpgStore store = new com.nenotv.player.storage.EpgStore(c)) {
+            check(store.guideSources(two, ch).equals(Arrays.asList(empty, full)), "Guide sources order");
+            List<EpgEntry> w = store.guideWindow(two, ch, now - 2 * GuideDatabase.DAY - 1800, now - 2 * GuideDatabase.DAY + 5400, "nl");
+            check(w.size() == 1 && "Twee dagen geleden".equals(w.get(0).title), "Second guide not used: " + titles(w));
+        } finally { db.forget(fullSource); db.forget(emptySource); }
     }
 
     static List<String> titles(List<EpgEntry> rows) { List<String> o = new ArrayList<>(); for (EpgEntry e : rows) o.add(e.title); return o; }

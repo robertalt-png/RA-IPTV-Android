@@ -8,6 +8,8 @@ public interface Provider {
     default List<EpgEntry> epgEntries(MediaEntry item,int limit) throws Exception { return Collections.emptyList(); }
     /** Address of the complete XMLTV guide of this source for the G1 guide database, or "" when there is none. */
     default String guideUrl() { return ""; }
+    /** G6: every XMLTV guide of this source, most trusted first (the panel's own guide, then a guide the user entered). */
+    default List<String> guideUrls() { return com.nenotv.player.core.GuideSources.split(guideUrl()); }
     /** G3: addresses that replay a past programme of this live channel, best first; empty when the source has no catch-up. */
     default List<String> catchupUrls(MediaEntry channel,long startEpoch,long endEpoch) throws Exception {
         if(channel==null||!channel.catchup)return Collections.emptyList();
