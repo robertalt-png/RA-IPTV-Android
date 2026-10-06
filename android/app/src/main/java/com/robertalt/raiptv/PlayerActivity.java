@@ -20,7 +20,7 @@ import java.util.*;
 public class PlayerActivity extends FragmentActivity {
     PlayerView media3View; ExoPlayer exo; MediaEntry entry; LibraryStore library;
     TextView title,status,timeText; Button playPause,rewind,forward,audio,subtitle,pip,speed,aspect,sleep,record,favorite,castButton,channelPrev,channelNext;
-    SeekBar seek; FrameLayout controls; Handler ui=new Handler(Looper.getMainLooper()); boolean userSeeking=false,destroyed=false; int aspectMode=0; float playbackSpeed=1f;
+    SeekBar seek; FrameLayout controls; Handler ui=new Handler(Looper.getMainLooper()); boolean userSeeking=false,destroyed=false; int aspectMode=0; float playbackSpeed=1f; ArrayList<String> streamUrls=new ArrayList<>(); int streamIndex=0; boolean resumeOnStart=false; long lastProgressSave=0;
     String T(String k){return UiText.t(this,k);}
     com.nenotv.player.provider.PlaybackSourceRoute playbackRoute;
     Runnable tick=new Runnable(){public void run(){if(destroyed||isFinishing())return;if(!FamilyStore.allowed(PlayerActivity.this,entry)||playbackRoute==null||!playbackRoute.isCurrent(false)){if(exo!=null){exo.release();exo=null;}Toast.makeText(PlayerActivity.this,T("source_unavailable"),Toast.LENGTH_LONG).show();finish();return;}updateProgress();ui.postDelayed(this,500);}};
@@ -65,7 +65,7 @@ public class PlayerActivity extends FragmentActivity {
         media3View.setUseController(false);
         media3View.setOnClickListener(v->touchControls());
         controls.setOnClickListener(v->touchControls());
-        ScreenInsets.player(this);rewind.setText("−10 s");forward.setText("+10 s");rewind.setContentDescription("−10 "+T("seconds"));forward.setContentDescription("+10 "+T("seconds"));wire();startPlayer();ui.post(tick);showControls();
+        ScreenInsets.player(this);rewind.setText("−10 s");forward.setText("+10 s");rewind.setContentDescription("−10 "+T("seconds"));forward.setContentDescription("+10 "+T("seconds"));updateAspectLabel();wire();startPlayer();ui.post(tick);showControls();
     }
 
     void wire(){
@@ -80,21 +80,45 @@ public class PlayerActivity extends FragmentActivity {
     void startPlayer(){
         if(!FamilyStore.allowed(this,entry)){FamilyUi.blocked(this);finish();return;}
         try{playbackRoute=com.nenotv.player.provider.PlaybackSourceRoute.resolve(this,entry,false);}
-        catch(Exception unavailable){status.setText(T("source_unavailable"));finish();return;}
+        catch(Exception unavailable){Toast.makeText(this,T("source_unavailable"),Toast.LENGTH_LONG).show();finish();return;}
         ArrayList<String> urls=new ArrayList<>(entry.candidates);if(urls.isEmpty()&&entry.url!=null&&!entry.url.isEmpty())urls.add(entry.url);if(urls.isEmpty()){status.setText(T("no_stream_url"));return;}
-        exo=new ExoPlayer.Builder(this).setMediaSourceFactory(DemoSource.mediaSourceFactory(this,entry)).build();media3View.setPlayer(exo);exo.setMediaItem(MediaItem.fromUri(urls.get(0)));long resume=library.progress(entry);exo.prepare();if(resume>10000&&!"live".equals(entry.type))exo.seekTo(resume);exo.play();status.setText("Media3 · "+T("playing"));
-        exo.addListener(new Player.Listener(){@Override public void onPlaybackStateChanged(int state){if(state==Player.STATE_READY){status.setText("Media3 · "+T("playing"));scheduleControlsHide();}else if(state==Player.STATE_ENDED){library.markWatched(entry);finish();}}@Override public void onIsPlayingChanged(boolean playing){if(playing)scheduleControlsHide();else{cancelControlsHide();showControls();}}@Override public void onPlayerError(PlaybackException e){cancelControlsHide();showControls();status.setText(T("error_prefix")+": "+e.getErrorCodeName());}});
+        exo=new ExoPlayer.Builder(this).setMediaSourceFactory(DemoSource.mediaSourceFactory(this,entry)).build();applyLanguagePreferences();media3View.setPlayer(exo);streamUrls=urls;streamIndex=0;exo.setMediaItem(MediaItem.fromUri(urls.get(0)));long resume=library.progress(entry);exo.prepare();if(resume>10000&&!"live".equals(entry.type))exo.seekTo(resume);exo.play();status.setText(T("playing"));
+        exo.addListener(new Player.Listener(){@Override public void onPlaybackStateChanged(int state){if(state==Player.STATE_READY){status.setText(T("playing"));scheduleControlsHide();}else if(state==Player.STATE_ENDED){library.markWatched(entry);finish();}}@Override public void onIsPlayingChanged(boolean playing){if(playing)scheduleControlsHide();else{cancelControlsHide();showControls();}}@Override public void onPlayerError(PlaybackException e){if(tryNextStream())return;cancelControlsHide();showControls();status.setText(friendlyError(e));}});
         updatePlayIcon();
     }
 
-    void updateProgress(){if(exo==null)return;long pos=Math.max(0,exo.getCurrentPosition()),dur=Math.max(0,exo.getDuration());if(!userSeeking&&dur>0)seek.setProgress((int)Math.min(1000,pos*1000/dur));timeText.setText(fmt(pos)+(dur>0?" / "+fmt(dur):""));if(entry!=null&&!"live".equals(entry.type)&&pos>5000)library.saveProgress(entry,pos,dur);updatePlayIcon();}
+    void updateProgress(){if(exo==null)return;long pos=Math.max(0,exo.getCurrentPosition()),dur=Math.max(0,exo.getDuration());if(!userSeeking&&dur>0)seek.setProgress((int)Math.min(1000,pos*1000/dur));timeText.setText(fmt(pos)+(dur>0?" / "+fmt(dur):""));long now=SystemClock.elapsedRealtime();if(entry!=null&&!"live".equals(entry.type)&&pos>5000&&now-lastProgressSave>=10000){lastProgressSave=now;library.saveProgress(entry,pos,dur);}updatePlayIcon();}
     String fmt(long ms){long s=Math.max(0,ms/1000),m=s/60,h=m/60;return h>0?String.format(Locale.ROOT,"%d:%02d:%02d",h,m%60,s%60):String.format(Locale.ROOT,"%02d:%02d",m,s%60);}
     void updatePlayIcon(){if(playPause!=null)playPause.setText(exo!=null&&exo.isPlaying()?"❚❚":"▶");}
     void updateFavorite(){if(favorite!=null&&entry!=null)favorite.setText(library.isFavorite(entry)?"♥":"♡");}
     void showSpeed(){final float[] r={.75f,1f,1.25f,1.5f,2f};String[] l={"0.75×","1.0×","1.25×","1.5×","2.0×"};new AlertDialog.Builder(this).setTitle(T("speed_title")).setItems(l,(d,w)->{playbackSpeed=r[w];if(exo!=null)exo.setPlaybackSpeed(playbackSpeed);speed.setText(l[w]);}).show();}
-    void cycleAspect(){aspectMode=(aspectMode+1)%3;media3View.setResizeMode(aspectMode==0?AspectRatioFrameLayout.RESIZE_MODE_FIT:aspectMode==1?AspectRatioFrameLayout.RESIZE_MODE_FILL:AspectRatioFrameLayout.RESIZE_MODE_ZOOM);}
+    void cycleAspect(){aspectMode=(aspectMode+1)%3;media3View.setResizeMode(aspectMode==0?AspectRatioFrameLayout.RESIZE_MODE_FIT:aspectMode==1?AspectRatioFrameLayout.RESIZE_MODE_FILL:AspectRatioFrameLayout.RESIZE_MODE_ZOOM);updateAspectLabel();}
+    void updateAspectLabel(){if(aspect!=null)aspect.setText(T("aspect")+": "+T(aspectMode==0?"fit":aspectMode==1?"fill":"zoom"));}
+    /** Same language rules as the Pro player: audio and subtitles follow the viewer's chosen languages. */
+    void applyLanguagePreferences(){if(exo==null)return;TrackSelectionParameters.Builder ts=exo.getTrackSelectionParameters().buildUpon();String[] ac=SettingsStore.audioLanguageCodes(this),sc=SettingsStore.subtitleLanguageCodes(this);if(ac.length>0)ts.setPreferredAudioLanguages(ac);if("off".equals(SettingsStore.subtitles(this)))ts.setTrackTypeDisabled(C.TRACK_TYPE_TEXT,true);else{ts.setTrackTypeDisabled(C.TRACK_TYPE_TEXT,false);if(sc.length>0)ts.setPreferredTextLanguages(sc);}exo.setTrackSelectionParameters(ts.build());}
+    /** A channel often has several stream addresses (e.g. .m3u8 and .ts); try the next one before showing an error. */
+    boolean tryNextStream(){if(exo==null||streamIndex+1>=streamUrls.size())return false;streamIndex++;exo.setMediaItem(MediaItem.fromUri(streamUrls.get(streamIndex)));exo.prepare();exo.play();return true;}
+    String friendlyError(PlaybackException e){int c=e.errorCode;if(c==PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS||c==PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND)return T("play_err_unavailable");if(c>=2000&&c<3000)return T("play_err_network");if(c>=3000&&c<5000)return T("play_err_format");return T("play_err_generic");}
     void showTracks(int type){if(exo==null)return;Tracks tr=exo.getCurrentTracks();ArrayList<String> names=new ArrayList<>();ArrayList<TrackSelectionOverride> picks=new ArrayList<>();for(Tracks.Group g:tr.getGroups()){if(g.getType()!=type)continue;for(int i=0;i<g.length;i++){Format f=g.getTrackFormat(i);String n=f.label!=null?f.label:(f.language!=null?SettingsStore.displayLanguage(this,f.language):T(type==C.TRACK_TYPE_AUDIO?"audio":"subtitles"));names.add(n);picks.add(new TrackSelectionOverride(g.getMediaTrackGroup(),Collections.singletonList(i)));}}if(names.isEmpty()){Toast.makeText(this,type==C.TRACK_TYPE_AUDIO?T("no_audio_tracks"):T("no_subtitles"),Toast.LENGTH_SHORT).show();return;}new AlertDialog.Builder(this).setTitle(type==C.TRACK_TYPE_AUDIO?T("audio_track"):T("subtitles")).setItems(names.toArray(new String[0]),(d,w)->{TrackSelectionParameters.Builder pb=exo.getTrackSelectionParameters().buildUpon();pb.setOverrideForType(picks.get(w));exo.setTrackSelectionParameters(pb.build());}).show();}
-    @Override protected void onStop(){super.onStop();if(entry!=null&&exo!=null&&!"live".equals(entry.type))library.saveProgress(entry,Math.max(0,exo.getCurrentPosition()),Math.max(0,exo.getDuration()),true);}
+    @Override protected void onStop(){super.onStop();if(entry!=null&&exo!=null&&!"live".equals(entry.type))library.saveProgress(entry,Math.max(0,exo.getCurrentPosition()),Math.max(0,exo.getDuration()),true);
+        // Stop sound and data when the viewer leaves the player (Home button, other app).
+        if(exo!=null){resumeOnStart=exo.getPlayWhenReady();exo.pause();}ui.removeCallbacks(tick);}
+    @Override protected void onStart(){super.onStart();if(exo!=null&&resumeOnStart){resumeOnStart=false;if(entry!=null&&"live".equals(entry.type))exo.seekToDefaultPosition();exo.play();}if(exo!=null&&!destroyed){ui.removeCallbacks(tick);ui.post(tick);}}
+    /** Remote control: the first press shows the controls, media keys work directly. */
+    @Override public boolean dispatchKeyEvent(KeyEvent event){
+        int k=event.getKeyCode();
+        if(event.getAction()==KeyEvent.ACTION_DOWN){
+            if(exo!=null&&(k==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE||k==KeyEvent.KEYCODE_HEADSETHOOK)){if(exo.isPlaying())exo.pause();else exo.play();updatePlayIcon();showControls();return true;}
+            if(exo!=null&&k==KeyEvent.KEYCODE_MEDIA_PLAY){exo.play();updatePlayIcon();showControls();return true;}
+            if(exo!=null&&k==KeyEvent.KEYCODE_MEDIA_PAUSE){exo.pause();updatePlayIcon();showControls();return true;}
+            if(exo!=null&&k==KeyEvent.KEYCODE_MEDIA_FAST_FORWARD){forward.performClick();return true;}
+            if(exo!=null&&k==KeyEvent.KEYCODE_MEDIA_REWIND){rewind.performClick();return true;}
+            boolean dpad=k==KeyEvent.KEYCODE_DPAD_CENTER||k==KeyEvent.KEYCODE_ENTER||k==KeyEvent.KEYCODE_DPAD_UP||k==KeyEvent.KEYCODE_DPAD_DOWN||k==KeyEvent.KEYCODE_DPAD_LEFT||k==KeyEvent.KEYCODE_DPAD_RIGHT;
+            if(dpad&&controls!=null&&controls.getVisibility()!=View.VISIBLE){showControls();playPause.requestFocus();return true;}
+            if(dpad)showControls();
+        }
+        return super.dispatchKeyEvent(event);
+    }
     @Override public void onWindowFocusChanged(boolean focus){super.onWindowFocusChanged(focus);if(focus)ScreenInsets.player(this);}
     @Override protected void onDestroy(){destroyed=true;ui.removeCallbacksAndMessages(null);demoHandler.removeCallbacksAndMessages(null);if(exo!=null){exo.release();exo=null;}super.onDestroy();}
 }

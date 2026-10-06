@@ -357,6 +357,10 @@ public final class UiText {
         {"pro_benefit_search","Search channels, movies and series all at once."},
         {"search_everywhere_pro","Found: %s. Searching everything at once is Pro. Search for free within Live, Movies or Series."},
         {"trial_badge","TRIAL"},
+        {"play_err_network","No connection to the stream. Check your internet and try again."},
+        {"play_err_unavailable","This channel or title is not available from your provider right now."},
+        {"play_err_format","This stream cannot be played on this device."},
+        {"play_err_generic","Playback is not working right now. Try again in a moment."},
     });
     private static final Map<String,String> NL=map(new String[][]{
         {"source_unavailable","Deze bron is niet meer beschikbaar"},
@@ -636,7 +640,7 @@ public final class UiText {
         {"speed_title","Afspeelsnelheid"},
         {"speed_label","Snelheid"},
         {"aspect","Beeld"},
-        {"fit","fit"},
+        {"fit","passend"},
         {"fill","vul"},
         {"zoom","zoom"},
         {"sleep_timer","Sleeptimer"},
@@ -706,6 +710,10 @@ public final class UiText {
         {"pro_benefit_search","Zoek in één keer in zenders, films en series."},
         {"search_everywhere_pro","Gevonden: %s. Overal tegelijk zoeken is Pro. Zoek gratis binnen Live, Films of Series."},
         {"trial_badge","PROEF"},
+        {"play_err_network","Geen verbinding met de stream. Controleer je internet en probeer het opnieuw."},
+        {"play_err_unavailable","Deze zender of titel is nu niet beschikbaar bij je aanbieder."},
+        {"play_err_format","Deze stream kan op dit apparaat niet worden afgespeeld."},
+        {"play_err_generic","Afspelen lukt nu niet. Probeer het zo opnieuw."},
     });
     private static final Map<String,String> ES=map(new String[][]{
         {"season","Temporada"},
@@ -1337,6 +1345,10 @@ public final class UiText {
         {"pro_benefit_search","Sender, Filme und Serien in einem Schritt durchsuchen."},
         {"search_everywhere_pro","Gefunden: %s. Alles auf einmal durchsuchen ist Pro. Suche kostenlos in Live, Filme oder Serien."},
         {"trial_badge","TEST"},
+        {"play_err_network","Keine Verbindung zum Stream. Prüfe dein Internet und versuche es erneut."},
+        {"play_err_unavailable","Dieser Sender oder Titel ist bei deinem Anbieter gerade nicht verfügbar."},
+        {"play_err_format","Dieser Stream kann auf diesem Gerät nicht abgespielt werden."},
+        {"play_err_generic","Die Wiedergabe funktioniert gerade nicht. Versuche es gleich erneut."},
     });
     private static final Map<String,String> FR=map(new String[][]{
         {"season","Saison"},
