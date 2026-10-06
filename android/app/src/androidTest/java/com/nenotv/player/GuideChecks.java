@@ -53,6 +53,18 @@ final class GuideChecks {
             check("Omschrijving".equals(ahead.get(0).description), "Description lost");
             check(db.fresh(source, GuideRefresher.MAX_AGE_MS, GuideRefresher.backSeconds(true), GuideRefresher.aheadSeconds(true)), "Fresh Pro guide reported stale");
 
+            // G4: programme search by title.
+            List<GuideDatabase.Hit> found = db.search(source, "journaal", now - 7 * GuideDatabase.DAY, now, 50);
+            check(found.size() == 1 && "NPO1.nl".equals(found.get(0).channel) && "Journaal nu".equals(found.get(0).entry.title), "Search journaal: " + found.size());
+            List<GuideDatabase.Hit> days = db.search(source, "DAGEN", now - 7 * GuideDatabase.DAY, now, 50);
+            check(days.size() == 2 && "Over vijf dagen".equals(days.get(0).entry.title) && "Twee dagen geleden".equals(days.get(1).entry.title), "Upcoming before past");
+            check(db.search(source, "%", now - 7 * GuideDatabase.DAY, now, 50).isEmpty() && db.search(source, "_ _", now - 7 * GuideDatabase.DAY, now, 50).isEmpty(), "LIKE wildcards not escaped");
+            check(db.search(source, "o", now - 7 * GuideDatabase.DAY, now, 50).isEmpty(), "One letter searched");
+            check(db.search(source, "geleden", now, now, 50).isEmpty(), "Search ignored the window start");
+            List<String> keys = db.keysOf(source, "NPO1.nl");
+            check(!keys.isEmpty() && keys.get(0).startsWith("id:"), "Guide keys order: " + keys);
+            check(db.search(source, "nieuws", now - 7 * GuideDatabase.DAY, now, 50).get(0).channel.equals("rtl4.nl"), "RTL Nieuws channel");
+
             // A broken download must keep the previous guide.
             boolean failed = false;
             try { db.importXmltv(source, new ByteArrayInputStream("<tv><programme".getBytes(StandardCharsets.UTF_8)), now, GuideRefresher.backSeconds(true), GuideRefresher.aheadSeconds(true), "nl"); }

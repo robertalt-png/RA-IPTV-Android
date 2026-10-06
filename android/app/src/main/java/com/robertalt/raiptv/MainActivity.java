@@ -151,11 +151,13 @@ public class MainActivity extends Activity {
     }
 
     // Master search (0.14.24): all languages, scope chosen next to the search box, default "all".
-    String searchScope="all"; LinearLayout searchScopeBar; Button scopeAll,scopeLive,scopeVod,scopeSeries;
+    String searchScope="all"; LinearLayout searchScopeBar; Button scopeAll,scopeLive,scopeVod,scopeSeries,guideHitsButton; List<MediaEntry> guideHitChannels=new ArrayList<>(); List<EpgEntry> guideHitEntries=new ArrayList<>(); volatile Map<String,MediaEntry> guideChannelMap; volatile String guideChannelMapKey="";
     void setupSearchScope(){
         searchScopeBar=findViewById(R.id.searchScopeBar);scopeAll=findViewById(R.id.searchScopeAll);scopeLive=findViewById(R.id.searchScopeLive);scopeVod=findViewById(R.id.searchScopeVod);scopeSeries=findViewById(R.id.searchScopeSeries);
         if(searchScopeBar==null)return;
         scopeAll.setText(T("all"));scopeLive.setText(T("tv_channels"));scopeVod.setText(T("movies"));scopeSeries.setText(T("series"));
+        guideHitsButton=new Button(this);guideHitsButton.setAllCaps(false);guideHitsButton.setTextSize(12);guideHitsButton.setTextColor(getResources().getColor(R.color.text));guideHitsButton.setMinHeight(0);guideHitsButton.setMinimumHeight(0);guideHitsButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(getResources().getColor(R.color.panel2)));guideHitsButton.setVisibility(View.GONE);guideHitsButton.setOnClickListener(v->showGuideHits());
+        try{ViewGroup parent=(ViewGroup)searchScopeBar.getParent();LinearLayout.LayoutParams gl=new LinearLayout.LayoutParams(-1,dp(38));gl.leftMargin=dp(14);gl.rightMargin=dp(14);gl.topMargin=dp(2);parent.addView(guideHitsButton,parent.indexOfChild(searchScopeBar)+1,gl);}catch(Exception layoutUnavailable){guideHitsButton=null;}
         scopeAll.setOnClickListener(v->setSearchScope("all"));scopeLive.setOnClickListener(v->setSearchScope("live"));scopeVod.setOnClickListener(v->setSearchScope("vod"));scopeSeries.setOnClickListener(v->setSearchScope("series"));
         updateSearchScopeUi();
     }
@@ -163,7 +165,7 @@ public class MainActivity extends Activity {
     void updateSearchScopeUi(){if(searchScopeBar==null)return;int on=getResources().getColor(R.color.accent,getTheme()),off=getResources().getColor(R.color.panel2,getTheme());
         Button[] b={scopeAll,scopeLive,scopeVod,scopeSeries};String[] k={"all","live","vod","series"};
         for(int i=0;i<b.length;i++){boolean sel=k[i].equals(searchScope);b[i].setBackgroundTintList(android.content.res.ColorStateList.valueOf(sel?on:off));b[i].setSelected(sel);b[i].setContentDescription(b[i].getText()+(sel?" ✓":""));}}
-    void showSearchScope(boolean show){if(searchScopeBar!=null)searchScopeBar.setVisibility(show&&!"epg".equals(section)?View.VISIBLE:View.GONE);}
+    void showSearchScope(boolean show){if(!show&&guideHitsButton!=null)guideHitsButton.setVisibility(View.GONE);if(searchScopeBar!=null)searchScopeBar.setVisibility(show&&!"epg".equals(section)?View.VISIBLE:View.GONE);}
     void toggleSearch(){if(search.getVisibility()==View.VISIBLE){if(search.getText().length()>0)search.setText("");search.clearFocus();search.setVisibility(View.GONE);showSearchScope(false);searchToggle.setText("⌕");((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(search.getWindowToken(),0);}else{search.setVisibility(View.VISIBLE);searchScope="all";updateSearchScopeUi();showSearchScope(true);searchToggle.setText("✕");search.requestFocus();((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(search,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);}}
     void showNenoMenu(){
     final Dialog d=new Dialog(this);
@@ -595,6 +597,50 @@ void scheduleBackgroundIndex(){
     void addEpgNowLine(FrameLayout timeline,long base,int widthDp){int x=com.nenotv.player.core.GuideWindow.nowLine(System.currentTimeMillis()/1000L,base,widthDp);if(x<0)return;View line=new View(this);line.setBackgroundColor(0xFFFF4D4D);line.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(dp(2),-1);lp.leftMargin=Math.max(0,dp(x)-dp(1));line.setLayoutParams(lp);timeline.addView(line);}
     TextView epgTimelineCard(String text,boolean now){TextView v=new TextView(this);v.setText(text);v.setTextColor(now?0xFF0A0A0A:0xFFF7F8FA);v.setTextSize(11f);v.setMaxLines(3);v.setEllipsize(TextUtils.TruncateAt.END);v.setPadding(dp(6),dp(5),dp(5),dp(3));v.setGravity(Gravity.CENTER_VERTICAL);v.setBackgroundColor(now?getResources().getColor(R.color.accent):0xFF1A1F29);return v;}
 
+    /** G4: playlist channels by guide matching key, built once per profile and index size. Call off the main thread. */
+    Map<String,MediaEntry> guideChannels(){
+        String key=profileKey()+"|"+searchIndex.count(profileKey())+"|"+all.size();Map<String,MediaEntry> cached=guideChannelMap;
+        if(cached!=null&&key.equals(guideChannelMapKey))return cached;
+        List<MediaEntry> live=searchIndex.sectionPage(profileKey(),"live",0,30000);
+        if(live.isEmpty()){live=new ArrayList<>();for(MediaEntry e:new ArrayList<>(all))if("live".equals(e.type))live.add(e);}
+        HashMap<String,MediaEntry> m=new HashMap<>();
+        for(MediaEntry e:live)for(String k:com.nenotv.player.core.GuideMatcher.channelKeys(e.tvgId,e.tvgName,e.name))m.putIfAbsent(k,e);
+        guideChannelMap=m;guideChannelMapKey=key;return m;
+    }
+    /** G4: programmes in the stored guide whose title matches, paired with the playlist channel they are on. */
+    List<Object[]> guideHits(String query){
+        Provider p=provider;if(p==null)return Collections.emptyList();String url=p.guideUrl();if(url==null||url.trim().isEmpty())return Collections.emptyList();
+        boolean pro=new EntitlementStore(this).isPro();long now=System.currentTimeMillis()/1000L;
+        GuideDatabase db=GuideDatabase.get(this);String src=GuideDatabase.sourceKey(url.trim());
+        List<GuideDatabase.Hit> hits=db.search(src,query,now-GuideRefresher.backSeconds(pro),now,200);if(hits.isEmpty())return Collections.emptyList();
+        Map<String,MediaEntry> channels=guideChannels();HashMap<String,MediaEntry> resolved=new HashMap<>();List<Object[]> out=new ArrayList<>();
+        for(GuideDatabase.Hit h:hits){
+            if(!resolved.containsKey(h.channel)){MediaEntry found=null;for(String k:db.keysOf(src,h.channel)){found=channels.get(k);if(found!=null)break;}resolved.put(h.channel,found);}
+            MediaEntry ch=resolved.get(h.channel);if(ch==null||isAdultLocked(ch))continue;
+            out.add(new Object[]{ch,h.entry});if(out.size()>=100)break;
+        }
+        return out;
+    }
+    void setGuideHits(List<Object[]> hits){
+        guideHitChannels=new ArrayList<>();guideHitEntries=new ArrayList<>();
+        for(Object[] h:hits){guideHitChannels.add((MediaEntry)h[0]);guideHitEntries.add((EpgEntry)h[1]);}
+        if(guideHitsButton==null)return;
+        if(hits.isEmpty()){guideHitsButton.setVisibility(View.GONE);return;}
+        guideHitsButton.setText("📅 "+hits.size()+" "+T("guide_hits"));guideHitsButton.setVisibility(View.VISIBLE);
+    }
+    void showGuideHits(){
+        epgRequestSerial++;hideContentViews();epgBoard.setVisibility(View.VISIBLE);epgBoardContainer.removeAllViews();
+        TextView back=new TextView(this);back.setText("← "+T("back_to_results"));back.setTextColor(getResources().getColor(R.color.accent));back.setTextSize(13);back.setPadding(dp(4),dp(10),dp(4),dp(10));back.setFocusable(true);back.setOnClickListener(v->{if(search!=null)searchEverywhere(search.getText().toString());});epgBoardContainer.addView(back);
+        long now=System.currentTimeMillis()/1000L;
+        for(int i=0;i<guideHitEntries.size();i++){
+            final MediaEntry ch=guideHitChannels.get(i);final EpgEntry e=guideHitEntries.get(i);
+            boolean replay=ch.catchup&&e.endEpoch<=now&&com.nenotv.player.core.CatchupUrls.available(e.startEpoch,now,ch.catchupDays);
+            String when=(e.isNow()?T("now"):epgDayLabel(e.startEpoch,now))+" · "+e.range()+" · "+DisplayText.title(ch);
+            TextView row=epgTimelineCard(when+"\n"+(replay?"↶ ":"")+e.title,e.isNow());row.setMaxLines(3);row.setFocusable(true);row.setPadding(dp(10),dp(8),dp(10),dp(8));row.setOnClickListener(v->showProgramme(ch,e));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.topMargin=dp(4);epgBoardContainer.addView(row,lp);
+        }
+        epgBoard.scrollTo(0,0);status.setText(guideHitEntries.size()+" "+T("guide_hits"));
+    }
     /** G3: one programme from the grid, with watch live, catch-up or "from the start" when the channel has an archive. */
     void showProgramme(MediaEntry ch,EpgEntry e){
         long now=System.currentTimeMillis()/1000L;boolean past=e.endEpoch>0&&e.endEpoch<=now,live=e.isNow();
@@ -626,7 +672,7 @@ void scheduleBackgroundIndex(){
     }
 
     void scheduleSearch(String q){if(pendingSearch!=null)ui.removeCallbacks(pendingSearch);final String asked=q==null?"":q;pendingSearch=()->searchEverywhere(asked);ui.postDelayed(pendingSearch,160);}
-    void searchEverywhere(String q){String z=q==null?"":q.trim().toLowerCase(Locale.ROOT);latestSearchQuery=z;if("epg".equals(section)){filterBar.setVisibility(z.isEmpty()?View.VISIBLE:View.GONE);if(z.isEmpty())showEpgByMode(all);else{showEpgList();epgAdapter.configure(epgRequests());epgAdapter.set(all);epgAdapter.filter(z);}busy(false,z.isEmpty()?T("epg"):T("results"));return;}if(z.isEmpty()){if(section.equals("home")||section.equals("local"))loadHome();else if(section.equals("vod")||section.equals("series"))loadSection(section);else if(section.equals("live")){filterBar.setVisibility(View.VISIBLE);categories.setVisibility(View.VISIBLE);genreButton.setVisibility(View.GONE);showMediaGrid(true);gridAdapter.set(new ArrayList<>(all),true);busy(false,all.size()+" "+T("results"));}return;}if(z.length()<2){gridAdapter.set(Collections.emptyList(),false);status.setText(T("type_2"));return;}categories.setVisibility(View.GONE);genreButton.setVisibility(View.GONE);filterBar.setVisibility(View.GONE);showMediaGrid(false);final int token=nextRequest();final String query=z;gridAdapter.set(Collections.emptyList(),false);status.setText(T("searching"));exec.execute(()->{try{String sec="all".equals(searchScope)?"":searchScope;String lang=SettingsStore.primaryLanguage(this);List<MediaEntry>x=smartDedup(visibleItems(searchIndex.searchAll(profileKey(),sec,query,lang,1000)));final int indexed=searchIndex.count(profileKey());runOnUiThread(()->{if(!current(token)||!query.equals(latestSearchQuery))return;gridAdapter.set(x,false);if(x.isEmpty()&&indexed==0){if(!indexRefreshRunning)refreshSearchIndex(false);status.setText(T("index_building"));}else busy(false,x.isEmpty()?T("no_results_for")+" ‘"+query+"’":x.size()+" "+T("results"));});}catch(Exception e){runOnUiThread(()->{if(current(token)&&query.equals(latestSearchQuery))busy(false,T("local_search_failed")+": "+friendly(e));});}});}
+    void searchEverywhere(String q){String z=q==null?"":q.trim().toLowerCase(Locale.ROOT);latestSearchQuery=z;if(guideHitsButton!=null)guideHitsButton.setVisibility(View.GONE);if("epg".equals(section)){filterBar.setVisibility(z.isEmpty()?View.VISIBLE:View.GONE);if(z.isEmpty())showEpgByMode(all);else{showEpgList();epgAdapter.configure(epgRequests());epgAdapter.set(all);epgAdapter.filter(z);}busy(false,z.isEmpty()?T("epg"):T("results"));return;}if(z.isEmpty()){if(section.equals("home")||section.equals("local"))loadHome();else if(section.equals("vod")||section.equals("series"))loadSection(section);else if(section.equals("live")){filterBar.setVisibility(View.VISIBLE);categories.setVisibility(View.VISIBLE);genreButton.setVisibility(View.GONE);showMediaGrid(true);gridAdapter.set(new ArrayList<>(all),true);busy(false,all.size()+" "+T("results"));}return;}if(z.length()<2){gridAdapter.set(Collections.emptyList(),false);status.setText(T("type_2"));return;}categories.setVisibility(View.GONE);genreButton.setVisibility(View.GONE);filterBar.setVisibility(View.GONE);showMediaGrid(false);final int token=nextRequest();final String query=z;gridAdapter.set(Collections.emptyList(),false);status.setText(T("searching"));exec.execute(()->{try{String sec="all".equals(searchScope)?"":searchScope;String lang=SettingsStore.primaryLanguage(this);List<MediaEntry>x=smartDedup(visibleItems(searchIndex.searchAll(profileKey(),sec,query,lang,1000)));final int indexed=searchIndex.count(profileKey());runOnUiThread(()->{if(!current(token)||!query.equals(latestSearchQuery))return;gridAdapter.set(x,false);if("all".equals(searchScope)||"live".equals(searchScope)){final String guideScope=searchScope;exec.execute(()->{List<Object[]>hits;try{hits=guideHits(query);}catch(Exception unavailable){hits=Collections.emptyList();}final List<Object[]>found=hits;runOnUiThread(()->{if(current(token)&&query.equals(latestSearchQuery)&&guideScope.equals(searchScope))setGuideHits(found);});});}if(x.isEmpty()&&indexed==0){if(!indexRefreshRunning)refreshSearchIndex(false);status.setText(T("index_building"));}else busy(false,x.isEmpty()?T("no_results_for")+" ‘"+query+"’":x.size()+" "+T("results"));});}catch(Exception e){runOnUiThread(()->{if(current(token)&&query.equals(latestSearchQuery))busy(false,T("local_search_failed")+": "+friendly(e));});}});}
     Provider newProvider(Profile p){return newProvider(p,SettingsStore.primaryLanguage(this));}
     Provider newProvider(Profile p,String language){return p.type==Profile.Type.XTREAM?new XtreamProvider(p):new M3uProvider(p,language);}
     synchronized Provider providerFor(MediaEntry e)throws Exception{

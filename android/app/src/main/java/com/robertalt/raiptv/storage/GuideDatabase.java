@@ -141,6 +141,44 @@ public final class GuideDatabase extends SQLiteOpenHelper {
         return out;
     }
 
+    /** G4: one programme found by title, with the guide channel it is on. */
+    public static final class Hit { public final String channel; public final EpgEntry entry; Hit(String channel, EpgEntry entry) { this.channel = channel; this.entry = entry; } }
+
+    static String likeEscape(String q) { return q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_"); }
+
+    /**
+     * Programmes whose title contains {@code query} (case-insensitive for Latin letters) and that end after {@code fromS}.
+     * Titles starting with the query come first, then what is on now or later (soonest first), then the past (latest first).
+     */
+    public List<Hit> search(String source, String query, long fromS, long nowS, int limit) {
+        ArrayList<Hit> out = new ArrayList<>();
+        String q = query == null ? "" : query.trim();
+        if (q.length() < 2) return out;
+        String like = likeEscape(q);
+        String now = String.valueOf(nowS);
+        try (Cursor c = getReadableDatabase().rawQuery("SELECT channel, start, stop, title, descr FROM programmes WHERE source=? AND stop>? AND title LIKE ? ESCAPE '\\' "
+                + "ORDER BY (title LIKE ? ESCAPE '\\') DESC, (stop>?) DESC, CASE WHEN stop>? THEN start ELSE -start END LIMIT ?",
+                new String[]{source, String.valueOf(fromS), "%" + like + "%", like + "%", now, now, String.valueOf(Math.max(1, limit))})) {
+            while (c.moveToNext()) {
+                EpgEntry e = new EpgEntry();
+                e.startEpoch = c.getLong(1); e.endEpoch = c.getLong(2); e.title = c.getString(3); e.description = c.getString(4);
+                e.startRaw = String.valueOf(e.startEpoch); e.endRaw = String.valueOf(e.endEpoch);
+                out.add(new Hit(c.getString(0), e));
+            }
+        } catch (Exception ignored) {}
+        return out;
+    }
+
+    /** Matching keys of a guide channel (id:, name:, norm:), as stored at import, strongest first. */
+    public List<String> keysOf(String source, String channel) {
+        ArrayList<String> out = new ArrayList<>();
+        try (Cursor c = getReadableDatabase().rawQuery("SELECT k FROM channel_keys WHERE source=? AND channel=?", new String[]{source, channel})) {
+            while (c.moveToNext()) out.add(c.getString(0));
+        } catch (Exception ignored) {}
+        out.sort(Comparator.comparingInt(k -> k.startsWith("id:") ? 0 : k.startsWith("name:") ? 1 : 2));
+        return out;
+    }
+
     private static final class Importer extends DefaultHandler {
         final SQLiteDatabase db; final String source, preferred; final long from, to;
         final SQLiteStatement insertProgramme, insertKey;
