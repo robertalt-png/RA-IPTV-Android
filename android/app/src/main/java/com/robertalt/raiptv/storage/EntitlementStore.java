@@ -76,7 +76,7 @@ public final class EntitlementStore {
         return Math.max(1,(left+86399999L)/86400000L);
     }
     public String shortBadge(){Level v=level();return v==Level.PRO?"PRO":v==Level.PRO_TRIAL?"TRIAL":"LIGHT";}
-    public String statusLabel(Context c){Level v=level();return v==Level.PRO?"SunnyIPTV Pro":v==Level.PRO_TRIAL?"SunnyIPTV Pro Trial":"SunnyIPTV Light";}
+    public String statusLabel(Context c){Level v=level();return v==Level.PRO?"SunnyIPTV Pro":v==Level.PRO_TRIAL?com.nenotv.player.UiText.t(c,"nenotv_pro_trial"):"SunnyIPTV Light";}
 
     public void applyServer(JSONObject o){
         if(o==null)return;

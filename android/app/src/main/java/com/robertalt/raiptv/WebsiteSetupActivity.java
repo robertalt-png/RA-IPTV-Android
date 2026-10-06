@@ -110,7 +110,7 @@ public final class WebsiteSetupActivity extends Activity {
         handler.postDelayed(this,750);
     }};
     private String[] tips(){return new String[]{
-            t("Tip: zoek in één keer in zenders, films en series.","Tip: search channels, movies and series in one go.","Tipp: Sender, Filme und Serien in einem Schritt durchsuchen."),
+            t("Tip: tik op het vergrootglas om binnen Live, Films of Series te zoeken.","Tip: tap the magnifier to search within Live, Movies or Series.","Tipp: Tippe auf die Lupe, um in Live, Filme oder Serien zu suchen."),
             t("Tip: met het familiefilter bepaal jij wat de kinderen zien. Gratis.","Tip: the family filter lets you decide what the children see. Free.","Tipp: Mit dem Familienfilter bestimmst du, was die Kinder sehen. Kostenlos."),
             t("Tip: tik op het hartje om iets aan je favorieten toe te voegen.","Tip: tap the heart to add something to your favourites.","Tipp: Tippe auf das Herz, um etwas zu deinen Favoriten hinzuzufügen."),
             t("Tip: films en series gaan verder waar je gebleven was.","Tip: movies and series continue where you left off.","Tipp: Filme und Serien laufen dort weiter, wo du aufgehört hast."),

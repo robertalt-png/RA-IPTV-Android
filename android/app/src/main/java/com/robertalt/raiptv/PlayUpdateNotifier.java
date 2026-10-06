@@ -86,7 +86,7 @@ public final class PlayUpdateNotifier {
         if (!usable() || dialog != null) return;
         dialog = new AlertDialog.Builder(activity)
                 .setTitle(requirements.isBasicOnly()
-                        ? text("SunnyIPTV werkt tijdelijk als Basic", "SunnyIPTV is temporarily Basic", "SunnyIPTV ist vorübergehend Basic")
+                        ? text("SunnyIPTV werkt tijdelijk als Light", "SunnyIPTV is temporarily Light", "SunnyIPTV ist vorübergehend Light")
                         : text("Nieuwe SunnyIPTV-versie beschikbaar", "New SunnyIPTV version available", "Neue SunnyIPTV-Version verfügbar"))
                 .setMessage(updateMessage())
                 .setPositiveButton(text("Bijwerken", "Update", "Aktualisieren"), (d, w) -> startUpdate(info))
@@ -140,15 +140,15 @@ public final class PlayUpdateNotifier {
                 "After installation, your previous access returns automatically, provided your subscription or tester rights are still valid.",
                 "Nach der Installation erhältst du deinen bisherigen Zugang automatisch zurück, sofern dein Abonnement oder deine Testerrechte noch gültig sind.");
         if (requirements.isBasicOnly()) return text(
-                "De termijn van 60 dagen is verstreken. Je gebruikt SunnyIPTV nu als Basic totdat je de update installeert. Je account en instellingen blijven bewaard.\n\n",
-                "The 60-day deadline has passed. SunnyIPTV now runs as Basic until you install the update. Your account and settings are preserved.\n\n",
-                "Die 60-Tage-Frist ist abgelaufen. SunnyIPTV läuft als Basic, bis du das Update installierst. Dein Konto und deine Einstellungen bleiben erhalten.\n\n") + restoration;
+                "De termijn van 60 dagen is verstreken. Je gebruikt SunnyIPTV nu als Light totdat je de update installeert. Je account en instellingen blijven bewaard.\n\n",
+                "The 60-day deadline has passed. SunnyIPTV now runs as Light until you install the update. Your account and settings are preserved.\n\n",
+                "Die 60-Tage-Frist ist abgelaufen. SunnyIPTV läuft als Light, bis du das Update installierst. Dein Konto und deine Einstellungen bleiben erhalten.\n\n") + restoration;
         long days = requirements.daysRemaining();
         return text("Installeer de update uiterlijk ", "Install the update by ", "Installiere das Update bis ")
                 + date + text(" (nog ", " (", " (noch ") + days
-                + text(" dagen). Daarna werkt SunnyIPTV tijdelijk als Basic.\n\n",
-                        " days remaining). After that, SunnyIPTV temporarily runs as Basic.\n\n",
-                        " Tage). Danach läuft SunnyIPTV vorübergehend als Basic.\n\n") + restoration;
+                + text(" dagen). Daarna werkt SunnyIPTV tijdelijk als Light.\n\n",
+                        " days remaining). After that, SunnyIPTV temporarily runs as Light.\n\n",
+                        " Tage). Danach läuft SunnyIPTV vorübergehend als Light.\n\n") + restoration;
     }
 
     private void showKnownUpdateOrRestoration() {
@@ -161,9 +161,9 @@ public final class PlayUpdateNotifier {
                 .setMessage(pro ? text("Je update is geïnstalleerd. Je eerdere Pro-toegang is automatisch hersteld.",
                         "Your update is installed. Your previous Pro access has been restored automatically.",
                         "Dein Update ist installiert. Dein bisheriger Pro-Zugang wurde automatisch wiederhergestellt.")
-                        : text("Je update is geïnstalleerd. De tijdelijke updatebeperking is opgeheven. Je gebruikt Basic omdat je geen geldige Pro- of testerrechten hebt.",
-                        "Your update is installed. The temporary update restriction has ended. You are using Basic because you have no valid Pro or tester rights.",
-                        "Dein Update ist installiert. Die vorübergehende Update-Einschränkung ist aufgehoben. Ohne gültige Pro- oder Testerrechte nutzt du Basic."))
+                        : text("Je update is geïnstalleerd. De tijdelijke updatebeperking is opgeheven. Je gebruikt Light omdat je geen geldige Pro- of testerrechten hebt.",
+                        "Your update is installed. The temporary update restriction has ended. You are using Light because you have no valid Pro or tester rights.",
+                        "Dein Update ist installiert. Die vorübergehende Update-Einschränkung ist aufgehoben. Ohne gültige Pro- oder Testerrechte nutzt du Light."))
                 .setPositiveButton("OK", (d, w) -> requirements.acknowledgeRestoration())
                 .setOnCancelListener(d -> requirements.acknowledgeRestoration()).create();
         dialog.setOnDismissListener(d -> dialog = null);
