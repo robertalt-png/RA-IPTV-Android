@@ -38,7 +38,12 @@ for flag in GPL VERSION3 NONFREE; do
   grep -q "#define CONFIG_${flag} 0" "$CFG" || { echo "FFmpeg licence check failed: CONFIG_${flag} is not 0"; exit 1; }
 done
 { grep -E "^License:" "$LOG" | sort -u; grep -E "#define CONFIG_(GPL|VERSION3|NONFREE) " "$CFG"; } > "$OUT/licence.txt"
-grep -E "#define CONFIG_[A-Z0-9_]+_DECODER 1" "$CFG" > "$OUT/decoders.txt"
+# FFmpeg 6 keeps component switches in config_components.h; require every requested decoder to be enabled.
+COMP="$MODULE/jni/ffmpeg/config_components.h"
+grep -E "#define CONFIG_[A-Z0-9_]+_DECODER 1" "$COMP" > "$OUT/decoders.txt"
+for d in "${DECODERS[@]}"; do
+  grep -q "#define CONFIG_$(echo "$d" | tr '[:lower:]' '[:upper:]')_DECODER 1" "$COMP" || { echo "Decoder $d is not enabled"; exit 1; }
+done
 printf 'FFmpeg %s (%s)\nhttps://github.com/FFmpeg/FFmpeg/tree/%s\nMedia3 %s https://github.com/androidx/media/tree/%s/libraries/decoder_ffmpeg\n' \
   "$FFMPEG_TAG" "$(git -C "$MODULE/jni/ffmpeg" rev-parse HEAD)" "$FFMPEG_TAG" "$MEDIA3_VERSION" "$MEDIA3_VERSION" > "$OUT/ffmpeg-source.txt"
 
