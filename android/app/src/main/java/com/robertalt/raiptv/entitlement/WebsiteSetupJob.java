@@ -12,14 +12,17 @@ public final class WebsiteSetupJob {
     interface Network {
         SourceSyncClient sources(Context context);
         CatalogPackageClient catalog(Context context);
+        default EntitlementClient diagnostics(Context context){return null;}
     }
     static Network network = new Network() {
         public SourceSyncClient sources(Context c) { return new SourceSyncClient(c); }
         public CatalogPackageClient catalog(Context c) { return new CatalogPackageClient(c); }
+        public EntitlementClient diagnostics(Context c){return new EntitlementClient(c);}
     };
     public volatile State state = State.WAITING;
     public volatile long bytesReceived,totalBytes,downloadElapsedMillis=-1,phaseStarted,lastProgressAt;
     public volatile int savedItems,totalItems;
+    public volatile String errorCode="NONE";
     public static boolean busy(State s) { return s==State.WAITING||s==State.PREPARING||s==State.DOWNLOADING||s==State.VERIFYING||s==State.IMPORTING||s==State.COMMITTING; }
     private final String account;
     private final Thread worker;
@@ -45,6 +48,9 @@ public final class WebsiteSetupJob {
     private void run(Context context, boolean replaceLocal) {
         long deadline = android.os.SystemClock.elapsedRealtime() + 20 * 60 * 1000L;
         SourceStore sources = new SourceStore(context);
+        SetupProcessLog log=new SetupProcessLog(context,account,transport.diagnostics(context));
+        log.record(this);
+        log.observe(this);
         try (SearchIndexStore index = new SearchIndexStore(context)) {
             while (android.os.SystemClock.elapsedRealtime() < deadline) {
                 if (Thread.currentThread().isInterrupted()) return;
@@ -64,7 +70,7 @@ public final class WebsiteSetupJob {
                 if (active == null || !active.enabled || DemoPolicy.isDemo(active.profile)) {
                     state = State.WAITING; Thread.sleep(4000); continue;
                 }
-                state = State.PREPARING;
+                state = State.PREPARING;log.record(this);
                 try {
                     String key = ProfileCacheKey.of(active.profile);
                     boolean ready = transport.catalog(context).bootstrap(index, key, active.profile,
@@ -72,13 +78,13 @@ public final class WebsiteSetupJob {
                                 private long now(){return android.os.SystemClock.elapsedRealtime();}
                                 public void downloading(long bytes,long total){
                                     if(state!=State.DOWNLOADING){phaseStarted=now();downloadElapsedMillis=-1;}
-                                    bytesReceived=bytes;totalBytes=total;lastProgressAt=now();state=State.DOWNLOADING;
+                                    bytesReceived=bytes;totalBytes=total;lastProgressAt=now();state=State.DOWNLOADING;log.record(WebsiteSetupJob.this);
                                 }
                                 public void downloaded(long elapsed){downloadElapsedMillis=elapsed;}
-                                public void verifying(){phaseStarted=lastProgressAt=now();state=State.VERIFYING;}
-                                public void importing(int total){savedItems=0;totalItems=total;phaseStarted=lastProgressAt=now();state=State.IMPORTING;}
-                                public void update(int count){savedItems=count;lastProgressAt=now();}
-                                public void committing(){lastProgressAt=now();state=State.COMMITTING;}
+                                public void verifying(){phaseStarted=lastProgressAt=now();state=State.VERIFYING;log.record(WebsiteSetupJob.this);}
+                                public void importing(int total){savedItems=0;totalItems=total;phaseStarted=lastProgressAt=now();state=State.IMPORTING;log.record(WebsiteSetupJob.this);}
+                                public void update(int count){savedItems=count;lastProgressAt=now();log.record(WebsiteSetupJob.this);}
+                                public void committing(){lastProgressAt=now();state=State.COMMITTING;log.record(WebsiteSetupJob.this);}
                             });
                     if (ready || (SettingsStore.prefs(context).getBoolean("first_sync_done_" + key, false)
                             && index.isComplete(key,"live") && index.isComplete(key,"vod") && index.isComplete(key,"series"))) {
@@ -91,6 +97,11 @@ public final class WebsiteSetupJob {
             }
             state = State.EXPIRED;
         } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
-        catch (Exception failure) { state = State.FAILED; }
+        catch (Exception failure) {
+            String message=failure.getMessage();
+            errorCode="CATALOG_CHECKSUM".equals(message)?"CHECKSUM":failure instanceof java.io.IOException?"NETWORK_OR_PACKAGE":"SETUP_FAILED";
+            state = State.FAILED;
+        }
+        finally {log.record(this);log.close();}
     }
 }

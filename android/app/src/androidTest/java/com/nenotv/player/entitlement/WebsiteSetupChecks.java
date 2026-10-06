@@ -20,6 +20,8 @@ public final class WebsiteSetupChecks {
         final byte[] packageBytes;
         final JSONObject manifest;
         final List<String> paths=new java.util.concurrent.CopyOnWriteArrayList<>();
+        final List<String> events=new java.util.concurrent.CopyOnWriteArrayList<>();
+        volatile String logError="";
         volatile int pulls,statuses,downloads;
         Fixture(boolean corrupt)throws Exception {
             String header=new JSONObject().put("kind","header").put("schema",1).put("source_id","website-test").put("fingerprint",FP)+"\n";
@@ -44,6 +46,10 @@ public final class WebsiteSetupChecks {
                         response=new JSONObject().put("ok",true).put("revision",pulls>1?1:0).put("sources",sources).toString().getBytes(StandardCharsets.UTF_8);
                     }else if(path.endsWith("catalog/status")){
                         statuses++;response=(statuses==1?new JSONObject().put("ok",true).put("state","building"):manifest).toString().getBytes(StandardCharsets.UTF_8);
+                    }else if(path.endsWith("account/setup-log")){
+                        events.add(request.getString("event"));logError=request.optString("error");
+                        check(!request.has("password")&&!request.has("username")&&!request.has("server")&&!request.has("m3u"),"Diagnostics contain provider fields");
+                        response="{\"ok\":true}".getBytes(StandardCharsets.UTF_8);
                     }else if(download){downloads++;response=packageBytes;}
                     else response="{\"ok\":true}".getBytes(StandardCharsets.UTF_8);
                     check(request.getString("account_scope").equals(FP),"Wrong source account sent");
@@ -70,8 +76,9 @@ public final class WebsiteSetupChecks {
                 WebsiteSetupJob.network=new WebsiteSetupJob.Network(){
                     public SourceSyncClient sources(Context c){return new SourceSyncClient(c,new EntitlementClient(c,fixture.url()));}
                     public CatalogPackageClient catalog(Context c){return new CatalogPackageClient(c,fixture.url());}
+                    public EntitlementClient diagnostics(Context c){return new EntitlementClient(c,fixture.url());}
                 };
-                // Android Keystore encryption is substantially slower on some hosted phone emulators.
+                // Keep the full encrypted-import check bounded on hosted emulators.
                 job=WebsiteSetupJob.start(context,false);long started=android.os.SystemClock.elapsedRealtime(),end=started+120000;
                 while(android.os.SystemClock.elapsedRealtime()<end&&WebsiteSetupJob.busy(job.state))Thread.sleep(100);
                 check(job.state==(corrupt?WebsiteSetupJob.State.FAILED:WebsiteSetupJob.State.READY),"Website setup did not reach verified outcome: "+job.state
@@ -79,6 +86,10 @@ public final class WebsiteSetupChecks {
                         +"; statuses="+fixture.statuses+"; downloads="+fixture.downloads);
                 check(job.bytesReceived==job.totalBytes&&job.totalBytes==fixture.packageBytes.length&&job.downloadElapsedMillis>=0,"Download progress did not measure the complete package");
                 if(!corrupt)check(job.savedItems==1000&&job.totalItems==1000&&job.lastProgressAt>=job.phaseStarted,"Stored-item progress did not match the verified list");
+                long logDeadline=android.os.SystemClock.elapsedRealtime()+10000;
+                while(android.os.SystemClock.elapsedRealtime()<logDeadline&&!fixture.events.contains(corrupt?"FAILED":"READY"))Thread.sleep(100);
+                check(fixture.events.contains("DOWNLOADING")&&fixture.events.contains(corrupt?"FAILED":"READY"),"Setup diagnostics missed the measured outcome");
+                check(fixture.logError.equals(corrupt?"CHECKSUM":"NONE"),"Setup diagnostics sent the wrong safe error code");
                 try(SearchIndexStore index=new SearchIndexStore(context)){
                     String key=ProfileCacheKey.of(secure.load());
                     check(index.countSection(key,"live")== (corrupt?0:1000),"Website import exposed a partial or corrupt library");
