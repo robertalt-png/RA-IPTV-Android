@@ -79,7 +79,12 @@ jobs:
         run: cat android/app/libs/ffmpeg/licence.txt android/app/libs/ffmpeg/ffmpeg-source.txt android/app/libs/ffmpeg/sizes.txt
       - name: Build the single app source
         working-directory: android
-        run: gradle --no-daemon :app:bundleRelease :app:assembleDebugAndroidTest
+        run: |
+          set -o pipefail
+          if ! gradle --no-daemon :app:bundleRelease :app:assembleDebugAndroidTest 2>&1 | tee "$RUNNER_TEMP/gradle-build.log"; then
+            grep -E '(error:|^e: |warning: \[|What went wrong|Lint found|\.(java|kt|xml):[0-9]+)' "$RUNNER_TEMP/gradle-build.log" | grep -v '^Note:' | head -12 | while IFS= read -r line; do echo "::error::${line//%/%25}"; done
+            exit 1
+          fi
       - name: Generate test APK from the exact Play AAB
         run: |
           mkdir -p distribution qa-tools
