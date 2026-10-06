@@ -199,7 +199,9 @@ public final class UiInstrumentation extends ImportInstrumentation {
     }
     void onboarding(Bundle result)throws Exception{
         privacyAccess();
+        boolean privacyBefore=com.nenotv.player.storage.ExtraPrivacyStore.answered(getTargetContext());
         accountFreeSetup(result);
+        check(com.nenotv.player.storage.ExtraPrivacyStore.answered(getTargetContext())==privacyBefore,"Account-free setup changed the age/privacy answer: "+mainGate(getTargetContext()));
         Context c=getTargetContext();
         SecureProfileStore profiles=new SecureProfileStore(c);
         profiles.clear();
@@ -252,7 +254,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
     void accountFreeSetup(Bundle result)throws Exception{
         Context c=getTargetContext();
         Map<String,Map<String,?>> previous=new LinkedHashMap<>();
-        for(String name:new String[]{"profile","nenotv_sources_v1","nenotv_entitlement","sunnyiptv_family_v1","nenotv_account_link_v1"})
+        for(String name:new String[]{"profile","nenotv_sources_v1","nenotv_entitlement","sunnyiptv_family_v1","nenotv_account_link_v1",com.nenotv.player.storage.ExtraPrivacyStore.PREFS})
             previous.put(name,new HashMap<>(c.getSharedPreferences(name,Context.MODE_PRIVATE).getAll()));
         ProfileActivity.LocalConnection original=ProfileActivity.localConnection;
         java.util.concurrent.atomic.AtomicInteger connections=new java.util.concurrent.atomic.AtomicInteger();
