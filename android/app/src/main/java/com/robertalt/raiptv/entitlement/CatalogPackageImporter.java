@@ -13,7 +13,14 @@ import java.util.zip.GZIPInputStream;
 /** One authenticated, verified gzip download; atomic replacement of the whole catalog. */
 public final class CatalogPackageImporter {
     public static final long MAX_COMPRESSED=100L*1024*1024, MAX_EXPANDED=300L*1024*1024;
-    public interface Progress {void update(int items);}
+    public interface Progress {
+        void update(int items);
+        default void downloading(long bytes,long total) {}
+        default void downloaded(long elapsedMillis) {}
+        default void verifying() {}
+        default void importing(int total) {}
+        default void committing() {}
+    }
     private CatalogPackageImporter(){}
     static String sha256(File file)throws Exception {
         MessageDigest digest=MessageDigest.getInstance("SHA-256");try(InputStream in=new FileInputStream(file)){byte[] b=new byte[65536];int n;while((n=in.read(b))!=-1){StreamingJsonArray.checkCancelled();digest.update(b,0,n);}}
@@ -22,9 +29,13 @@ public final class CatalogPackageImporter {
     public static int importFile(File file,JSONObject manifest,SearchIndexStore store,String profile,Progress progress,Runnable guard)throws Exception {
         long expected=manifest.getLong("bytes");String checksum=manifest.getString("sha256");
         if(expected<1||expected>MAX_COMPRESSED||file.length()!=expected||!checksum.matches("[a-f0-9]{64}")||!MessageDigest.isEqual(checksum.getBytes(StandardCharsets.US_ASCII),sha256(file).getBytes(StandardCharsets.US_ASCII)))throw new IOException("CATALOG_CHECKSUM");
+        long expectedItems=0;
+        for(String t:new String[]{"live","vod","series"}){int count=manifest.getJSONObject("counts").getInt(t);if(count<0)throw new IOException("CATALOG_COUNTS");expectedItems+=count;}
+        if(expectedItems>500000)throw new IOException("CATALOG_ITEMS");
+        progress.importing((int)expectedItems);
         String session=store.beginSectionImport();Map<String,List<Category>> categories=new LinkedHashMap<>();Map<String,Integer> counts=new LinkedHashMap<>();Map<String,List<MediaEntry>> batches=new LinkedHashMap<>();
         for(String t:new String[]{"live","vod","series"}){categories.put(t,new ArrayList<>());counts.put(t,0);batches.put(t,new ArrayList<>());}
-        boolean header=false,end=false,committed=false;long expanded=0;int total=0;
+        boolean header=false,end=false,committed=false;long expanded=0;int total=0,stored=0;
         try(InputStream in=new GZIPInputStream(new BufferedInputStream(new FileInputStream(file),65536),65536)){
             ByteArrayOutputStream line=new ByteArrayOutputStream();byte[] buf=new byte[65536];int n;
             while((n=in.read(buf))!=-1){StreamingJsonArray.checkCancelled();guard.run();expanded+=n;if(expanded>MAX_EXPANDED)throw new IOException("CATALOG_SIZE");
@@ -37,15 +48,15 @@ public final class CatalogPackageImporter {
                     else if(kind.equals("item")){
                         MediaEntry e=store.decodePackageEntry(row.getJSONObject("entry").toString());if(e==null||e.id==null||e.id.isEmpty()||!batches.containsKey(e.type)||!e.sourceId.isEmpty())throw new IOException("CATALOG_ITEM");
                         if(++total>500000)throw new IOException("CATALOG_ITEMS");for(String u:e.candidates)if(!u.startsWith("http://")&&!u.startsWith("https://"))throw new IOException("CATALOG_STREAM_URL");
-                        List<MediaEntry> batch=batches.get(e.type);batch.add(e);counts.put(e.type,counts.get(e.type)+1);if(batch.size()>=240){store.importBatch(session,profile,e.type,batch);batch.clear();progress.update(total);}
+                        List<MediaEntry> batch=batches.get(e.type);batch.add(e);counts.put(e.type,counts.get(e.type)+1);if(batch.size()>=240){store.importBatch(session,profile,e.type,batch);stored+=batch.size();batch.clear();progress.update(stored);}
                     }else if(kind.equals("end")){
                         for(String t:counts.keySet())if(row.getJSONObject("counts").getInt(t)!=counts.get(t)||manifest.getJSONObject("counts").getInt(t)!=counts.get(t)||row.getJSONObject("categories").getInt(t)!=categories.get(t).size())throw new IOException("CATALOG_COUNTS");end=true;
                     }else throw new IOException("CATALOG_RECORD");
                 }
             }
             if(!header||!end||line.size()!=0)throw new IOException("CATALOG_TRUNCATED");
-            for(String t:batches.keySet())if(!batches.get(t).isEmpty())store.importBatch(session,profile,t,batches.get(t));
-            guard.run();store.finishCatalogImport(session,profile,counts,categories,guard);committed=true;progress.update(total);return total;
+            for(String t:batches.keySet())if(!batches.get(t).isEmpty()){store.importBatch(session,profile,t,batches.get(t));stored+=batches.get(t).size();progress.update(stored);}
+            progress.committing();guard.run();store.finishCatalogImport(session,profile,counts,categories,guard);committed=true;progress.update(total);return total;
         }finally{if(!committed)store.abortSectionImport(session);}
     }
 }

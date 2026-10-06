@@ -46,7 +46,8 @@ public final class CatalogPackageClient {
         if(manifest.getInt("schema")!=1||!active.id.equals(manifest.getString("source_id"))||!manifest.getString("fingerprint").matches("[a-f0-9]{64}"))throw new IOException("CATALOG_MANIFEST");
         File temp=File.createTempFile("nenotv-catalog-",".gz",context.getCacheDir());
         try{
-            download(manifest,temp,()->guard(active.id,revision));
+            download(manifest,temp,()->guard(active.id,revision),progress);
+            progress.verifying();
             CatalogPackageImporter.importFile(temp,manifest,index,profileKey,progress,()->guard(active.id,revision));
             guard(active.id,revision);
             settings.edit().putBoolean(marker,true).putBoolean("first_sync_done_"+profileKey,true).putInt("language_index_version_"+profileKey,4).putBoolean("language_index_rebuild_started_"+profileKey,false).commit();
@@ -54,8 +55,9 @@ public final class CatalogPackageClient {
             return true;
         }finally{if(!temp.delete())temp.deleteOnExit();}
     }
-    private void download(JSONObject manifest,File file,Runnable guard)throws Exception {
+    private void download(JSONObject manifest,File file,Runnable guard,CatalogPackageImporter.Progress progress)throws Exception {
         long expected=manifest.getLong("bytes");if(expected<1||expected>CatalogPackageImporter.MAX_COMPRESSED)throw new IOException("CATALOG_SIZE");
+        long started=android.os.SystemClock.elapsedRealtime();progress.downloading(0,expected);
         JSONObject body=new JSONObject().put("device_id",entitlement.deviceId()).put("device_key",entitlement.deviceKey()).put("public_device_id",entitlement.publicDeviceId()).put("platform","android").put("app_version",BuildConfig.VERSION_NAME).put("account_scope",scope).put("source_id",manifest.getString("source_id")).put("fingerprint",manifest.getString("fingerprint"));
         byte[] payload=body.toString().getBytes(StandardCharsets.UTF_8);
         HttpURLConnection connection=(HttpURLConnection)new URL(base+"/wp-json/nenotv/v1/"+access.route("catalog/download")).openConnection();
@@ -65,9 +67,10 @@ public final class CatalogPackageClient {
             if(connection.getResponseCode()!=200||!"application/vnd.nenotv.catalog+gzip".equals(connection.getContentType())||!manifest.getString("sha256").equals(connection.getHeaderField("X-SunnyIPTV-SHA256")!=null?connection.getHeaderField("X-SunnyIPTV-SHA256"):connection.getHeaderField("X-NenoTV-SHA256")))throw new IOException("CATALOG_DOWNLOAD");
             long deadline=android.os.SystemClock.elapsedRealtime()+180000;long bytes=0;
             try(InputStream in=connection.getInputStream();OutputStream out=new BufferedOutputStream(new FileOutputStream(file),65536)){
-                byte[] buf=new byte[65536];int n;while((n=in.read(buf))!=-1){StreamingJsonArray.checkCancelled();guard.run();if(android.os.SystemClock.elapsedRealtime()>deadline||(bytes+=n)>expected)throw new IOException("CATALOG_DOWNLOAD_LIMIT");out.write(buf,0,n);}
+                byte[] buf=new byte[65536];int n;while((n=in.read(buf))!=-1){StreamingJsonArray.checkCancelled();guard.run();if(android.os.SystemClock.elapsedRealtime()>deadline||(bytes+=n)>expected)throw new IOException("CATALOG_DOWNLOAD_LIMIT");out.write(buf,0,n);progress.downloading(bytes,expected);}
             }
             if(bytes!=expected)throw new IOException("CATALOG_TRUNCATED");
+            progress.downloaded(android.os.SystemClock.elapsedRealtime()-started);
         }finally{connection.disconnect();}
     }
 }

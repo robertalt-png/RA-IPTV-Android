@@ -7,7 +7,7 @@ import com.nenotv.player.storage.*;
 
 /** Shares a bounded import across browser handoff and the return activity. */
 public final class WebsiteSetupJob {
-    public enum State { WAITING, PREPARING, IMPORTING, READY, CHOICE, FAILED, EXPIRED }
+    public enum State { WAITING, PREPARING, DOWNLOADING, VERIFYING, IMPORTING, COMMITTING, READY, CHOICE, FAILED, EXPIRED }
     private static WebsiteSetupJob current;
     interface Network {
         SourceSyncClient sources(Context context);
@@ -18,6 +18,9 @@ public final class WebsiteSetupJob {
         public CatalogPackageClient catalog(Context c) { return new CatalogPackageClient(c); }
     };
     public volatile State state = State.WAITING;
+    public volatile long bytesReceived,totalBytes,downloadElapsedMillis=-1,phaseStarted,lastProgressAt;
+    public volatile int savedItems,totalItems;
+    public static boolean busy(State s) { return s==State.WAITING||s==State.PREPARING||s==State.DOWNLOADING||s==State.VERIFYING||s==State.IMPORTING||s==State.COMMITTING; }
     private final String account;
     private final Thread worker;
     private final Network transport;
@@ -26,7 +29,7 @@ public final class WebsiteSetupJob {
     public static synchronized WebsiteSetupJob start(Context context, boolean replaceLocal) {
         String account = new AccountLinkStore(context).accountId();
         if (current != null && current.account.equals(account)
-                && current.worker.isAlive() && (current.state == State.WAITING || current.state == State.PREPARING || current.state == State.IMPORTING)) return current;
+                && current.worker.isAlive() && busy(current.state)) return current;
         if (current != null) current.worker.interrupt();
         current = new WebsiteSetupJob(context.getApplicationContext(), account, replaceLocal);
         current.worker.start();
@@ -65,7 +68,18 @@ public final class WebsiteSetupJob {
                 try {
                     String key = ProfileCacheKey.of(active.profile);
                     boolean ready = transport.catalog(context).bootstrap(index, key, active.profile,
-                            count -> state = State.IMPORTING);
+                            new CatalogPackageImporter.Progress(){
+                                private long now(){return android.os.SystemClock.elapsedRealtime();}
+                                public void downloading(long bytes,long total){
+                                    if(state!=State.DOWNLOADING){phaseStarted=now();downloadElapsedMillis=-1;}
+                                    bytesReceived=bytes;totalBytes=total;lastProgressAt=now();state=State.DOWNLOADING;
+                                }
+                                public void downloaded(long elapsed){downloadElapsedMillis=elapsed;}
+                                public void verifying(){phaseStarted=lastProgressAt=now();state=State.VERIFYING;}
+                                public void importing(int total){savedItems=0;totalItems=total;phaseStarted=lastProgressAt=now();state=State.IMPORTING;}
+                                public void update(int count){savedItems=count;lastProgressAt=now();}
+                                public void committing(){lastProgressAt=now();state=State.COMMITTING;}
+                            });
                     if (ready || (SettingsStore.prefs(context).getBoolean("first_sync_done_" + key, false)
                             && index.isComplete(key,"live") && index.isComplete(key,"vod") && index.isComplete(key,"series"))) {
                         if (!account.equals(new AccountLinkStore(context).accountId()) || sources.syncDirty() || sources.accountChangePending()) { state=State.FAILED; return; }

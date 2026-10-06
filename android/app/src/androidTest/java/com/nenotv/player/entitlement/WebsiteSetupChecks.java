@@ -73,10 +73,12 @@ public final class WebsiteSetupChecks {
                 };
                 // Android Keystore encryption is substantially slower on some hosted phone emulators.
                 job=WebsiteSetupJob.start(context,false);long started=android.os.SystemClock.elapsedRealtime(),end=started+120000;
-                while(android.os.SystemClock.elapsedRealtime()<end&&(job.state==WebsiteSetupJob.State.WAITING||job.state==WebsiteSetupJob.State.PREPARING||job.state==WebsiteSetupJob.State.IMPORTING))Thread.sleep(100);
+                while(android.os.SystemClock.elapsedRealtime()<end&&WebsiteSetupJob.busy(job.state))Thread.sleep(100);
                 check(job.state==(corrupt?WebsiteSetupJob.State.FAILED:WebsiteSetupJob.State.READY),"Website setup did not reach verified outcome: "+job.state
                         +"; elapsed_ms="+(android.os.SystemClock.elapsedRealtime()-started)+"; pulls="+fixture.pulls
                         +"; statuses="+fixture.statuses+"; downloads="+fixture.downloads);
+                check(job.bytesReceived==job.totalBytes&&job.totalBytes==fixture.packageBytes.length&&job.downloadElapsedMillis>=0,"Download progress did not measure the complete package");
+                if(!corrupt)check(job.savedItems==1000&&job.totalItems==1000&&job.lastProgressAt>=job.phaseStarted,"Stored-item progress did not match the verified list");
                 try(SearchIndexStore index=new SearchIndexStore(context)){
                     String key=ProfileCacheKey.of(secure.load());
                     check(index.countSection(key,"live")== (corrupt?0:1000),"Website import exposed a partial or corrupt library");
