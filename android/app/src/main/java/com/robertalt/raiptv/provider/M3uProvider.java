@@ -8,5 +8,6 @@ public class M3uProvider implements Provider {
     @Override public List<Category> categories(String type){ LinkedHashSet<String>s=new LinkedHashSet<>();for(MediaEntry e:all)if(type.equals(e.type))s.add(e.group);List<Category>o=new ArrayList<>();for(String g:s)o.add(new Category(g,g,type));return o; }
     @Override public List<MediaEntry> items(String type,String cat){ List<MediaEntry>o=new ArrayList<>();for(MediaEntry e:all)if(type.equals(e.type)&&(cat==null||cat.isEmpty()||cat.equals("all")||cat.equals(e.group)))o.add(e);return o; }
     @Override public List<EpgEntry> epgEntries(MediaEntry item,int limit)throws Exception {if(p.epgUrl==null||p.epgUrl.isEmpty())return Collections.emptyList();return XmltvGuide.lookupEntries(p.epgUrl,item.tvgId,item.tvgName,limit,language);}
+    @Override public String guideUrl(){return p.epgUrl==null?"":p.epgUrl.trim();}
     @Override public String epg(MediaEntry item)throws Exception {return Provider.super.epg(item);}
 }

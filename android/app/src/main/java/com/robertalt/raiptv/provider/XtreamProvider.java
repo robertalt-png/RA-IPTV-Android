@@ -240,6 +240,9 @@ public class XtreamProvider implements Provider {
         return s.startsWith("http://")||s.startsWith("https://")?s:"";
     }
 
+    /** Full XMLTV guide of the Xtream server (7 days back and ahead when the provider keeps them). */
+    @Override public String guideUrl(){if(p.server==null||p.server.trim().isEmpty()||p.username==null||p.username.isEmpty())return "";return XtreamUrls.base(p.server)+"/xmltv.php?username="+XtreamUrls.enc(p.username)+"&password="+XtreamUrls.enc(p.password);}
+
     @Override public List<EpgEntry> epgEntries(MediaEntry item,int limit)throws Exception{
         int n=Math.max(2,Math.min(12,limit));
         String url=XtreamUrls.api(p.server,p.username,p.password,"get_short_epg","")+"&stream_id="+XtreamUrls.enc(item.streamId)+"&limit="+n;

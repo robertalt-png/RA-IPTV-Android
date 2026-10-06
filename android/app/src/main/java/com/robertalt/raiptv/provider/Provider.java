@@ -6,6 +6,8 @@ public interface Provider {
     List<MediaEntry> items(String type,String categoryId) throws Exception;
     default List<MediaEntry> seriesEpisodes(MediaEntry series) throws Exception { return Collections.emptyList(); }
     default List<EpgEntry> epgEntries(MediaEntry item,int limit) throws Exception { return Collections.emptyList(); }
+    /** Address of the complete XMLTV guide of this source for the G1 guide database, or "" when there is none. */
+    default String guideUrl() { return ""; }
     default MediaDetails details(MediaEntry item) throws Exception {
         MediaDetails d=new MediaDetails(); if(item==null)return d; d.title=item.name; d.year=item.year; d.plot=item.plot; d.rating=item.rating; d.imdbId=item.imdbId; d.tmdbId=item.tmdbId; d.backdrop=item.backdrop; d.poster=item.logo; return d;
     }

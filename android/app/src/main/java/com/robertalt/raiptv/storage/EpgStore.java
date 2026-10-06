@@ -43,7 +43,12 @@ public class EpgStore extends SQLiteOpenHelper {
         byte[] digest=java.security.MessageDigest.getInstance("SHA-256").digest(identity.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
         StringBuilder hash=new StringBuilder();for(byte b:digest)hash.append(String.format(Locale.ROOT,"%02x",b&255));
         String key="timeline3|"+hash;
+        // G1: the complete guide stored on the device comes first; the per-channel fetch below stays as fallback.
+        final boolean pro=new EntitlementStore(app).isPro();
+        final String guideUrl=provider.guideUrl();
         java.util.concurrent.FutureTask<List<EpgEntry>> created=new java.util.concurrent.FutureTask<>(()->{
+            List<EpgEntry> stored=fromGuide(guideUrl,channel,pro,language);
+            if(!stored.isEmpty())return stored;
             if(fresh(key))return com.nenotv.player.EpgTimeline.normalize(get(key));
             List<EpgEntry> rows;
             try{rows=com.nenotv.player.EpgTimeline.normalize(provider.epgEntries(channel,50));}
@@ -66,6 +71,17 @@ public class EpgStore extends SQLiteOpenHelper {
         catch(java.util.concurrent.ExecutionException failure){Throwable cause=failure.getCause();if(cause instanceof Exception)throw (Exception)cause;if(cause instanceof Error)throw (Error)cause;throw new java.io.IOException("EPG_FETCH_FAILED",cause);}
         catch(InterruptedException interrupted){Thread.currentThread().interrupt();throw new java.io.InterruptedIOException("EPG_FETCH_INTERRUPTED");}
         finally{if(owner)fetches.remove(key,created);}
+    }
+    /** Programmes from the G1 guide database, from the one on now up to 24 hours (free) or 7 days (Pro) ahead. */
+    private List<EpgEntry> fromGuide(String guideUrl,com.nenotv.player.model.MediaEntry channel,boolean pro,String language){
+        try{
+            if(guideUrl==null||guideUrl.trim().isEmpty())return Collections.emptyList();
+            GuideRefresher.ensure(app,guideUrl,pro,language);
+            GuideDatabase guide=GuideDatabase.get(app);String source=GuideDatabase.sourceKey(guideUrl.trim());
+            String id=guide.channelFor(source,channel.tvgId,channel.tvgName,channel.name);if(id.isEmpty())return Collections.emptyList();
+            long now=System.currentTimeMillis()/1000L;
+            return com.nenotv.player.EpgTimeline.normalize(guide.entries(source,id,now,now+GuideRefresher.aheadSeconds(pro),pro?400:60));
+        }catch(Exception unavailable){return Collections.emptyList();}
     }
     private String encode(List<EpgEntry> rows)throws Exception{JSONArray a=new JSONArray();for(EpgEntry e:rows){JSONObject x=new JSONObject();x.put("t",e.title);x.put("d",e.description);x.put("sr",e.startRaw);x.put("er",e.endRaw);x.put("s",e.startEpoch);x.put("e",e.endEpoch);a.put(x);}return a.toString();}
     private List<EpgEntry> decode(String raw)throws Exception{List<EpgEntry>o=new ArrayList<>();JSONArray a=new JSONArray(raw);for(int i=0;i<a.length();i++){JSONObject x=a.getJSONObject(i);EpgEntry e=new EpgEntry();e.title=x.optString("t");e.description=x.optString("d");e.startRaw=x.optString("sr");e.endRaw=x.optString("er");e.startEpoch=x.optLong("s");e.endEpoch=x.optLong("e");o.add(e);}return o;}
