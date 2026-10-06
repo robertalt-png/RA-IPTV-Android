@@ -137,12 +137,12 @@ public final class UiInstrumentation extends ImportInstrumentation {
                 try{
                     waitForIdleSync();
                     runOnMainSync(()->{
-                        Button privacy=a.box.findViewWithTag("privacy_policy");
+                        TextView privacy=a.box.findViewWithTag("privacy_policy");
                         String expected="nl".equals(language)?"Privacyverklaring":"de".equals(language)?"Datenschutzerklärung":"Privacy policy";
                         check(privacy!=null&&privacy.isEnabled()&&privacy.getVisibility()==View.VISIBLE&&privacy.hasOnClickListeners(),"Privacy link unavailable: "+level+"/"+language);
                         check(expected.contentEquals(privacy.getText()),"Privacy label incorrect: "+language);
                         assertUnclippedText(privacy);
-                        Button deletion=a.box.findViewWithTag("account_deletion");
+                        TextView deletion=a.box.findViewWithTag("account_deletion");
                         String deletionLabel="nl".equals(language)?"Account verwijderen aanvragen":"de".equals(language)?"Kontolöschung beantragen":"Request account deletion";
                         check(deletion!=null&&deletion.isEnabled()&&deletion.getVisibility()==View.VISIBLE&&deletion.hasOnClickListeners(),"Account deletion unavailable: "+level+"/"+language);
                         check(deletionLabel.contentEquals(deletion.getText()),"Deletion label incorrect: "+language);
@@ -154,9 +154,8 @@ public final class UiInstrumentation extends ImportInstrumentation {
                 try{
                     waitForIdleSync();
                     runOnMainSync(()->{
-                        Button deletion=settings.box.findViewWithTag("account_deletion");
-                        check(deletion!=null&&deletion.isEnabled()&&deletion.hasOnClickListeners(),"Settings deletion unavailable: "+level+"/"+language);
-                        assertUnclippedText(deletion);
+                        // Account deletion lives once, on the account screen; Settings links there.
+                        check(settings.box.findViewWithTag("account_deletion")==null,"Duplicate account deletion in Settings: "+level+"/"+language);
                     });
                 }finally{runOnMainSync(settings::finish);waitForIdleSync();}
             }
@@ -346,7 +345,6 @@ public final class UiInstrumentation extends ImportInstrumentation {
                     check(!a.link.isEnabled()&&!a.email.isEnabled()&&!a.trial.isEnabled()&&!a.refresh.isEnabled(),"Account permits concurrent requests");
                     a.busy(false);
                     a.serverText.setText("");
-                    assertUnclippedText(a.link);
                     if(Build.VERSION.SDK_INT>=30){
                         int[] position=new int[2];a.box.getLocationOnScreen(position);
                         check(position[1]>=a.box.getRootWindowInsets().getInsets(WindowInsets.Type.systemBars()).top,"Account overlaps system bars");

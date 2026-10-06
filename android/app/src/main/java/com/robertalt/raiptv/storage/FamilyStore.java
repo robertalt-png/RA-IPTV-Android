@@ -45,6 +45,7 @@ public final class FamilyStore {
     public static boolean allowed(Context c,MediaEntry e){
         if(e==null)return false;
         if(!active(c))return true;
+        if(autoKidsAllowed(c,e))return true;
         if(!"series".equals(e.type))return approved(c,e);
         // A series is only a navigation container; every episode needs its own approval.
         try{
@@ -58,6 +59,26 @@ public final class FamilyStore {
         return false;
     }
     private static String safe(String x){return x==null?"":x;}
+    // ---- Automatic children's categories in child mode (on by default, parent can switch it off with the PIN) ----
+    private static final java.util.Set<String> KIDS_WORDS=new java.util.HashSet<>(java.util.Arrays.asList("kids","kid","kinder","kinderen","kinderfilm","kinderfilms","kinderseries","jeugd","junior","children","childrens","cartoon","cartoons","enfants","bambini","infantil","infantiles","niños","ninos","çocuk","cocuk","dzieci"));
+    /** True for provider category names such as "NL | Kids" or "Kinderfilms"; never for adult-labelled names. */
+    public static boolean isKidsName(String name){
+        if(name==null||name.isEmpty()||SettingsStore.isAdultLabel(name))return false;
+        for(String w:name.toLowerCase(java.util.Locale.ROOT).split("[^\\p{L}\\p{Nd}]+"))if(KIDS_WORDS.contains(w))return true;
+        return false;
+    }
+    public static boolean autoKids(Context c){return prefs(c).getBoolean("auto_kids",true);}
+    public static boolean setAutoKids(Context c,boolean on,String pin){if(!SettingsStore.verifyParentalPin(c,pin))return false;return edit(c).putBoolean("auto_kids",on).commit();}
+    /** Remembers which category IDs are children's categories, so the player can check them after a restart. */
+    public static void rememberKidsCategories(Context c,java.util.Collection<String> ids){
+        if(ids==null||ids.isEmpty())return;java.util.Set<String> all=new java.util.HashSet<>(prefs(c).getStringSet("kids_category_ids",new java.util.HashSet<>()));
+        if(all.addAll(ids))prefs(c).edit().putStringSet("kids_category_ids",all).apply();
+    }
+    private static boolean autoKidsAllowed(Context c,MediaEntry e){
+        if(!autoKids(c)||!safe(e.sourceId).isEmpty()||SettingsStore.isAdultLabel(e.name))return false;
+        if(isKidsName(e.group))return true;
+        String id=safe(e.categoryId);return !id.isEmpty()&&prefs(c).getStringSet("kids_category_ids",java.util.Collections.emptySet()).contains(id);
+    }
     private static SharedPreferences.Editor edit(Context c){return prefs(c).edit().putLong("revision",revision(c)+1);}
     public static boolean setActive(Context c,boolean on,String pin){
         if(!SettingsStore.verifyParentalPin(c,pin))return false;

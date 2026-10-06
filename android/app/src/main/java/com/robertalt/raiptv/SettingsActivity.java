@@ -1,35 +1,172 @@
 package com.nenotv.player;
-import android.app.*;import android.os.*;import android.graphics.Typeface;import android.text.InputType;import android.view.*;import android.widget.*;
+
+import android.app.*;
+import android.content.Intent;
+import android.os.*;
+import android.text.InputType;
+import android.widget.*;
 import com.nenotv.player.storage.*;
-public class SettingsActivity extends Activity{
-  LinearLayout box; android.content.SharedPreferences p; String langAtOpen;
-  int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
-  String T(String k){return UiText.t(this,k);} 
-  TextView t(String x,int z){TextView v=new TextView(this);v.setText(x);v.setTextColor(0xFFF7F8FA);v.setTextSize(z);return v;}
-  Button b(String x){Button v=new Button(this);v.setText(x);v.setAllCaps(false);v.setTextColor(0xFFF7F8FA);v.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));return v;}
-  @Override public void onCreate(Bundle x){super.onCreate(x);if(FamilyStore.active(this)){startActivity(new android.content.Intent(this,FamilyActivity.class));finish();return;}SettingsStore.migrateLanguagePreferences(this);p=SettingsStore.prefs(this);langAtOpen=SettingsStore.language(this);build();UiText.applyDirection(this);}
-  void build(){ScrollView sv=new ScrollView(this);sv.setBackgroundColor(0xFF07090D);sv.setClipToPadding(true);sv.setOnApplyWindowInsetsListener((v,insets)->{v.setPadding(0,insets.getSystemWindowInsetTop(),0,insets.getSystemWindowInsetBottom());return insets;});sv.requestApplyInsets();box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(12),dp(18),dp(30));sv.addView(box);
-    LinearLayout h=new LinearLayout(this);h.setGravity(Gravity.CENTER_VERTICAL);TextView title=t(T("settings"),28);title.setTypeface(null,Typeface.BOLD);h.addView(title,new LinearLayout.LayoutParams(0,-2,1));Button close=b(T("close"));close.setOnClickListener(v->finish());h.addView(close);box.addView(h);
-    sec(T("language"));spin(T("app_language"),"language",appLanguageLabels(),new String[]{"nl","en","de","fr","es","it","pt","tr","pl","ar"});TextView langHelp=t(T("language_help")+" "+T("content_language_help"),12);langHelp.setTextColor(0xFF8D96A4);langHelp.setPadding(0,0,0,dp(8));box.addView(langHelp);
-    sec(T("general"));toggle(T("compact"),"compact",true);spin(T("hero_size"),"hero_size",new String[]{T("small"),T("normal"),T("large")},new String[]{"small","normal","large"});spin(T("start_screen"),"start_screen",new String[]{T("home"),T("last_tab"),T("live_tv"),T("epg"),T("movies"),T("series")},new String[]{"home","last","live","epg","vod","series"});spin(T("default_sort"),"sort",new String[]{T("provider"),"A–Z","Z–A",T("favorites_first"),T("recent_first")},new String[]{"provider","az","za","favorites","recent"});
-    sec(FamilyUi.text(this,"Familiefilter","Family filter","Familienfilter"));Button family=b(FamilyUi.text(this,"Kindermodus en ouder-PIN","Child mode and parent PIN","Kindermodus und Eltern-PIN"));family.setOnClickListener(v->startActivity(new android.content.Intent(this,FamilyActivity.class)));box.addView(family,new LinearLayout.LayoutParams(-1,dp(52)));
-    Button age=b(FamilyUi.text(this,"Leeftijdsgroep","Age group","Altersgruppe"));age.setTag("age_privacy");age.setOnClickListener(v->startActivity(new android.content.Intent(this,AgePrivacyActivity.class).putExtra("settings",true)));box.addView(age,new LinearLayout.LayoutParams(-1,dp(52)));
-    sec("Mijn SunnyIPTV");Button logout=b(FamilyUi.text(this,"Uitloggen","Sign out","Abmelden"));logout.setOnClickListener(v->new AlertDialog.Builder(this).setTitle(FamilyUi.text(this,"Uitloggen?","Sign out?","Abmelden?")).setMessage(FamilyUi.text(this,"Uw tv-bronnen en instellingen blijven op dit apparaat staan.","Your TV sources and settings remain on this device.","Ihre TV-Quellen und Einstellungen bleiben auf diesem Geraet.")).setNegativeButton(T("cancel"),null).setPositiveButton(FamilyUi.text(this,"Uitloggen","Sign out","Abmelden"),(d,w)->{new AccountLinkStore(this).clear();ExtraPrivacyStore.clear(this);startActivity(new android.content.Intent(this,MainActivity.class).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK|android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK));finish();}).show());box.addView(logout,new LinearLayout.LayoutParams(-1,dp(52)));
-    Button deletion=b(FamilyUi.text(this,"Account verwijderen aanvragen","Request account deletion","Kontolöschung beantragen"));deletion.setTag("account_deletion");deletion.setOnClickListener(v->{try{startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(SiteEndpoints.accountDeletionUrl(SettingsStore.language(this)))));}catch(android.content.ActivityNotFoundException e){new AlertDialog.Builder(this).setMessage(SiteEndpoints.accountDeletionUrl(SettingsStore.language(this))).setPositiveButton(T("close"),null).show();}});box.addView(deletion,new LinearLayout.LayoutParams(-1,dp(52)));
-    sec(T("playback"));TextView proHint=t("🔒 PRO · "+T("picture_in_picture")+" · "+T("advanced_subtitles"),12);proHint.setTextColor(0xFFFFD400);box.addView(proHint);spin(T("player"),"player",new String[]{T("automatic"),"VLC","Media3"},new String[]{"auto","vlc","media3"});spin(T("buffer"),"buffer",new String[]{T("fast"),T("stable"),T("maximum")},new String[]{"normal","stable","max"});spin(T("audio_pref"),"audio",audioLanguageLabels(),new String[]{"auto","original","nl","en","de","fr","es","it","pt","tr","pl","ar"});spin(T("subtitle_pref"),"subtitles",subtitleLanguageLabels(),new String[]{"auto","off","nl","en","de","fr","es","it","pt","tr","pl","ar"});toggle(T("picture_in_picture"),"pip",true);toggle(T("autoplay"),"autoplay_next",true);
-    sec(T("advanced_subtitles"));Button bridge=b(T("external_subtitle_bridge"));bridge.setOnClickListener(v->editSubtitleBridge());box.addView(bridge,new LinearLayout.LayoutParams(-1,dp(50)));
-    sec(T("maintenance"));Button re=b(T("reindex"));re.setOnClickListener(v->{p.edit().putBoolean("force_reindex",true).apply();Toast.makeText(this,T("reindex_started"),Toast.LENGTH_SHORT).show();});box.addView(re,new LinearLayout.LayoutParams(-1,dp(50)));Button cl=b(T("clear_cache"));cl.setOnClickListener(v->{MediaRowAdapter.clearArtworkCache();MainActivity.clearHeroCache();Toast.makeText(this,T("cache_cleared"),Toast.LENGTH_SHORT).show();});box.addView(cl,new LinearLayout.LayoutParams(-1,dp(50)));
-    sec(T("library"));SecureProfileStore profiles=new SecureProfileStore(this);if(profiles.exists()){com.nenotv.player.model.Profile profile=profiles.load();String base=profile.type.name()+"|"+profile.server+"|"+profile.username+"|"+profile.m3uUrl;String key=Integer.toHexString(base.hashCode())+":"+profile.type.name();SearchIndexStore index=new SearchIndexStore(this);TextView stats=t(T("live_tv")+": "+index.countSection(key,"live")+"\n"+T("movies")+": "+index.countSection(key,"vod")+"\n"+T("series")+": "+index.countSection(key,"series"),13);box.addView(stats);index.close();}sec(T("about"));TextView a=t("SunnyIPTV "+BuildConfig.VERSION_NAME+"\nLight + Pro",13);a.setTextColor(0xFFA7AFBC);box.addView(a);setContentView(sv);}
-  void editSubtitleBridge(){SecureProfileStore store=new SecureProfileStore(this);if(!store.exists()){Toast.makeText(this,T("profile_required"),Toast.LENGTH_SHORT).show();return;}com.nenotv.player.model.Profile profile=store.load();LinearLayout wrap=new LinearLayout(this);wrap.setOrientation(LinearLayout.VERTICAL);wrap.setPadding(dp(18),0,dp(18),0);EditText url=new EditText(this);url.setHint(T("bridge_url"));url.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_URI);url.setText(profile.bridgeUrl);EditText token=new EditText(this);token.setHint(T("bridge_token_optional"));token.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);token.setText(profile.bridgeToken);wrap.addView(url);wrap.addView(token);new AlertDialog.Builder(this).setTitle(T("external_subtitle_bridge")).setMessage(T("bridge_help")).setView(wrap).setNegativeButton(T("cancel"),null).setPositiveButton(T("save"),(d,w)->{profile.bridgeUrl=url.getText().toString().trim();profile.bridgeToken=token.getText().toString();store.save(profile);Toast.makeText(this,T("saved"),Toast.LENGTH_SHORT).show();}).show();}
-  String languageName(String code){return SettingsStore.displayLanguage(this,code);}
-  String[] appLanguageLabels(){return new String[]{languageName("nl"),languageName("en"),languageName("de"),languageName("fr"),languageName("es"),languageName("it"),languageName("pt"),languageName("tr"),languageName("pl"),languageName("ar")};}
-  String[] contentLanguageLabels(){return new String[]{T("follow_app_language"),languageName("nl"),languageName("en"),languageName("de"),languageName("fr"),languageName("es"),languageName("it"),languageName("pt"),languageName("tr"),languageName("pl"),languageName("ar")};}
-  String[] audioLanguageLabels(){return new String[]{T("follow_app_language"),T("original"),languageName("nl"),languageName("en"),languageName("de"),languageName("fr"),languageName("es"),languageName("it"),languageName("pt"),languageName("tr"),languageName("pl"),languageName("ar")};}
-  String[] subtitleLanguageLabels(){return new String[]{T("follow_app_language"),T("off"),languageName("nl"),languageName("en"),languageName("de"),languageName("fr"),languageName("es"),languageName("it"),languageName("pt"),languageName("tr"),languageName("pl"),languageName("ar")};}
 
+/** Settings as blocks: each block opens one small topic. Options that do nothing in Light are not shown there. */
+public class SettingsActivity extends Activity {
+    private static final int MAIN = 0, LANGUAGE = 1, DISPLAY = 2, PLAYBACK = 3, TROUBLE = 4, ACCOUNT = 5;
+    LinearLayout box;
+    android.content.SharedPreferences p;
+    int page = MAIN;
+    static final String[] LANGS = {"nl", "en", "de", "fr", "es", "it", "pt", "tr", "pl", "ar"};
 
+    String T(String k) { return UiText.t(this, k); }
+    String text(String nl, String en, String de) { return FamilyUi.text(this, nl, en, de); }
+    boolean pro() { return ProGate.allowed(this); }
 
-  void sec(String x){TextView v=t(x,18);v.setTypeface(null,Typeface.BOLD);v.setPadding(0,dp(20),0,dp(7));box.addView(v);}
-  void toggle(String l,String k,boolean d){Switch v=new Switch(this);v.setText(l);v.setTextColor(0xFFF7F8FA);v.setChecked(p.getBoolean(k,d));v.setOnCheckedChangeListener((a,on)->p.edit().putBoolean(k,on).apply());box.addView(v,new LinearLayout.LayoutParams(-1,dp(52)));}
-  void spin(String l,String k,String[]ls,String[]vs){TextView z=t(l,13);z.setTextColor(0xFFA7AFBC);box.addView(z);Spinner sp=new Spinner(this);ArrayAdapter<String>ad=new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,ls){@Override public View getDropDownView(int q,View v,ViewGroup g){TextView x=(TextView)super.getDropDownView(q,v,g);x.setTextColor(0xFFF7F8FA);x.setBackgroundColor(0xFF181C22);x.setPadding(dp(16),dp(14),dp(16),dp(14));return x;}};ad.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);sp.setAdapter(ad);String cur="start_screen".equals(k)?SettingsStore.startScreen(this):p.getString(k,vs[0]);int n=0;for(int i=0;i<vs.length;i++)if(vs[i].equals(cur))n=i;sp.setSelection(n,false);final boolean[] ready={false};sp.post(()->ready[0]=true);sp.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){public void onNothingSelected(AdapterView<?>x){}public void onItemSelected(AdapterView<?>x,View v,int q,long id){if(!ready[0])return;String next=vs[q];String old=p.getString(k,vs[0]);if(next.equals(old))return;if("language".equals(k)){SettingsStore.setPrimaryLanguage(SettingsActivity.this,next);recreate();}else p.edit().putString(k,next).apply();}});box.addView(sp,new LinearLayout.LayoutParams(-1,dp(48)));}
+    @Override public void onCreate(Bundle x) {
+        super.onCreate(x);
+        if (FamilyStore.active(this)) { startActivity(new Intent(this, FamilyActivity.class)); finish(); return; }
+        SettingsStore.migrateLanguagePreferences(this);
+        p = SettingsStore.prefs(this);
+        if (x != null) page = x.getInt("page", MAIN);
+        build();
+    }
+    @Override protected void onPostCreate(Bundle saved) { super.onPostCreate(saved); BackCompat.route(this); }
+    @Override protected void onSaveInstanceState(Bundle out) { super.onSaveInstanceState(out); out.putInt("page", page); }
+    @Override public void onBackPressed() { if (page != MAIN) { page = MAIN; build(); } else super.onBackPressed(); }
+    @Override protected void onResume() { super.onResume(); if (p != null) build(); }
+
+    void open(int target) { page = target; build(); }
+
+    void build() {
+        String title = page == LANGUAGE ? T("language") : page == DISPLAY ? text("Weergave", "Display", "Anzeige") : page == PLAYBACK ? T("playback")
+                : page == TROUBLE ? text("Problemen oplossen", "Troubleshooting", "Fehlerbehebung") : page == ACCOUNT ? text("Account", "Account", "Konto") : T("settings");
+        box = Tiles.page(this, title);
+        if (page != MAIN) Tiles.link(this, box, "← " + text("Terug naar instellingen", "Back to settings", "Zurück zu den Einstellungen"), v -> open(MAIN));
+        Tiles.Grid g = new Tiles.Grid(this, box);
+        switch (page) {
+            case LANGUAGE:
+                choice(g, T("app_language"), "language", labels(LANGS), LANGS);
+                choice(g, T("audio_pref"), "audio", prefixed(new String[]{T("follow_app_language"), T("original")}), prefixedValues("auto", "original"));
+                choice(g, T("subtitle_pref"), "subtitles", prefixed(new String[]{T("follow_app_language"), T("off")}), prefixedValues("auto", "off"));
+                g.finish();
+                Tiles.note(this, box, text("Zenders, films en series in je taal staan bovenaan.", "Channels, movies and series in your language come first.", "Sender, Filme und Serien in deiner Sprache stehen oben."));
+                break;
+            case DISPLAY:
+                displaySize(g);
+                choice(g, T("start_screen"), "start_screen", new String[]{T("home"), T("last_tab"), T("live_tv"), T("epg"), T("movies"), T("series")}, new String[]{"home", "last", "live", "epg", "vod", "series"});
+                choice(g, T("default_sort"), "sort", new String[]{T("provider"), "A–Z", "Z–A", T("favorites_first"), T("recent_first")}, new String[]{"provider", "az", "za", "favorites", "recent"});
+                g.finish();
+                break;
+            case PLAYBACK:
+                if (pro()) {
+                    onOff(g, T("picture_in_picture"), "pip", true);
+                    onOff(g, T("autoplay"), "autoplay_next", true);
+                    choice(g, T("player"), "player", new String[]{T("automatic"), "VLC", "Media3"}, new String[]{"auto", "vlc", "media3"});
+                    g.add("💬", T("advanced_subtitles"), T("external_subtitle_bridge"), false, v -> editSubtitleBridge());
+                    g.finish();
+                } else {
+                    g.add("🔒", "SunnyIPTV Pro", text("Beeld-in-beeld, volgende aflevering automatisch, externe ondertitels en opnemen", "Picture-in-picture, next episode automatically, external subtitles and recording", "Bild-in-Bild, nächste Folge automatisch, externe Untertitel und Aufnahme"), false, v -> ProGate.require(this, T("picture_in_picture")));
+                    g.finish();
+                    Tiles.note(this, box, text("Audio- en ondertiteltaal stel je in onder Taal.", "Set audio and subtitle language under Language.", "Audio- und Untertitelsprache stellst du unter Sprache ein."));
+                }
+                break;
+            case TROUBLE:
+                g.add("🔄", T("reindex"), text("Haalt je zenders, films en series opnieuw op", "Downloads your channels, movies and series again", "Lädt Sender, Filme und Serien neu"), false, v -> { p.edit().putBoolean("force_reindex", true).apply(); Toast.makeText(this, T("reindex_started"), Toast.LENGTH_SHORT).show(); });
+                g.add("🧹", T("clear_cache"), text("Maakt opslagruimte vrij voor afbeeldingen", "Frees space used by images", "Gibt Speicher für Bilder frei"), false, v -> { MediaRowAdapter.clearArtworkCache(); MainActivity.clearHeroCache(); Toast.makeText(this, T("cache_cleared"), Toast.LENGTH_SHORT).show(); });
+                g.add("📶", text("Verbindingstest", "Connection test", "Verbindungstest"), text("Is je verbinding snel genoeg?", "Is your connection fast enough?", "Ist deine Verbindung schnell genug?"), false, v -> startActivity(new Intent(this, NetworkTestActivity.class)));
+                g.finish();
+                break;
+            case ACCOUNT:
+                g.add("👤", T("account_and_pro"), text("Status, Pro en dit apparaat", "Status, Pro and this device", "Status, Pro und dieses Gerät"), false, v -> startActivity(new Intent(this, AccountActivity.class)));
+                g.add("🎂", text("Leeftijdsgroep", "Age group", "Altersgruppe"), text("Bepaalt welke extra diensten mogen", "Decides which extra services may be used", "Bestimmt, welche Zusatzdienste erlaubt sind"), false, v -> startActivity(new Intent(this, AgePrivacyActivity.class).putExtra("settings", true)));
+                g.add("🚪", text("Uitloggen", "Sign out", "Abmelden"), "", false, v -> signOut());
+                g.finish();
+                break;
+            default:
+                g.add("🌐", T("language"), SettingsStore.displayLanguage(this, SettingsStore.language(this)), false, v -> open(LANGUAGE));
+                g.add("🖥", text("Weergave", "Display", "Anzeige"), text("Startscherm, sortering, grootte", "Start screen, sorting, size", "Startbildschirm, Sortierung, Größe"), false, v -> open(DISPLAY));
+                g.add("▶", T("playback"), pro() ? text("Speler en ondertitels", "Player and subtitles", "Player und Untertitel") : "🔒 Pro", false, v -> open(PLAYBACK));
+                g.add("👪", text("Familiefilter", "Family filter", "Familienfilter"), text("Iedereen, Familie of Kinderen", "Everyone, Family or Children", "Alle, Familie oder Kinder"), false, v -> startActivity(new Intent(this, FamilyActivity.class)));
+                g.add("🔧", text("Problemen oplossen", "Troubleshooting", "Fehlerbehebung"), text("Lijst vernieuwen, verbindingstest", "Refresh list, connection test", "Liste erneuern, Verbindungstest"), false, v -> open(TROUBLE));
+                g.add("👤", text("Account", "Account", "Konto"), text("Mijn account, uitloggen", "My account, sign out", "Mein Konto, abmelden"), false, v -> open(ACCOUNT));
+                g.finish();
+                Tiles.note(this, box, footer());
+        }
+        UiText.applyDirection(this);
+    }
+
+    String footer() {
+        String plan = new EntitlementStore(this).statusLabel(this);
+        String line = "SunnyIPTV " + BuildConfig.VERSION_NAME + " · " + plan;
+        try {
+            SecureProfileStore profiles = new SecureProfileStore(this);
+            if (profiles.exists()) {
+                com.nenotv.player.model.Profile profile = profiles.load();
+                String key = ProfileCacheKey.of(profile);
+                try (SearchIndexStore index = new SearchIndexStore(this)) {
+                    line += "\n" + T("live_tv") + ": " + index.countSection(key, "live") + " · " + T("movies") + ": " + index.countSection(key, "vod") + " · " + T("series") + ": " + index.countSection(key, "series");
+                }
+            }
+        } catch (Exception ignored) {}
+        return line;
+    }
+
+    /** One tile showing the current value; tapping opens a simple list to choose from. */
+    void choice(Tiles.Grid g, String label, String key, String[] labels, String[] values) {
+        String cur = "start_screen".equals(key) ? SettingsStore.startScreen(this) : "language".equals(key) ? SettingsStore.language(this) : p.getString(key, values[0]);
+        int at = 0;
+        for (int i = 0; i < values.length; i++) if (values[i].equals(cur)) at = i;
+        final int selected = at;
+        g.add("", label, labels[at], false, v -> new AlertDialog.Builder(this).setTitle(label).setSingleChoiceItems(labels, selected, (d, w) -> {
+            d.dismiss();
+            if (values[w].equals(cur)) return;
+            if ("language".equals(key)) { SettingsStore.setPrimaryLanguage(this, values[w]); recreate(); }
+            else { p.edit().putString(key, values[w]).apply(); build(); }
+        }).setNegativeButton(T("cancel"), null).show());
+    }
+
+    void onOff(Tiles.Grid g, String label, String key, boolean def) {
+        boolean on = p.getBoolean(key, def);
+        g.add("", label, on ? text("Aan", "On", "An") : text("Uit", "Off", "Aus"), false, v -> { p.edit().putBoolean(key, !on).apply(); build(); });
+    }
+
+    /** "Compact view" and "hero size" were two technical switches; one simple choice replaces them. */
+    void displaySize(Tiles.Grid g) {
+        String[] labels = {text("Compact", "Compact", "Kompakt"), text("Normaal", "Normal", "Normal"), text("Groot", "Large", "Groß")};
+        boolean compact = SettingsStore.compact(this);
+        String hero = SettingsStore.hero(this);
+        int at = !compact ? 2 : "small".equals(hero) ? 0 : 1;
+        g.add("", text("Grootte", "Size", "Größe"), labels[at], false, v -> new AlertDialog.Builder(this).setTitle(text("Grootte", "Size", "Größe")).setSingleChoiceItems(labels, at, (d, w) -> {
+            d.dismiss();
+            p.edit().putBoolean("compact", w != 2).putString("hero_size", w == 0 ? "small" : w == 1 ? "normal" : "large").apply();
+            build();
+        }).setNegativeButton(T("cancel"), null).show());
+    }
+
+    void signOut() {
+        new AlertDialog.Builder(this).setTitle(text("Uitloggen?", "Sign out?", "Abmelden?"))
+                .setMessage(text("Je tv-bron en instellingen blijven op dit apparaat staan. Om de app weer te gebruiken koppel je dit apparaat opnieuw.",
+                        "Your TV source and settings stay on this device. To use the app again, link this device again.",
+                        "Deine TV-Quelle und Einstellungen bleiben auf diesem Gerät. Um die App wieder zu nutzen, verbindest du dieses Gerät erneut."))
+                .setNegativeButton(T("cancel"), null)
+                .setPositiveButton(text("Uitloggen", "Sign out", "Abmelden"), (d, w) -> {
+                    new AccountLinkStore(this).clear();
+                    ExtraPrivacyStore.clear(this);
+                    startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
+                    finish();
+                }).show();
+    }
+
+    void editSubtitleBridge() {
+        SecureProfileStore store = new SecureProfileStore(this);
+        if (!store.exists()) { Toast.makeText(this, T("profile_required"), Toast.LENGTH_SHORT).show(); return; }
+        com.nenotv.player.model.Profile profile = store.load();
+        LinearLayout wrap = new LinearLayout(this); wrap.setOrientation(LinearLayout.VERTICAL); wrap.setPadding(Tiles.dp(this, 18), 0, Tiles.dp(this, 18), 0);
+        EditText url = new EditText(this); url.setHint(T("bridge_url")); url.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI); url.setText(profile.bridgeUrl);
+        EditText token = new EditText(this); token.setHint(T("bridge_token_optional")); token.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD); token.setText(profile.bridgeToken);
+        wrap.addView(url); wrap.addView(token);
+        new AlertDialog.Builder(this).setTitle(T("external_subtitle_bridge")).setMessage(T("bridge_help")).setView(wrap).setNegativeButton(T("cancel"), null)
+                .setPositiveButton(T("save"), (d, w) -> { profile.bridgeUrl = url.getText().toString().trim(); profile.bridgeToken = token.getText().toString(); store.save(profile); Toast.makeText(this, T("saved"), Toast.LENGTH_SHORT).show(); }).show();
+    }
+
+    String[] labels(String[] codes) { String[] out = new String[codes.length]; for (int i = 0; i < codes.length; i++) out[i] = SettingsStore.displayLanguage(this, codes[i]); return out; }
+    String[] prefixed(String[] first) { String[] names = labels(LANGS); String[] out = new String[first.length + names.length]; System.arraycopy(first, 0, out, 0, first.length); System.arraycopy(names, 0, out, first.length, names.length); return out; }
+    String[] prefixedValues(String a, String b) { String[] out = new String[LANGS.length + 2]; out[0] = a; out[1] = b; System.arraycopy(LANGS, 0, out, 2, LANGS.length); return out; }
 }

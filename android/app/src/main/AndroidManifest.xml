@@ -25,6 +25,7 @@
         </activity>
         <activity android:name=".SettingsActivity" android:exported="false" />
         <activity android:name=".FamilyActivity" android:exported="false" />
+        <activity android:name=".NetworkTestActivity" android:exported="false" />
         <activity android:name=".HouseholdProfilesActivity" android:exported="false" />
         <activity android:name=".LanguageSetupActivity" android:exported="false" />
         <activity android:name=".AgePrivacyActivity" android:exported="false" />
