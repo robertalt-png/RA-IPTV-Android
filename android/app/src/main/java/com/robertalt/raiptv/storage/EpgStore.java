@@ -35,7 +35,7 @@ public class EpgStore extends SQLiteOpenHelper {
     public List<EpgEntry> getOrFetch(com.nenotv.player.provider.Provider provider,String profile,com.nenotv.player.model.MediaEntry channel,String language)throws Exception{
         if(closed)throw new java.io.IOException("EPG_STORE_CLOSED");
         if(provider==null||channel==null)throw new IllegalArgumentException("EPG_CONTEXT_MISSING");
-        boolean smart=new EntitlementStore(app).isPro()&&SettingsStore.prefs(app).getBoolean("pro_smart_epg",false);
+        boolean smart=new EntitlementStore(app).isPro()&&SettingsStore.prefs(app).getBoolean("pro_smart_epg",true);
         List<String> extraUrls=Collections.emptyList();
         if(smart){String sourceId=channel.sourceId==null||channel.sourceId.isEmpty()?new SourceStore(app).activeId():channel.sourceId;extraUrls=new SmartEpgStore(app).urls(sourceId);}
         final List<String> configuredUrls=extraUrls;
@@ -75,7 +75,7 @@ public class EpgStore extends SQLiteOpenHelper {
     public List<String> guideSources(com.nenotv.player.provider.Provider provider,com.nenotv.player.model.MediaEntry channel){
         List<String> own;try{own=provider==null?Collections.emptyList():provider.guideUrls();}catch(Exception unavailable){own=Collections.emptyList();}
         List<String> extra=Collections.emptyList();
-        try{if(new EntitlementStore(app).isPro()&&SettingsStore.prefs(app).getBoolean("pro_smart_epg",false)){String sourceId=channel==null||channel.sourceId==null||channel.sourceId.isEmpty()?new SourceStore(app).activeId():channel.sourceId;extra=new SmartEpgStore(app).urls(sourceId);}}catch(Exception unavailable){}
+        try{if(new EntitlementStore(app).isPro()&&SettingsStore.prefs(app).getBoolean("pro_smart_epg",true)){String sourceId=channel==null||channel.sourceId==null||channel.sourceId.isEmpty()?new SourceStore(app).activeId():channel.sourceId;extra=new SmartEpgStore(app).urls(sourceId);}}catch(Exception unavailable){}
         return com.nenotv.player.core.GuideSources.merge(own,extra);
     }
     /** Programmes overlapping [from,to) from the first stored guide that knows this channel and has programmes there. */

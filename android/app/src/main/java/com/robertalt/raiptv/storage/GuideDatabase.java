@@ -33,6 +33,14 @@ public final class GuideDatabase extends SQLiteOpenHelper {
 
     GuideDatabase(Context c) { super(c, DB, null, VERSION); }
 
+    /** P6: bytes the guide database takes on the device (main file plus write-ahead log). */
+    public static long sizeOnDisk(Context c) {
+        java.io.File f = c.getApplicationContext().getDatabasePath(DB);
+        long n = f.length();
+        java.io.File wal = new java.io.File(f.getPath() + "-wal");
+        return n + (wal.exists() ? wal.length() : 0);
+    }
+
     @Override public void onConfigure(SQLiteDatabase db) { db.enableWriteAheadLogging(); }
 
     @Override public void onCreate(SQLiteDatabase db) {

@@ -37,7 +37,7 @@ public class MainActivity extends Activity {
     volatile boolean activityPaused=false,playbackActive=false;
     boolean seriesEpisodeMode=false,settingCategories=false,autoDefaultGroup=true; volatile boolean indexRefreshRequested=false,indexRefreshRunning=false,resumeIndexAfterPlayback=false,indexCategoryBusy=false; volatile Future<?> indexFuture=null; volatile int fullLibraryToken=0; String appliedLanguage="",appliedContentLanguage="";
     boolean cachePagingActive=false,cachePageLoading=false,autoReindexAfterConnect=false,epgGridMode=true; String cachePagingSection="",cachePagingTag=""; int cachePagingOffset=0,cachePagingTotal=0; static final int CACHE_PAGE_SIZE=240; long lastIndexUiPublish=0L; String indexAutoHeroKey="";
-    int requestSerial=0,heroSerial=0; String latestSearchQuery=""; long epgBaseEpoch=0L,epgViewStart=0L; List<MediaEntry> epgBoardChannels=new ArrayList<>(); int epgBoardShown=0; TextView epgMoreView;
+    int requestSerial=0,heroSerial=0; String latestSearchQuery=""; long epgBaseEpoch=0L,epgViewStart=0L,epgGridStarted=0L,epgGridLastMs=-1L; int epgGridPending=0,epgGridLastRows=0; List<MediaEntry> epgBoardChannels=new ArrayList<>(); int epgBoardShown=0; TextView epgMoreView;
     Handler ui=new Handler(Looper.getMainLooper()); Runnable pendingSearch,delayedIndexResume; MediaEntry selectedHero;
     private long familyRevision=-1;
     static final long SEARCH_INDEX_TTL_MS=6*60*60*1000L;
@@ -177,6 +177,7 @@ public class MainActivity extends Activity {
     addNenoMenuItem(d,box,T("account_and_pro"),()->startActivity(new Intent(this,AccountActivity.class)));
     addNenoMenuItem(d,box,(ProGate.allowed(this)?"":"🔒 ")+T("household_profiles"),()->{if(ProGate.require(this,T("household_profiles")))startActivity(new Intent(this,HouseholdProfilesActivity.class));});
     addNenoMenuItem(d,box,T("manage_source"),()->startActivityForResult(ProModuleInstaller.sourcesIntent(this),10));
+    addNenoMenuItem(d,box,(ProGate.allowed(this)?"🔔 ":"🔒 ")+T("reminders"),()->{if(ProGate.require(this,T("reminders")))showReminders();});
     addNenoMenuItem(d,box,(ProGate.allowed(this)?"":"🔒 ")+T("casting"),()->{if(ProGate.require(this,T("casting")))showTvShareMenu();});
     addNenoMenuItem(d,box,FamilyUi.text(this,"Verbindingstest","Connection test","Verbindungstest"),()->startActivity(new Intent(this,NetworkTestActivity.class)));
     addNenoMenuItem(d,box,T("settings"),()->startActivity(new Intent(this,SettingsActivity.class)));
@@ -275,6 +276,16 @@ void scheduleBackgroundIndex(){
         AlertDialog dlg=new AlertDialog.Builder(this).setTitle("🔔 "+r.title).setMessage(head+left[0]+" s").setPositiveButton(T("watch"),(d,w)->play(r.channel)).setNegativeButton(T("cancel"),null).create();
         Runnable tick=new Runnable(){public void run(){if(!dlg.isShowing()||!isUiAlive())return;left[0]--;if(left[0]<=0){dlg.dismiss();play(r.channel);return;}dlg.setMessage(head+left[0]+" s");ui.postDelayed(this,1000);}};
         dlg.setOnDismissListener(d->ui.removeCallbacks(tick));dlg.show();ui.postDelayed(tick,1000);
+    }
+    /** P4: all upcoming reminders; tap one to watch the channel or remove the reminder. */
+    void showReminders(){
+        long now=System.currentTimeMillis()/1000L;List<com.nenotv.player.storage.ReminderStore.Reminder> list=com.nenotv.player.storage.ReminderStore.upcoming(this,now);
+        if(list.isEmpty()){new AlertDialog.Builder(this).setTitle("🔔 "+T("reminders")).setMessage(T("no_reminders")).setPositiveButton(T("close"),null).show();return;}
+        String[] rows=new String[list.size()];
+        for(int i=0;i<rows.length;i++){com.nenotv.player.storage.ReminderStore.Reminder r=list.get(i);rows[i]=epgDayLabel(r.start,now)+" · "+clockAt(r.start)+" · "+DisplayText.title(r.channel)+"\n"+r.title;}
+        new AlertDialog.Builder(this).setTitle("🔔 "+T("reminders")+" ("+list.size()+")").setItems(rows,(d,w)->{com.nenotv.player.storage.ReminderStore.Reminder r=list.get(w);
+            new AlertDialog.Builder(this).setTitle(r.title).setMessage(rows[w]).setPositiveButton(T("watch"),(dd,ww)->play(r.channel)).setNeutralButton("🔕 "+T("reminder_remove"),(dd,ww)->{Reminders.remove(this,r.id);Toast.makeText(this,T("reminder_removed"),Toast.LENGTH_SHORT).show();refreshEpgBoardIfShown();showReminders();}).setNegativeButton(T("close"),null).show();
+        }).setNegativeButton(T("close"),null).show();
     }
     void toggleReminder(MediaEntry ch,EpgEntry e){
         if(com.nenotv.player.storage.ReminderStore.has(this,ch,e.startEpoch)){Reminders.remove(this,com.nenotv.player.storage.ReminderStore.id(ch,e.startEpoch));Toast.makeText(this,T("reminder_removed"),Toast.LENGTH_SHORT).show();refreshEpgBoardIfShown();return;}
@@ -559,6 +570,7 @@ void scheduleBackgroundIndex(){
     epgBaseEpoch=com.nenotv.player.core.GuideWindow.clamp(pro?epgViewStart:0L,now,pro);epgViewStart=pro?epgBaseEpoch:0L;
     if(pro)addEpgNavigation(now);
     addEpgTimelineHeader();
+    epgGridStarted=android.os.SystemClock.elapsedRealtime();epgGridPending=0;
     appendEpgRows(pro?40:(getResources().getConfiguration().screenWidthDp>=600?18:10));
     epgBoard.scrollTo(0,0);
 }
@@ -567,7 +579,7 @@ void scheduleBackgroundIndex(){
     List<MediaEntry>src=epgBoardChannels;int end=Math.min(src.size(),epgBoardShown+count);
     for(int i=epgBoardShown;i<end;i++)addEpgBoardRow(src.get(i));
     epgBoardShown=end;
-    if(src.size()>end){boolean pro=ProGate.allowed(this);TextView more=new TextView(this);more.setText("+ "+(src.size()-end)+" "+T("channels")+(pro?"":" · "+T("list")));more.setTextColor(getResources().getColor(R.color.muted));more.setTextSize(12);more.setGravity(Gravity.CENTER);more.setPadding(dp(8),dp(14),dp(8),dp(18));more.setFocusable(true);more.setOnClickListener(v->{if(ProGate.allowed(this))appendEpgRows(40);else setEpgMode(false);});epgMoreView=more;epgBoardContainer.addView(more);}
+    if(src.size()>end){boolean pro=ProGate.allowed(this);TextView more=new TextView(this);more.setText("+ "+(src.size()-end)+" "+T("channels")+(pro?"":" · "+T("list")));more.setTextColor(getResources().getColor(R.color.muted));more.setTextSize(12);more.setGravity(Gravity.CENTER);more.setPadding(dp(8),dp(14),dp(8),dp(18));tvFocusable(more,0x00000000);more.setOnClickListener(v->{if(ProGate.allowed(this))appendEpgRows(40);else setEpgMode(false);});epgMoreView=more;epgBoardContainer.addView(more);}
 }
     void moveEpgView(long start){epgViewStart=start;drawEpgBoard();}
     String epgDayLabel(long epoch,long now){int off=com.nenotv.player.core.GuideWindow.dayOffset(epoch,now,java.time.ZoneId.systemDefault());if(off==0)return T("today");try{return java.time.Instant.ofEpochSecond(epoch).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM",SettingsStore.appLocale(this)));}catch(Exception e){return "";}}
@@ -582,9 +594,27 @@ void scheduleBackgroundIndex(){
     long min=com.nenotv.player.core.GuideWindow.clamp(1L,now,true);back.setEnabled(base>min);back.setAlpha(base>min?1f:.4f);
     long max=com.nenotv.player.core.GuideWindow.clamp(Long.MAX_VALUE/2,now,true);next.setEnabled(base<max);next.setAlpha(base<max?1f:.4f);
     LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(38));lp.rightMargin=dp(6);
-    bar.addView(back,lp);bar.addView(day,new LinearLayout.LayoutParams(lp));bar.addView(nowButton,new LinearLayout.LayoutParams(lp));bar.addView(next,new LinearLayout.LayoutParams(lp));
+    Button info=epgNavButton("ℹ",v->showGuideStats());info.setContentDescription(T("guide_stats"));
+    bar.addView(back,lp);bar.addView(day,new LinearLayout.LayoutParams(lp));bar.addView(nowButton,new LinearLayout.LayoutParams(lp));bar.addView(next,new LinearLayout.LayoutParams(lp));bar.addView(info,new LinearLayout.LayoutParams(lp));
     HorizontalScrollView scroll=new HorizontalScrollView(this);scroll.setHorizontalScrollBarEnabled(false);scroll.addView(bar);epgBoardContainer.addView(scroll);
 }
+    /** P6: measured numbers of the stored guide on this device, for testing. */
+    void showGuideStats(){
+        exec.execute(()->{
+            StringBuilder m=new StringBuilder();
+            try{
+                List<String> sources=epgStore.guideSources(provider,null);GuideDatabase db=GuideDatabase.get(this);
+                m.append(T("guide_stats_size")).append(": ").append(String.format(Locale.ROOT,"%.1f MB",GuideDatabase.sizeOnDisk(this)/1048576.0)).append("\n");
+                int i=1;for(String url:sources){long[] c=db.counts(GuideDatabase.sourceKey(url.trim()));m.append(T("guide_stats_source")).append(" ").append(i++).append(": ").append(c[0]).append(" · ").append(c[1]).append(" ").append(T("channels")).append("\n");}
+                long[] last=GuideRefresher.lastImport;
+                if(last!=null)m.append(T("guide_stats_import")).append(": ").append(String.format(Locale.ROOT,"%.1f s · %.1f MB",last[0]/1000.0,last[1]/1048576.0))
+                    .append(" · ").append(last[2]).append("\n");
+                if(epgGridLastMs>=0)m.append(T("guide_stats_grid")).append(": ").append(String.format(Locale.ROOT,"%.1f s",epgGridLastMs/1000.0)).append(" · ").append(epgGridLastRows).append(" ").append(T("channels"));
+            }catch(Exception failure){m.append(failure.getClass().getSimpleName());}
+            final String text=m.toString();
+            runOnUiThread(()->{if(isUiAlive())new AlertDialog.Builder(this).setTitle("ℹ "+T("guide_stats")).setMessage(text).setPositiveButton(T("close"),null).show();});
+        });
+    }
     void showEpgDayPicker(){
     long now=System.currentTimeMillis()/1000L;java.time.ZoneId zone=java.time.ZoneId.systemDefault();int days=(int)com.nenotv.player.core.GuideWindow.PRO_DAYS;
     String[]labels=new String[days*2+1];long[]starts=new long[labels.length];
@@ -599,24 +629,33 @@ void scheduleBackgroundIndex(){
     void addEpgTimelineHeader(){LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);TextView blank=new TextView(this);blank.setText(ProGate.allowed(this)?epgDayLabel(epgBaseEpoch,System.currentTimeMillis()/1000L):T("now"));blank.setTextColor(getResources().getColor(R.color.muted));blank.setTextSize(10);blank.setGravity(Gravity.CENTER_VERTICAL);row.addView(blank,new LinearLayout.LayoutParams(dp(105),dp(28)));FrameLayout times=new FrameLayout(this);int w=epgTimelineWidth(),labelW=44;for(int i=0;i<=4;i++){TextView t=new TextView(this);t.setText(clockAt(epgBaseEpoch+i*1800L));t.setTextColor(getResources().getColor(R.color.muted));t.setTextSize(9);FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(dp(labelW),dp(28));lp.leftMargin=dp(Math.max(0,(w-labelW)*i/4));t.setLayoutParams(lp);times.addView(t);}row.addView(times,new LinearLayout.LayoutParams(dp(w),dp(28)));epgBoardContainer.addView(row);}
     void addEpgBoardRow(MediaEntry ch){
     LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(3),dp(2),dp(3),dp(2));
-    TextView name=new TextView(this);name.setText(DisplayText.title(ch));name.setTextColor(getResources().getColor(R.color.text));name.setTextSize(10.5f);name.setTypeface(null,Typeface.BOLD);name.setMaxLines(2);name.setEllipsize(TextUtils.TruncateAt.END);name.setGravity(Gravity.CENTER_VERTICAL);row.addView(name,new LinearLayout.LayoutParams(dp(105),dp(66)));
+    TextView name=new TextView(this);name.setText(DisplayText.title(ch));name.setTextColor(getResources().getColor(R.color.text));name.setTextSize(10.5f);name.setTypeface(null,Typeface.BOLD);name.setMaxLines(2);name.setEllipsize(TextUtils.TruncateAt.END);name.setGravity(Gravity.CENTER_VERTICAL);tvFocusable(name,0x00000000);name.setOnClickListener(v->play(ch));name.setPadding(dp(4),0,dp(2),0);row.addView(name,new LinearLayout.LayoutParams(dp(105),dp(66)));
     FrameLayout timeline=new FrameLayout(this);timeline.setBackgroundColor(0xFF10141C);int timelineDp=epgTimelineWidth();row.addView(timeline,new LinearLayout.LayoutParams(dp(timelineDp),dp(66)));row.setOnClickListener(v->play(ch));epgBoardContainer.addView(row,new LinearLayout.LayoutParams(-1,dp(70)));
     TextView loading=epgTimelineCard(T("epg_loading"),false);FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(-1,-1);loading.setLayoutParams(lp);timeline.addView(loading);
-    final long base=epgBaseEpoch;final int request=epgRequestSerial;
+    final long base=epgBaseEpoch;final int request=epgRequestSerial;epgGridPending++;
     epgExec.execute(()->{try{
         if(request!=epgRequestSerial)return;
         final boolean pro=ProGate.allowed(this);List<EpgEntry>events=pro?epgRequests().window(ch,base,base+com.nenotv.player.core.GuideWindow.SPAN):epgRequests().load(ch);
         runOnUiThread(()->{
             if(!isUiAlive()||!"epg".equals(section)||base!=epgBaseEpoch||request!=epgRequestSerial)return;
             timeline.removeAllViews();long horizon=base+7200L;int added=0;
-            for(EpgEntry e:events){long st=e.startEpoch>0?e.startEpoch:base,en=e.endEpoch>st?e.endEpoch:st+1800L;if(en<=base||st>=horizon)continue;long visStart=Math.max(base,st),visEnd=Math.min(horizon,en);int left=(int)Math.round((visStart-base)*timelineDp/7200.0),width=Math.max(1,Math.min(timelineDp-left,(int)Math.round((visEnd-visStart)*timelineDp/7200.0)));String range=e.range();String visibleRange=width<Math.round(120*getResources().getConfiguration().fontScale)?range.replace("–","\n"):range;TextView card=epgTimelineCard((visibleRange.isEmpty()?"":visibleRange+"\n")+e.title,e.isNow());card.setContentDescription((range.isEmpty()?"":range+" · ")+e.title);card.setOnClickListener(v->showProgramme(ch,e));if(e.startEpoch>System.currentTimeMillis()/1000L&&com.nenotv.player.storage.ReminderStore.has(this,ch,e.startEpoch))card.setText("🔔 "+card.getText());if(ch.catchup&&e.endEpoch<=System.currentTimeMillis()/1000L&&com.nenotv.player.core.CatchupUrls.available(e.startEpoch,System.currentTimeMillis()/1000L,ch.catchupDays))card.setText("↶ "+card.getText());if(width<64){card.setSingleLine(true);card.setText(e.title);card.setPadding(dp(2),dp(5),dp(2),dp(3));}FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(dp(width),dp(62));cp.leftMargin=dp(left);cp.topMargin=dp(2);card.setLayoutParams(cp);timeline.addView(card);added++;}
+            for(EpgEntry e:events){long st=e.startEpoch>0?e.startEpoch:base,en=e.endEpoch>st?e.endEpoch:st+1800L;if(en<=base||st>=horizon)continue;long visStart=Math.max(base,st),visEnd=Math.min(horizon,en);int left=(int)Math.round((visStart-base)*timelineDp/7200.0),width=Math.max(1,Math.min(timelineDp-left,(int)Math.round((visEnd-visStart)*timelineDp/7200.0)));String range=e.range();String visibleRange=width<Math.round(120*getResources().getConfiguration().fontScale)?range.replace("–","\n"):range;TextView card=epgTimelineCard((visibleRange.isEmpty()?"":visibleRange+"\n")+e.title,e.isNow());card.setContentDescription((range.isEmpty()?"":range+" · ")+e.title);tvFocusable(card,e.isNow()?getResources().getColor(R.color.accent):0xFF1A1F29);card.setOnClickListener(v->showProgramme(ch,e));if(e.startEpoch>System.currentTimeMillis()/1000L&&com.nenotv.player.storage.ReminderStore.has(this,ch,e.startEpoch))card.setText("🔔 "+card.getText());if(ch.catchup&&e.endEpoch<=System.currentTimeMillis()/1000L&&com.nenotv.player.core.CatchupUrls.available(e.startEpoch,System.currentTimeMillis()/1000L,ch.catchupDays))card.setText("↶ "+card.getText());if(width<64){card.setSingleLine(true);card.setText(e.title);card.setPadding(dp(2),dp(5),dp(2),dp(3));}FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(dp(width),dp(62));cp.leftMargin=dp(left);cp.topMargin=dp(2);card.setLayoutParams(cp);timeline.addView(card);added++;}
             if(added==0){TextView none=epgTimelineCard(T("no_epg"),false);FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(-1,-1);none.setLayoutParams(np);timeline.addView(none);}
             addEpgNowLine(timeline,base,timelineDp);
+            if(--epgGridPending==0){epgGridLastMs=android.os.SystemClock.elapsedRealtime()-epgGridStarted;epgGridLastRows=epgBoardShown;}
         });
-    }catch(Exception ignored){runOnUiThread(()->{if(isUiAlive()&&"epg".equals(section)&&request==epgRequestSerial){timeline.removeAllViews();TextView none=epgTimelineCard(T("no_epg"),false);FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(-1,-1);none.setLayoutParams(np);timeline.addView(none);}});}});
+    }catch(Exception ignored){runOnUiThread(()->{if(isUiAlive()&&"epg".equals(section)&&request==epgRequestSerial){if(--epgGridPending==0){epgGridLastMs=android.os.SystemClock.elapsedRealtime()-epgGridStarted;epgGridLastRows=epgBoardShown;}timeline.removeAllViews();TextView none=epgTimelineCard(T("no_epg"),false);FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(-1,-1);none.setLayoutParams(np);timeline.addView(none);}});}});
 }
 
     void addEpgNowLine(FrameLayout timeline,long base,int widthDp){int x=com.nenotv.player.core.GuideWindow.nowLine(System.currentTimeMillis()/1000L,base,widthDp);if(x<0)return;View line=new View(this);line.setBackgroundColor(0xFFFF4D4D);line.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(dp(2),-1);lp.leftMargin=Math.max(0,dp(x)-dp(1));line.setLayoutParams(lp);timeline.addView(line);}
+    /** P2: reachable with a TV remote (D-pad) and clearly marked when focused: white 2dp border, background kept. */
+    void tvFocusable(View v,int background){
+        v.setFocusable(true);v.setFocusableInTouchMode(false);
+        android.graphics.drawable.GradientDrawable focused=new android.graphics.drawable.GradientDrawable();focused.setColor(background);focused.setStroke(dp(2),0xFFFFFFFF);focused.setCornerRadius(dp(3));
+        android.graphics.drawable.StateListDrawable states=new android.graphics.drawable.StateListDrawable();
+        states.addState(new int[]{android.R.attr.state_focused},focused);states.addState(new int[]{},new android.graphics.drawable.ColorDrawable(background));
+        v.setBackground(states);
+    }
     TextView epgTimelineCard(String text,boolean now){TextView v=new TextView(this);v.setText(text);v.setTextColor(now?0xFF0A0A0A:0xFFF7F8FA);v.setTextSize(11f);v.setMaxLines(3);v.setEllipsize(TextUtils.TruncateAt.END);v.setPadding(dp(6),dp(5),dp(5),dp(3));v.setGravity(Gravity.CENTER_VERTICAL);v.setBackgroundColor(now?getResources().getColor(R.color.accent):0xFF1A1F29);return v;}
 
     /** G4: playlist channels by guide matching key, built once per profile and index size. Call off the main thread. */
@@ -660,13 +699,13 @@ void scheduleBackgroundIndex(){
     }
     void showGuideHits(){
         epgRequestSerial++;hideContentViews();epgBoard.setVisibility(View.VISIBLE);epgBoardContainer.removeAllViews();
-        TextView back=new TextView(this);back.setText("← "+T("back_to_results"));back.setTextColor(getResources().getColor(R.color.accent));back.setTextSize(13);back.setPadding(dp(4),dp(10),dp(4),dp(10));back.setFocusable(true);back.setOnClickListener(v->{if(search!=null)searchEverywhere(search.getText().toString());});epgBoardContainer.addView(back);
+        TextView back=new TextView(this);back.setText("← "+T("back_to_results"));back.setTextColor(getResources().getColor(R.color.accent));back.setTextSize(13);back.setPadding(dp(4),dp(10),dp(4),dp(10));tvFocusable(back,0x00000000);back.setOnClickListener(v->{if(search!=null)searchEverywhere(search.getText().toString());});epgBoardContainer.addView(back);
         long now=System.currentTimeMillis()/1000L;
         for(int i=0;i<guideHitEntries.size();i++){
             final MediaEntry ch=guideHitChannels.get(i);final EpgEntry e=guideHitEntries.get(i);
             boolean replay=ch.catchup&&e.endEpoch<=now&&com.nenotv.player.core.CatchupUrls.available(e.startEpoch,now,ch.catchupDays);
             String when=(e.isNow()?T("now"):epgDayLabel(e.startEpoch,now))+" · "+e.range()+" · "+DisplayText.title(ch);
-            TextView row=epgTimelineCard(when+"\n"+(replay?"↶ ":"")+e.title,e.isNow());row.setMaxLines(3);row.setFocusable(true);row.setPadding(dp(10),dp(8),dp(10),dp(8));row.setOnClickListener(v->showProgramme(ch,e));
+            TextView row=epgTimelineCard(when+"\n"+(replay?"↶ ":"")+e.title,e.isNow());row.setMaxLines(3);tvFocusable(row,e.isNow()?getResources().getColor(R.color.accent):0xFF1A1F29);row.setPadding(dp(10),dp(8),dp(10),dp(8));row.setOnClickListener(v->showProgramme(ch,e));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.topMargin=dp(4);epgBoardContainer.addView(row,lp);
         }
         epgBoard.scrollTo(0,0);status.setText(guideHitEntries.size()+" "+T("guide_hits"));
