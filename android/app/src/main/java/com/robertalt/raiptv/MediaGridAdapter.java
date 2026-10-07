@@ -27,6 +27,8 @@ public class MediaGridAdapter extends BaseAdapter {
 
     public MediaGridAdapter(Context c,LibraryStore s){context=c;store=s;}
     public void setEpg(EpgRequests requests){epgRequests=requests;epgCache.clear();epgLoading.clear();}
+    /** Number of language versions behind a grouped search card (MainActivity.languageVersions). */
+    int versionCount(MediaEntry e){if(!(context instanceof MainActivity))return 1;java.util.List<MediaEntry> v=((MainActivity)context).languageVersions.get(e.uniqueKey());return v==null?1:v.size();}
     public void set(List<MediaEntry> x,boolean live){items=x==null?new ArrayList<>():x;liveMode=live;notifyDataSetChanged();}
     public void append(List<MediaEntry> more){if(more==null||more.isEmpty())return;if(!(items instanceof ArrayList))items=new ArrayList<>(items);items.addAll(more);notifyDataSetChanged();}
     public int getCount(){return items.size();}
@@ -53,7 +55,7 @@ public class MediaGridAdapter extends BaseAdapter {
         LinearLayout.LayoutParams artLp=(LinearLayout.LayoutParams)art.getLayoutParams();artLp.height=dp(isLive?78:126);art.setLayoutParams(artLp);
         AbsListView.LayoutParams lp=new AbsListView.LayoutParams(-1,-2);convertView.setLayoutParams(lp);
         h.poster.setScaleType(isLive?ImageView.ScaleType.CENTER_INSIDE:ImageView.ScaleType.CENTER_CROP);
-        h.name.setText(DisplayText.title(e));h.fav.setText(store.isFavorite(e)?"★":"");String badge=DisplayText.badges(e);h.badge.setText(badge);h.badge.setVisibility(badge.isEmpty()?View.GONE:View.VISIBLE);
+        h.name.setText(DisplayText.title(e));h.fav.setText(store.isFavorite(e)?"★":"");String badge=DisplayText.badges(e);int langs=versionCount(e);if(langs>1)badge=(badge.isEmpty()?"":badge+" · ")+"🌐 "+langs;h.badge.setText(badge);h.badge.setVisibility(badge.isEmpty()?View.GONE:View.VISIBLE);
         int pct=store.progressPercent(e);h.progress.setVisibility(!isLive&&pct>0?View.VISIBLE:View.INVISIBLE);h.progress.setProgress(pct);
         String meta=isLive?DisplayText.category(e.group):DisplayText.shortMeta(e);if(meta==null)meta="";if(store.watched(e))meta=(meta.isEmpty()?"":meta+" · ")+UiText.t(context,"watched");h.meta.setText(meta);h.meta.setTag(e.uniqueKey());
         MediaRowAdapter.loadArtwork(h.poster,e.logo,e.name,isLive?220:210,isLive?130:300);

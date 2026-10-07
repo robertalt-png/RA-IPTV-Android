@@ -501,7 +501,8 @@ public class SearchIndexStore extends SQLiteOpenHelper {
     }
     /** Language of a result as the card shows it: the tag in the title wins over the category's tag. */
     static String resultLanguage(MediaEntry e,String storedTag){
-        try{for(String t:com.nenotv.player.DisplayText.parse(e).tags){String x=com.nenotv.player.ContentLanguage.normalizeTag(t);if(!x.isEmpty())return x;}}catch(RuntimeException ignored){}
+        // Same rule as the language groups: a tag in the title wins, also one that is no known language (GR).
+        try{String x=com.nenotv.player.core.LanguageGroups.titleLanguage(e);if(!x.isEmpty())return x;}catch(RuntimeException ignored){}
         String x=com.nenotv.player.ContentLanguage.normalizeTag(storedTag);return x.isEmpty()?com.nenotv.player.ContentLanguage.detectTag(e):x;
     }
     /** 0 app language, 1 MULTI, 2 unknown, 3 another language. */

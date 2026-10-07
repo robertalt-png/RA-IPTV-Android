@@ -81,7 +81,8 @@ public class AccountActivity extends Activity {
         if(ent.level()==EntitlementStore.Level.PRO)grid.add("⭐",ent.statusLabel(this),text("Bekijk je abonnement","View your subscription","Abo ansehen"),false,v->openWeb(myNenoUrl()));
         else{
             grid.add("🛒",T("buy_pro"),text("Solo of Multi, via Google Play","Solo or Multi, through Google Play","Solo oder Multi, über Google Play"),false,v->showBuyDialog());
-            if(!ent.isPro())grid.add("⭐",T("request_trial"),text("Probeer alle Pro-functies gratis","Try every Pro feature for free","Alle Pro-Funktionen gratis testen"),false,v->showTrialDialog());
+            // The trial starts automatically when this device is linked to an account (server: sunnyiptv_auto_trial).
+            if(!ent.isPro()&&!new AccountLinkStore(this).linked())grid.add("⭐",T("request_trial"),T("trial_by_pairing"),false,v->startActivity(new Intent(this,PairingActivity.class)));
         }
         grid.add("🔑",T("activation_code"),text("Code uit je e-mail invoeren","Enter the code from your email","Code aus deiner E-Mail eingeben"),false,v->showCodeDialog());
         grid.add("📱",T("this_device"),T("device_code")+": "+ent.publicDeviceId(),false,v->showDeviceDialog());

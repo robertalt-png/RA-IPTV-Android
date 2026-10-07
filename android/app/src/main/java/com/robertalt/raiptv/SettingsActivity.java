@@ -45,6 +45,7 @@ public class SettingsActivity extends Activity {
                 choice(g, T("app_language"), "language", labels(LANGS), LANGS);
                 choice(g, T("audio_pref"), "audio", prefixed(new String[]{T("follow_app_language"), T("original")}), prefixedValues("auto", "original"));
                 choice(g, T("subtitle_pref"), "subtitles", prefixed(new String[]{T("follow_app_language"), T("off")}), prefixedValues("auto", "off"));
+                onOff(g, T("group_languages"), "group_languages", true);
                 g.finish();
                 Tiles.note(this, box, text("Zenders, films en series in je taal staan bovenaan.", "Channels, movies and series in your language come first.", "Sender, Filme und Serien in deiner Sprache stehen oben."));
                 break;
