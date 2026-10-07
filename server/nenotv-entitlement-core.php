@@ -16,6 +16,7 @@ require_once __DIR__ . '/nenotv-catalog-package.php';
 require_once __DIR__ . '/sunnyiptv-review-access.php';
 require_once __DIR__ . '/sunnyiptv-account-setup.php';
 require_once __DIR__ . '/sunnyiptv-play-billing.php';
+require_once __DIR__ . '/sunnyiptv-admin-api.php';
 
 final class NenoTV_Entitlement_Core {
     use NenoTV_Pairing;
@@ -24,6 +25,7 @@ final class NenoTV_Entitlement_Core {
     use SunnyIPTV_Review_Access;
     use SunnyIPTV_Account_Setup;
     use SunnyIPTV_Play_Billing;
+    use SunnyIPTV_Admin_API;
     const VERSION = '0.1.25';
     const DB_VERSION = '5';
     const NS = 'nenotv-backend/v1';
@@ -51,6 +53,7 @@ final class NenoTV_Entitlement_Core {
         self::pairing_hooks();
         self::account_setup_hooks();
         self::play_hooks();
+        self::admin_api_hooks();
         add_action('wp_enqueue_scripts', static function(){wp_enqueue_style('nenotv-account-flow', plugins_url('account-flow.css',__FILE__), [], self::VERSION . '.' . (string)filemtime(__DIR__.'/account-flow.css'));});
         self::catalog_hooks();
         add_action('init', [__CLASS__, 'review_meta']);

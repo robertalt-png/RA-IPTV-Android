@@ -1,0 +1,92 @@
+<?php
+if (!defined('ABSPATH')) exit;
+
+/**
+ * SunnyIPTV Admin app, read-only additions to nenotv-dashboard/v1/admin-app:
+ * customers and devices, entitlements by kind (internal test and review access counted apart from customers),
+ * the Pro switches, the Google Play connection and the latest entitlement events.
+ * Same authorisation as the existing admin app: the paired Bearer token (NenoTV_Dashboard_API) or a site administrator.
+ * Returns counts and event types only: no names, e-mail addresses, IP addresses, device ids or order details.
+ */
+trait SunnyIPTV_Admin_API {
+    public static function admin_api_hooks(): void {
+        add_action('rest_api_init', static function () {
+            register_rest_route('sunnyiptv-admin/v1', '/status', [
+                'methods' => 'GET',
+                'permission_callback' => [__CLASS__, 'admin_api_allowed'],
+                'callback' => [__CLASS__, 'admin_api_status'],
+            ]);
+        });
+    }
+
+    public static function admin_api_allowed(WP_REST_Request $request): bool {
+        if (current_user_can('manage_options')) return true;
+        return class_exists('NenoTV_Dashboard_API') && NenoTV_Dashboard_API::authorized_admin_app($request);
+    }
+
+    private static function admin_api_internal_source(string $source): bool {
+        return in_array($source, ['internal_catalog_test', 'google_play_review'], true);
+    }
+
+    public static function admin_api_status(WP_REST_Request $request): WP_REST_Response {
+        global $wpdb;
+        $now = time();
+
+        // Accounts and linked devices.
+        $users = count_users();
+        $customers = (int)($users['avail_roles']['customer'] ?? 0);
+        $quick = (int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(DISTINCT user_id) FROM {$wpdb->usermeta} WHERE meta_key=%s", '_sunnyiptv_quick_account'));
+        $linked_accounts = (int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(DISTINCT user_id) FROM {$wpdb->usermeta} WHERE meta_key=%s AND meta_value<>%s AND meta_value<>%s", '_sunnyiptv_free_devices', '', 'a:0:{}'));
+        $linked_devices = (int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like('sunnyiptv_free_device_') . '%'));
+
+        // Entitlements: customers versus internal rows.
+        $rows = $wpdb->get_results('SELECT source, level, plan, status, expires_at, max_devices, id FROM ' . self::ent_table(), ARRAY_A) ?: [];
+        $ent = ['trial_active' => 0, 'trial_expired' => 0, 'pro_active' => 0, 'pro_ended' => 0, 'internal_active' => 0, 'by_source' => []];
+        foreach ($rows as $r) {
+            $source = (string)$r['source'];
+            $active = self::entitlement_is_active($r);
+            $ent['by_source'][$source] = ($ent['by_source'][$source] ?? 0) + 1;
+            if (self::admin_api_internal_source($source)) { if ($active) $ent['internal_active']++; continue; }
+            if (self::is_trial($r)) { if ($active) $ent['trial_active']++; else $ent['trial_expired']++; continue; }
+            if ($active) $ent['pro_active']++; else $ent['pro_ended']++;
+        }
+        $devices = $wpdb->get_results('SELECT status, COUNT(*) n FROM ' . self::dev_table() . ' GROUP BY status', ARRAY_A) ?: [];
+        $pro_devices = [];
+        foreach ($devices as $d) $pro_devices[(string)$d['status']] = (int)$d['n'];
+
+        // Switches and connections (booleans only, never secrets).
+        $auth = get_option('nenotv_release_oauth_credentials', []);
+        $switches = [
+            'pro_mode' => self::mode(),
+            'auto_trial' => get_option('sunnyiptv_auto_trial', '0') === '1',
+            'play_billing' => get_option('sunnyiptv_play_billing', '0') === '1',
+            'email_trial' => self::trial_enabled(),
+            'trial_days' => self::trial_days(),
+            'shop_coming_soon' => get_option('woocommerce_coming_soon', 'no') === 'yes',
+            'mollie_test_mode' => get_option('mollie-payments-for-woocommerce_test_mode_enabled', 'no') === 'yes',
+            'play_connected' => is_array($auth) && !empty($auth['refresh_enc']),
+        ];
+
+        // Latest events: type, outcome and the fixed system message; no references.
+        $events = $wpdb->get_results('SELECT id, event_type, outcome, message, created_at FROM ' . self::event_table() . ' ORDER BY id DESC LIMIT 40', ARRAY_A) ?: [];
+        foreach ($events as &$e) { $e['id'] = (int)$e['id']; $e['created_at'] = gmdate('c', (int)strtotime($e['created_at'] . ' UTC')); }
+        unset($e);
+
+        $warnings = [];
+        if ($switches['pro_mode'] === 'live' && !$switches['play_connected']) $warnings[] = 'play_not_connected';
+        if ($switches['play_billing'] && !$switches['play_connected']) $warnings[] = 'play_billing_without_connection';
+        if ($switches['mollie_test_mode']) $warnings[] = 'mollie_test_mode';
+        foreach ($events as $e) if (in_array($e['event_type'], ['play_verify_failed', 'play_ack_failed', 'play_recheck_failed'], true) && strtotime($e['created_at']) > $now - DAY_IN_SECONDS) { $warnings[] = 'play_errors_24h'; break; }
+
+        return new WP_REST_Response([
+            'ok' => true,
+            'generated_at' => gmdate('c', $now),
+            'customers' => ['accounts' => $customers, 'quick_accounts' => $quick, 'accounts_with_devices' => $linked_accounts, 'linked_devices' => $linked_devices],
+            'entitlements' => $ent,
+            'pro_devices' => $pro_devices,
+            'switches' => $switches,
+            'warnings' => array_values(array_unique($warnings)),
+            'events' => $events,
+        ], 200, ['Cache-Control' => 'no-store']);
+    }
+}
