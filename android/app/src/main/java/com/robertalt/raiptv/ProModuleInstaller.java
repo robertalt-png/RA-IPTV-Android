@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.widget.Toast;
 import com.google.android.play.core.splitinstall.*;
+import com.google.android.play.core.splitinstall.model.SplitInstallSessionStatus;
 import com.nenotv.player.storage.EntitlementStore;
 import java.util.Collections;
 
