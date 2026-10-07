@@ -18,8 +18,8 @@ report_failure() {
   return 0
 }
 trap report_failure EXIT
-apk="$PWD/distribution/SunnyIPTV-Pro-v0.14.37-vc131-TEST-SIGNED.apk"
-light_apk="$PWD/distribution/SunnyIPTV-Light-v0.14.37-vc131-TEST-SIGNED.apk"
+apk="$PWD/distribution/SunnyIPTV-Pro-v0.14.38-vc132-TEST-SIGNED.apk"
+light_apk="$PWD/distribution/SunnyIPTV-Light-v0.14.38-vc132-TEST-SIGNED.apk"
 adb install "$light_apk"
 adb install qa-tools/tests.apk
 adb shell am instrument -w -e phase family com.nenotv.player.test/com.nenotv.player.UiInstrumentation | tee qa-results/family-light.txt
@@ -80,6 +80,7 @@ rg -q 'NENOTV_PRO_SOURCES=passed' qa-results/pro-runtime.txt
 rg -q 'NENOTV_PRO_SMART_SOURCES=passed' qa-results/pro-runtime.txt
 rg -q 'NENOTV_PRO_SMART_EPG=passed' qa-results/pro-runtime.txt
 rg -q 'NENOTV_PRO_RUNTIME=passed' qa-results/pro-runtime.txt
+rg -q 'NENOTV_RECORDING=passed' qa-results/pro-runtime.txt
 adb pull /sdcard/Android/data/com.nenotv.player/files/qa qa-results/screenshots
 if [ "$device" = phone ]; then
   mv qa-results/screenshots qa-results/phone-screenshots

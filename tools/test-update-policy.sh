@@ -28,6 +28,8 @@ javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/model/MediaEn
 java -cp "$classes" com.nenotv.player.core.LanguageGroupsTest
 javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/core/NumberZap.java android/app/src/main/java/com/robertalt/raiptv/core/Reconnect.java tools/tests/ZappingReconnectTest.java
 java -cp "$classes" ZappingReconnectTest
+javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/core/Reconnect.java android/app/src/main/java/com/robertalt/raiptv/core/RecordingPlan.java android/app/src/main/java/com/robertalt/raiptv/core/RecordingEngine.java tools/tests/RecordingTest.java
+java -cp "$classes" RecordingTest
 # UiText must stay under the JVM 64 KB method limit (one initialiser method per language).
 mkdir -p "$classes/uitext"
 python3 - "$classes/uitext/UiText.java" <<'PY'

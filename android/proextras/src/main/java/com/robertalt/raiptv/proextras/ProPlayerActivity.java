@@ -64,7 +64,7 @@ public class ProPlayerActivity extends FragmentActivity {
     FrameLayout root,controls;
     PlayerView media3View;
     TextView title,status,timeText;
-    Button playPause,rewind,forward,audio,subtitle,pip,channelPrev,channelNext,speed,aspect,sleep,favorite,castButton;
+    Button playPause,rewind,forward,audio,subtitle,pip,channelPrev,channelNext,speed,aspect,sleep,favorite,castButton,record;
     CastContext castContext; CastSession castSession; RemoteMediaClient castClient;
     MediaRouteChooserDialog castDialog;
     long castPrivacyGeneration;
@@ -143,7 +143,7 @@ public class ProPlayerActivity extends FragmentActivity {
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         setContentView(R.layout.activity_pro_player);UiText.applyDirection(this);ScreenInsets.player(this);
         library=new LibraryStore(this);
-        root=findViewById(R.id.playerRoot);controls=findViewById(R.id.playerControls);media3View=findViewById(R.id.media3View);title=findViewById(R.id.playerTitle);status=findViewById(R.id.playerStatus);timeText=findViewById(R.id.timeText);playPause=findViewById(R.id.playPauseButton);rewind=findViewById(R.id.rewindButton);forward=findViewById(R.id.forwardButton);audio=findViewById(R.id.audioButton);subtitle=findViewById(R.id.subtitleButton);pip=findViewById(R.id.pipButton);seek=findViewById(R.id.seekBar);channelPrev=findViewById(R.id.channelPrevButton);channelNext=findViewById(R.id.channelNextButton);speed=findViewById(R.id.speedButton);aspect=findViewById(R.id.aspectButton);sleep=findViewById(R.id.sleepButton);favorite=findViewById(R.id.favoriteButton);castButton=findViewById(R.id.castRouteButton);
+        root=findViewById(R.id.playerRoot);controls=findViewById(R.id.playerControls);media3View=findViewById(R.id.media3View);title=findViewById(R.id.playerTitle);status=findViewById(R.id.playerStatus);timeText=findViewById(R.id.timeText);playPause=findViewById(R.id.playPauseButton);rewind=findViewById(R.id.rewindButton);forward=findViewById(R.id.forwardButton);audio=findViewById(R.id.audioButton);subtitle=findViewById(R.id.subtitleButton);pip=findViewById(R.id.pipButton);seek=findViewById(R.id.seekBar);channelPrev=findViewById(R.id.channelPrevButton);channelNext=findViewById(R.id.channelNextButton);speed=findViewById(R.id.speedButton);aspect=findViewById(R.id.aspectButton);sleep=findViewById(R.id.sleepButton);favorite=findViewById(R.id.favoriteButton);castButton=findViewById(R.id.castRouteButton);record=findViewById(R.id.recordButton);
         audio.setText(T("audio"));subtitle.setText(T("subtitles"));aspect.setText(T("fit"));sleep.setText(T("sleep_short"));pip.setContentDescription(T("picture_in_picture"));
         entry=(MediaEntry)getIntent().getSerializableExtra("media");if(entry==null||!com.nenotv.player.storage.FamilyStore.allowed(this,entry)){finish();return;}
         PlaybackQueueStore.Payload qp=PlaybackQueueStore.take(getIntent().getStringExtra("queueToken"));
@@ -160,13 +160,15 @@ public class ProPlayerActivity extends FragmentActivity {
         for(int n=0;n<episodeQueue.size();n++)if(episodeQueue.get(n).uniqueKey().equals(entry.uniqueKey()))episodeIndex=n;
         if(!prepareEntry(entry))return;updateFavoriteUi();
         if(candidates.isEmpty()){status.setText(T("no_stream_url"));return;}
+        if("live".equals(entry.type)&&com.nenotv.player.RecordingService.runningCount()>0)Toast.makeText(this,T("recording_connection_note"),Toast.LENGTH_LONG).show();
         wireControls();createZapOverlay();setupCast();updateQueueControls();startPreferredPlayer();searchExternalSubtitle();ui.post(tick);showControls();
     }
 
     boolean prepareEntry(MediaEntry e){
         if(playbackRevoked||destroyed||isFinishing())return false;
         if(!com.nenotv.player.storage.FamilyStore.allowed(this,e)){revokePlayback();return false;}
-        try{playbackRoute=com.nenotv.player.provider.PlaybackSourceRoute.resolve(this,e,new com.nenotv.player.storage.EntitlementStore(this).isPro());profile=playbackRoute.profile();}
+        if(com.nenotv.player.Recordings.isLocalRecording(this,e)){playbackRoute=null;profile=new Profile();}
+        else try{playbackRoute=com.nenotv.player.provider.PlaybackSourceRoute.resolve(this,e,new com.nenotv.player.storage.EntitlementStore(this).isPro());profile=playbackRoute.profile();}
         catch(Exception unavailable){revokePlayback();return false;}
         entry=e;title.setText(DisplayText.title(e));candidates=new ArrayList<>(e.candidates);if(candidates.isEmpty()&&e.url!=null&&!e.url.isEmpty())candidates.add(e.url);index=0;freezeOnCandidate=0;pendingResumeMs=0;recovering=false;wantPlaying=true;externalSubtitle=null;lastWatchPosition=0;lastProgressAt=0;watchGraceUntil=0;
         return true;
@@ -175,7 +177,7 @@ public class ProPlayerActivity extends FragmentActivity {
     boolean currentPlaybackRoute(){
         if(destroyed||isFinishing()||playbackRevoked)return false;
         boolean pro=new com.nenotv.player.storage.EntitlementStore(this).isPro();
-        if(pro&&com.nenotv.player.storage.FamilyStore.allowed(this,entry)&&playbackRoute!=null&&playbackRoute.isCurrent(true))return true;
+        if(pro&&com.nenotv.player.storage.FamilyStore.allowed(this,entry)&&(com.nenotv.player.Recordings.isLocalRecording(this,entry)||playbackRoute!=null&&playbackRoute.isCurrent(true)))return true;
         revokePlayback();return false;
     }
     void revokePlayback(){
@@ -197,6 +199,7 @@ public class ProPlayerActivity extends FragmentActivity {
         speed.setVisibility(live?View.GONE:View.VISIBLE);
         speed.setEnabled(!isCasting());aspect.setEnabled(!isCasting());audio.setEnabled(!isCasting());subtitle.setEnabled(!isCasting());
         seek.setVisibility(live?View.INVISIBLE:View.VISIBLE);
+        if(record!=null)record.setVisibility("live".equals(entry.type)&&!DemoSource.isEntry(entry)?View.VISIBLE:View.GONE);
         rewind.setVisibility(live?View.GONE:View.VISIBLE);forward.setVisibility(live?View.GONE:View.VISIBLE);
     }
 
@@ -262,6 +265,7 @@ public class ProPlayerActivity extends FragmentActivity {
         aspect.setOnClickListener(v->{cycleAspect();showControls();});
         sleep.setOnClickListener(v->{showSleepMenu();showControls();});
         pip.setOnClickListener(v->enterPip());
+        if(record!=null){record.setText("● "+T("record"));record.setOnClickListener(v->{showRecordMenu();showControls();});}
         seek.setMax(1000);
         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
             public void onStartTrackingTouch(SeekBar b){userSeeking=true;ui.removeCallbacks(hide);}
@@ -387,6 +391,18 @@ public class ProPlayerActivity extends FragmentActivity {
         }catch(Exception ignored){}});
     }
     void attachSubtitle(File f,String label){if(destroyed)return;if(exo!=null){long pos=exo.getCurrentPosition();boolean was=exo.isPlaying();playMedia3Candidate(pos);if(was)exo.play();status.setText(T("subtitles")+": "+label);}}
+    // ---- Recording: record the channel that is playing ----
+    void showRecordMenu(){
+        if(entry==null||!"live".equals(entry.type))return;
+        final int[] mins={30,60,120,180};String[] labels=new String[mins.length];
+        for(int i=0;i<mins.length;i++)labels[i]=mins[i]+" "+T("minutes");
+        new AlertDialog.Builder(this).setTitle("● "+T("record")+" · "+DisplayText.title(entry)).setItems(labels,(d,w)->{
+            com.nenotv.player.Recordings.Planned p=com.nenotv.player.Recordings.recordNow(this,entry,DisplayText.title(entry),mins[w]);
+            if(!p.refused.isEmpty()){Toast.makeText(this,T("recording_refused_"+p.refused),Toast.LENGTH_LONG).show();return;}
+            Toast.makeText(this,T("recording_started")+"\n"+T("recording_connection_note"),Toast.LENGTH_LONG).show();
+        }).setNegativeButton(T("cancel"),null).show();
+    }
+
     // ---- Step 3: number zapping ----
     void createZapOverlay(){
         float d=getResources().getDisplayMetrics().density;int pad=Math.round(14*d);

@@ -23,7 +23,7 @@ public class PlayerActivity extends FragmentActivity {
     SeekBar seek; FrameLayout controls; Handler ui=new Handler(Looper.getMainLooper()); boolean userSeeking=false,destroyed=false; int aspectMode=0; float playbackSpeed=1f; ArrayList<String> streamUrls=new ArrayList<>(); int streamIndex=0; boolean resumeOnStart=false; long lastProgressSave=0;
     String T(String k){return UiText.t(this,k);}
     com.nenotv.player.provider.PlaybackSourceRoute playbackRoute;
-    Runnable tick=new Runnable(){public void run(){if(destroyed||isFinishing())return;if(!FamilyStore.allowed(PlayerActivity.this,entry)||playbackRoute==null||!playbackRoute.isCurrent(false)){if(exo!=null){exo.release();exo=null;}Toast.makeText(PlayerActivity.this,T("source_unavailable"),Toast.LENGTH_LONG).show();finish();return;}updateProgress();ui.postDelayed(this,500);}};
+    Runnable tick=new Runnable(){public void run(){if(destroyed||isFinishing())return;if(!FamilyStore.allowed(PlayerActivity.this,entry)||!(Recordings.isLocalRecording(PlayerActivity.this,entry)||playbackRoute!=null&&playbackRoute.isCurrent(false))){if(exo!=null){exo.release();exo=null;}Toast.makeText(PlayerActivity.this,T("source_unavailable"),Toast.LENGTH_LONG).show();finish();return;}updateProgress();ui.postDelayed(this,500);}};
     Runnable hideControlsTask=()->hideControls();
     // Step 3: automatic reconnect (Light and Pro).
     int reconnectAttempt=0; long firstFailureAt=0L, reconnectResumeMs=0L; boolean reconnectPending=false;
@@ -83,7 +83,8 @@ public class PlayerActivity extends FragmentActivity {
 
     void startPlayer(){
         if(!FamilyStore.allowed(this,entry)){FamilyUi.blocked(this);finish();return;}
-        try{playbackRoute=com.nenotv.player.provider.PlaybackSourceRoute.resolve(this,entry,false);}
+        if(Recordings.isLocalRecording(this,entry))playbackRoute=null;
+        else try{playbackRoute=com.nenotv.player.provider.PlaybackSourceRoute.resolve(this,entry,false);}
         catch(Exception unavailable){Toast.makeText(this,T("source_unavailable"),Toast.LENGTH_LONG).show();finish();return;}
         ArrayList<String> urls=new ArrayList<>(entry.candidates);if(urls.isEmpty()&&entry.url!=null&&!entry.url.isEmpty())urls.add(entry.url);if(urls.isEmpty()){status.setText(T("no_stream_url"));return;}
         exo=new ExoPlayer.Builder(this,PlayerAudio.renderers(this)).setMediaSourceFactory(DemoSource.mediaSourceFactory(this,entry)).build();applyLanguagePreferences();media3View.setPlayer(exo);streamUrls=urls;streamIndex=0;exo.setMediaItem(MediaItem.fromUri(urls.get(0)));long resume=library.progress(entry);exo.prepare();if(resume>10000&&!"live".equals(entry.type))exo.seekTo(resume);exo.play();status.setText(T("playing"));
