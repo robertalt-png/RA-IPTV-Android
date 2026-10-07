@@ -105,6 +105,13 @@ public class ProPlayerActivity extends FragmentActivity {
     static final long RECOVERY_COOLDOWN_MS=8000L;
     static final long HEALTHY_RESET_MS=30000L;
     String T(String key){return UiText.t(this,key);}
+    // Step 3: number zapping and automatic reconnect.
+    final com.nenotv.player.core.NumberZap zap=new com.nenotv.player.core.NumberZap();
+    TextView zapView; int previousLiveIndex=-1;
+    int reconnectAttempt=0; long firstFailureAt=0L; boolean reconnectPending=false; long reconnectResumeMs=0L;
+    android.net.ConnectivityManager.NetworkCallback netCallback;
+    final Runnable zapCommit=this::commitZap;
+    final Runnable reconnectNow=this::reconnect;
 
     final RemoteMediaClient.Callback castMediaCallback=new RemoteMediaClient.Callback(){
         @Override public void onStatusUpdated(){
@@ -153,7 +160,7 @@ public class ProPlayerActivity extends FragmentActivity {
         for(int n=0;n<episodeQueue.size();n++)if(episodeQueue.get(n).uniqueKey().equals(entry.uniqueKey()))episodeIndex=n;
         if(!prepareEntry(entry))return;updateFavoriteUi();
         if(candidates.isEmpty()){status.setText(T("no_stream_url"));return;}
-        wireControls();setupCast();updateQueueControls();startPreferredPlayer();searchExternalSubtitle();ui.post(tick);showControls();
+        wireControls();createZapOverlay();setupCast();updateQueueControls();startPreferredPlayer();searchExternalSubtitle();ui.post(tick);showControls();
     }
 
     boolean prepareEntry(MediaEntry e){
@@ -280,8 +287,15 @@ public class ProPlayerActivity extends FragmentActivity {
         long start=pendingResumeMs>0?pendingResumeMs:resume>0?resume:library.progress(entry);pendingResumeMs=0;
         index=0;playMedia3Candidate(start);
         exo.addListener(new Player.Listener(){
-            @Override public void onPlayerError(PlaybackException error){runOnUiThread(()->{index++;if(index<candidates.size()){status.setText(T("stream_rejected")+" "+(index+1)+"/"+candidates.size()+"…");playMedia3Candidate(0);}else{status.setText(T("play_failed")+" "+candidates.size()+" "+T("stream_variants")+": "+error.getErrorCodeName());wantPlaying=false;}});}
-            @Override public void onPlaybackStateChanged(int state){if(state==Player.STATE_READY){status.setText("Media3 · "+T("playing"));recovering=false;applyPlaybackSpeed();applyAspect();resetWatchdogGrace();updatePlayIcon();}else if(state==Player.STATE_ENDED)runOnUiThread(ProPlayerActivity.this::onMediaEnded);}
+            @Override public void onPlayerError(PlaybackException error){runOnUiThread(()->{
+                if(destroyed)return;
+                // A live stream that fell behind its window restarts at the live edge at once.
+                if(com.nenotv.player.core.Reconnect.restartAtLiveEdge(error.errorCode)&&exo!=null){try{exo.seekToDefaultPosition();exo.prepare();exo.play();}catch(Exception ignored){}return;}
+                long resumeAt=entry!=null&&!"live".equals(entry.type)?currentLocalPosition():0;
+                index++;if(index<candidates.size()){status.setText(T("stream_rejected")+" "+(index+1)+"/"+candidates.size()+"…");playMedia3Candidate(resumeAt);return;}
+                if(scheduleReconnect(error.errorCode,resumeAt))return;
+                status.setText(T("play_failed")+" "+candidates.size()+" "+T("stream_variants")+": "+error.getErrorCodeName());wantPlaying=false;updatePlayIcon();showControls();});}
+            @Override public void onPlaybackStateChanged(int state){if(state==Player.STATE_READY){resetReconnect();status.setText("Media3 · "+T("playing"));recovering=false;applyPlaybackSpeed();applyAspect();resetWatchdogGrace();updatePlayIcon();}else if(state==Player.STATE_ENDED)runOnUiThread(ProPlayerActivity.this::onMediaEnded);}
             @Override public void onIsPlayingChanged(boolean isPlaying){updatePlayIcon();}
         });
     }
@@ -300,14 +314,14 @@ public class ProPlayerActivity extends FragmentActivity {
     }
 
     void switchLiveInternal(int delta){
-        saveProgress();int n=liveQueue.size();if(liveIndex<0)liveIndex=0;liveIndex=(liveIndex+delta+n)%n;MediaEntry next=liveQueue.get(liveIndex);boolean remote=hasCastSession();if(!remote)releasePlayers();if(!prepareEntry(next))return;library.recent(next);updateFavoriteUi();updateQueueControls();status.setText(T("zapping")+" · "+DisplayText.title(next));if(remote){castRemoteConfirmed=false;castRelayMode=false;closeCastRelay();castCandidateIndex=0;loadCastCandidate(0,true);}else startPreferredPlayer();
+        saveProgress();int n=liveQueue.size();if(liveIndex<0)liveIndex=0;int before=liveIndex;liveIndex=(liveIndex+delta+n)%n;if(before!=liveIndex)previousLiveIndex=before;resetReconnect();MediaEntry next=liveQueue.get(liveIndex);boolean remote=hasCastSession();if(!remote)releasePlayers();if(!prepareEntry(next))return;library.recent(next);updateFavoriteUi();updateQueueControls();int shown=com.nenotv.player.core.NumberZap.shown(liveIndex,liveNumbers());status.setText(T("zapping")+" · "+(shown>0?shown+" ":"")+DisplayText.title(next));if(remote){castRemoteConfirmed=false;castRelayMode=false;closeCastRelay();castCandidateIndex=0;loadCastCandidate(0,true);}else startPreferredPlayer();
     }
 
     void switchEpisode(int delta){
         if(episodeQueue.isEmpty())return;int n=episodeQueue.size();if(episodeIndex<0)episodeIndex=0;int nextIndex=episodeIndex+delta;if(nextIndex<0||nextIndex>=n){wantPlaying=false;return;}saveProgress();episodeIndex=nextIndex;MediaEntry next=episodeQueue.get(episodeIndex);boolean remote=hasCastSession();if(!remote)releasePlayers();if(!prepareEntry(next))return;library.recent(next);updateFavoriteUi();updateQueueControls();status.setText(T("next_episode")+" · "+DisplayText.title(next));if(remote){castRemoteConfirmed=false;castRelayMode=false;closeCastRelay();castCandidateIndex=0;loadCastCandidate(library.progress(next),true);}else{startPreferredPlayer();searchExternalSubtitle();}
     }
 
-    void togglePlay(){if(isCasting()){try{castClient.togglePlayback();wantPlaying=!castClient.isPlaying();}catch(Exception ignored){}updatePlayIcon();return;}if(exo!=null){if(exo.isPlaying()){wantPlaying=false;exo.pause();}else{wantPlaying=true;resetWatchdogGrace();exo.play();}}updatePlayIcon();}
+    void togglePlay(){if(!isCasting()&&reconnectPending){reconnect();return;}if(!isCasting()&&exo!=null&&exo.getPlaybackState()==Player.STATE_IDLE&&!exo.isPlaying()){wantPlaying=true;resetReconnect();index=0;resetWatchdogGrace();playMedia3Candidate("live".equals(entry.type)?0:currentLocalPosition());updatePlayIcon();return;}if(isCasting()){try{castClient.togglePlayback();wantPlaying=!castClient.isPlaying();}catch(Exception ignored){}updatePlayIcon();return;}if(exo!=null){if(exo.isPlaying()){wantPlaying=false;exo.pause();}else{wantPlaying=true;resetWatchdogGrace();exo.play();}}updatePlayIcon();}
     void seekBy(long delta){long d=duration(),p=currentPosition();if(d<=0)return;seekTo(Math.max(0,Math.min(d,p+delta)));}
     void seekTo(long p){if(isCasting())try{castClient.seek(new MediaSeekOptions.Builder().setPosition(p).build());}catch(Exception ignored){}else if(exo!=null)exo.seekTo(p);}
     long currentPosition(){try{return isCasting()?Math.max(0,castClient.getApproximateStreamPosition()):currentLocalPosition();}catch(Exception e){return 0;}}
@@ -326,7 +340,7 @@ public class ProPlayerActivity extends FragmentActivity {
 
     void recoverFromFreeze(){
         long now=SystemClock.elapsedRealtime();if(recovering||now-lastRecoveryAt<RECOVERY_COOLDOWN_MS)return;recovering=true;lastRecoveryAt=now;freezeOnCandidate++;long resume=(entry!=null&&"live".equals(entry.type))?0:currentPosition();status.setText(T("anti_freeze")+" · "+T("recover_stream"));
-        if(exo!=null){if(freezeOnCandidate<=1){try{exo.stop();}catch(Exception ignored){}ui.postDelayed(()->{if(!destroyed&&exo!=null){recovering=false;playMedia3Candidate(resume);}},500);return;}freezeOnCandidate=0;index++;if(index<candidates.size()){status.setText(T("anti_freeze")+" · "+T("try_alt_stream"));ui.postDelayed(()->{if(!destroyed&&exo!=null){recovering=false;playMedia3Candidate(resume);}},500);}else{recovering=false;status.setText(T("stream_stuck"));wantPlaying=false;updatePlayIcon();}}else recovering=false;
+        if(exo!=null){if(freezeOnCandidate<=1){try{exo.stop();}catch(Exception ignored){}ui.postDelayed(()->{if(!destroyed&&exo!=null){recovering=false;playMedia3Candidate(resume);}},500);return;}freezeOnCandidate=0;index++;if(index<candidates.size()){status.setText(T("anti_freeze")+" · "+T("try_alt_stream"));ui.postDelayed(()->{if(!destroyed&&exo!=null){recovering=false;playMedia3Candidate(resume);}},500);}else{recovering=false;if(!scheduleReconnect(com.nenotv.player.core.Reconnect.IO_NETWORK_CONNECTION_TIMEOUT,resume)){status.setText(T("stream_stuck"));wantPlaying=false;updatePlayIcon();}}}else recovering=false;
     }
 
     void showAudioMenu(){
@@ -373,8 +387,64 @@ public class ProPlayerActivity extends FragmentActivity {
         }catch(Exception ignored){}});
     }
     void attachSubtitle(File f,String label){if(destroyed)return;if(exo!=null){long pos=exo.getCurrentPosition();boolean was=exo.isPlaying();playMedia3Candidate(pos);if(was)exo.play();status.setText(T("subtitles")+": "+label);}}
+    // ---- Step 3: number zapping ----
+    void createZapOverlay(){
+        float d=getResources().getDisplayMetrics().density;int pad=Math.round(14*d);
+        zapView=new TextView(this);zapView.setTextSize(30);zapView.setTextColor(Color.WHITE);zapView.setBackgroundColor(0xCC000000);zapView.setPadding(pad*2,pad,pad*2,pad);zapView.setVisibility(View.GONE);zapView.setMaxLines(2);
+        FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT,Gravity.TOP|Gravity.END);lp.setMargins(pad*2,pad*2,pad*2,pad*2);root.addView(zapView,lp);
+    }
+    static int digitFor(int k){if(k>=KeyEvent.KEYCODE_0&&k<=KeyEvent.KEYCODE_9)return k-KeyEvent.KEYCODE_0;if(k>=KeyEvent.KEYCODE_NUMPAD_0&&k<=KeyEvent.KEYCODE_NUMPAD_9)return k-KeyEvent.KEYCODE_NUMPAD_0;return -1;}
+    int[] liveNumbers(){int[] n=new int[liveQueue.size()];for(int i=0;i<n.length;i++)n[i]=liveQueue.get(i).number;return n;}
+    boolean zapAvailable(){return entry!=null&&"live".equals(entry.type)&&liveQueue.size()>1&&zapView!=null;}
+    void handleZapKey(int k,int digit){
+        if(digit>=0){if(zap.add(digit)){showZap();ui.removeCallbacks(zapCommit);if(zap.full())commitZap();else ui.postDelayed(zapCommit,com.nenotv.player.core.NumberZap.COMMIT_AFTER_MS);}return;}
+        if(k==KeyEvent.KEYCODE_LAST_CHANNEL){if(previousLiveIndex>=0&&previousLiveIndex<liveQueue.size())jumpToLive(previousLiveIndex);return;}
+        if(k==KeyEvent.KEYCODE_BACK||k==KeyEvent.KEYCODE_DEL){zap.clear();ui.removeCallbacks(zapCommit);zapView.setVisibility(View.GONE);return;}
+        ui.removeCallbacks(zapCommit);commitZap();
+    }
+    void showZap(){String typed=zap.text();int idx=-1;try{idx=com.nenotv.player.core.NumberZap.resolve(Integer.parseInt(typed),liveNumbers());}catch(Exception ignored){}zapView.setText(typed+(idx>=0?"\n"+DisplayText.title(liveQueue.get(idx)):""));zapView.setVisibility(View.VISIBLE);}
+    void commitZap(){
+        if(destroyed||zapView==null)return;int number=zap.take();if(number<=0){zapView.setVisibility(View.GONE);return;}
+        int idx=com.nenotv.player.core.NumberZap.resolve(number,liveNumbers());
+        if(idx<0){zapView.setText(String.format(T("channel_not_found"),String.valueOf(number)));ui.postDelayed(()->{if(zap.isEmpty()&&zapView!=null)zapView.setVisibility(View.GONE);},1600);return;}
+        zapView.setVisibility(View.GONE);if(idx!=liveIndex)jumpToLive(idx);
+    }
+    void jumpToLive(int idx){if(liveQueue.size()<2||idx<0||idx>=liveQueue.size())return;if(liveIndex<0)liveIndex=0;switchLiveInternal(idx-liveIndex);showControls();}
+
+    // ---- Step 3: automatic reconnect ----
+    boolean scheduleReconnect(int code,long resumeMs){
+        if(destroyed||playbackRevoked||isCasting()||!wantPlaying||entry==null)return false;
+        long now=SystemClock.elapsedRealtime();if(firstFailureAt==0)firstFailureAt=now;
+        if(!com.nenotv.player.core.Reconnect.retryable(code,reconnectAttempt)||com.nenotv.player.core.Reconnect.giveUp(firstFailureAt,now)){resetReconnect();return false;}
+        long delay=com.nenotv.player.core.Reconnect.delayMs(reconnectAttempt);reconnectAttempt++;reconnectPending=true;reconnectResumeMs=Math.max(0,resumeMs);
+        status.setText(String.format(T("reconnecting"),String.valueOf(delay/1000),String.valueOf(reconnectAttempt)));showControls();updatePlayIcon();
+        ui.removeCallbacks(reconnectNow);ui.postDelayed(reconnectNow,delay);return true;
+    }
+    void reconnect(){
+        if(destroyed||!reconnectPending)return;reconnectPending=false;ui.removeCallbacks(reconnectNow);
+        if(!currentPlaybackRoute()||exo==null||isCasting())return;
+        index=0;freezeOnCandidate=0;resetWatchdogGrace();playMedia3Candidate("live".equals(entry.type)?0:reconnectResumeMs);
+    }
+    void resetReconnect(){reconnectAttempt=0;firstFailureAt=0L;reconnectPending=false;ui.removeCallbacks(reconnectNow);}
+    void watchNetwork(boolean on){
+        try{android.net.ConnectivityManager cm=getSystemService(android.net.ConnectivityManager.class);if(cm==null)return;
+            if(on&&netCallback==null){netCallback=new android.net.ConnectivityManager.NetworkCallback(){@Override public void onAvailable(android.net.Network n){ui.post(()->{if(reconnectPending&&!destroyed)reconnect();});}};cm.registerDefaultNetworkCallback(netCallback);}
+            else if(!on&&netCallback!=null){cm.unregisterNetworkCallback(netCallback);netCallback=null;}
+        }catch(Exception ignored){}
+    }
+
     void releasePlayers(){if(exo!=null){try{exo.release();}catch(Exception ignored){}exo=null;}}
     void saveProgress(){if(library!=null&&entry!=null)library.saveProgress(entry,currentPosition(),duration(),true);}
+
+    /** Number keys go to channel entry before any focused button sees them. */
+    @Override public boolean dispatchKeyEvent(KeyEvent ev){
+        if(zapAvailable()){
+            int k=ev.getKeyCode(),digit=digitFor(k);
+            boolean zapKey=digit>=0||k==KeyEvent.KEYCODE_LAST_CHANNEL||(!zap.isEmpty()&&(k==KeyEvent.KEYCODE_DPAD_CENTER||k==KeyEvent.KEYCODE_ENTER||k==KeyEvent.KEYCODE_NUMPAD_ENTER||k==KeyEvent.KEYCODE_BACK||k==KeyEvent.KEYCODE_DEL));
+            if(zapKey){if(ev.getAction()==KeyEvent.ACTION_DOWN&&ev.getRepeatCount()==0)handleZapKey(k,digit);return true;}
+        }
+        return super.dispatchKeyEvent(ev);
+    }
 
     @Override public boolean onKeyDown(int keyCode,KeyEvent event){
         if("live".equals(entry.type)&&liveQueue.size()>1){if(keyCode==KeyEvent.KEYCODE_CHANNEL_UP||keyCode==KeyEvent.KEYCODE_DPAD_UP){switchLive(1);showControls();return true;}if(keyCode==KeyEvent.KEYCODE_CHANNEL_DOWN||keyCode==KeyEvent.KEYCODE_DPAD_DOWN){switchLive(-1);showControls();return true;}}
@@ -386,8 +456,8 @@ public class ProPlayerActivity extends FragmentActivity {
 
     @Override public void onUserLeaveHint(){super.onUserLeaveHint();enterPip();}
     @Override public void onConfigurationChanged(Configuration c){super.onConfigurationChanged(c);}
-    @Override protected void onStart(){super.onStart();com.nenotv.player.ExtraPrivacySession.addListener(privacyRevoked);setupCast();if(!com.nenotv.player.storage.ExtraPrivacyStore.allowsSdk(this)){privacyRevoked.run();return;}try{castContext=ProCastPrivacy.get(this);castPrivacyGeneration=com.nenotv.player.ExtraPrivacySession.generation();if(castContext!=null){castContext.getSessionManager().addSessionManagerListener(castSessionListener,CastSession.class);CastSession c=castContext.getSessionManager().getCurrentCastSession();if(c!=null&&c.isConnected()&&!casting)connectCastSession(c,true);}}catch(Throwable ignored){}}
-    @Override protected void onStop(){if(castContext!=null)try{castContext.getSessionManager().removeSessionManagerListener(castSessionListener,CastSession.class);}catch(Exception ignored){}super.onStop();}
+    @Override protected void onStart(){super.onStart();watchNetwork(true);com.nenotv.player.ExtraPrivacySession.addListener(privacyRevoked);setupCast();if(!com.nenotv.player.storage.ExtraPrivacyStore.allowsSdk(this)){privacyRevoked.run();return;}try{castContext=ProCastPrivacy.get(this);castPrivacyGeneration=com.nenotv.player.ExtraPrivacySession.generation();if(castContext!=null){castContext.getSessionManager().addSessionManagerListener(castSessionListener,CastSession.class);CastSession c=castContext.getSessionManager().getCurrentCastSession();if(c!=null&&c.isConnected()&&!casting)connectCastSession(c,true);}}catch(Throwable ignored){}}
+    @Override protected void onStop(){watchNetwork(false);if(castContext!=null)try{castContext.getSessionManager().removeSessionManagerListener(castSessionListener,CastSession.class);}catch(Exception ignored){}super.onStop();}
     @Override public void onWindowFocusChanged(boolean focus){super.onWindowFocusChanged(focus);if(focus)ScreenInsets.player(this);}
     @Override protected void onPause(){saveProgress();super.onPause();}
     @Override protected void onDestroy(){destroyed=true;com.nenotv.player.ExtraPrivacySession.removeListener(privacyRevoked);ui.removeCallbacksAndMessages(null);saveProgress();if(castDialog!=null){castDialog.dismiss();castDialog=null;}try{if(castClient!=null)castClient.unregisterCallback(castMediaCallback);}catch(Exception ignored){}closeCastRelay();releasePlayers();exec.shutdownNow();super.onDestroy();}

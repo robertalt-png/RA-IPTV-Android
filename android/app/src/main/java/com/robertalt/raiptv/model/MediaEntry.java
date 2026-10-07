@@ -8,6 +8,8 @@ public class MediaEntry implements Serializable {
     private static final long serialVersionUID = 1L;
     public String id="", streamId="", seriesId="", name="Untitled", logo="", backdrop="", categoryId="", type="live", rating="", year="", plot="", extension="", directSource="", url="", group="", tvgId="", tvgName="", seriesTitle="", tmdbId="", imdbId="", sourceId="", sourceName="";
     public int season=0, episode=0, catchupDays=0;
+    /** Step 3: channel number from the provider (M3U tvg-chno, Xtream "num"); 0 = none, then the list position is used. */
+    public int number=0;
     public boolean catchup=false;
     /** P3: M3U catch-up kind (default, append, shift, flussonic, xc) and catchup-source template. */
     public String catchupType="", catchupSource="";

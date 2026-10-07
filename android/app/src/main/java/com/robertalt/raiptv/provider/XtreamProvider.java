@@ -120,6 +120,7 @@ public class XtreamProvider implements Provider {
         e.tvgId=x.optString("epg_channel_id",x.optString("tvg_id",""));e.tvgName=e.name;
         e.catchup=x.optInt("tv_archive",0)>0||"1".equals(x.optString("tv_archive",""))||x.optBoolean("has_archive",false);e.catchupDays=x.optInt("tv_archive_duration",0);
         e.type=type;
+        if("live".equals(type))e.number=Math.max(0,x.optInt("num",0));
         e.rating=x.optString("rating","");
         e.year=x.optString("year",x.optString("releaseDate",""));
         e.plot=x.optString("plot","");

@@ -25,6 +25,10 @@ public class PlayerActivity extends FragmentActivity {
     com.nenotv.player.provider.PlaybackSourceRoute playbackRoute;
     Runnable tick=new Runnable(){public void run(){if(destroyed||isFinishing())return;if(!FamilyStore.allowed(PlayerActivity.this,entry)||playbackRoute==null||!playbackRoute.isCurrent(false)){if(exo!=null){exo.release();exo=null;}Toast.makeText(PlayerActivity.this,T("source_unavailable"),Toast.LENGTH_LONG).show();finish();return;}updateProgress();ui.postDelayed(this,500);}};
     Runnable hideControlsTask=()->hideControls();
+    // Step 3: automatic reconnect (Light and Pro).
+    int reconnectAttempt=0; long firstFailureAt=0L, reconnectResumeMs=0L; boolean reconnectPending=false;
+    android.net.ConnectivityManager.NetworkCallback netCallback;
+    final Runnable reconnectNow=this::reconnect;
 
     void cancelControlsHide(){ui.removeCallbacks(hideControlsTask);}
     void scheduleControlsHide(){
@@ -69,7 +73,7 @@ public class PlayerActivity extends FragmentActivity {
     }
 
     void wire(){
-        playPause.setOnClickListener(v->{if(exo==null)return;if(exo.isPlaying()){exo.pause();cancelControlsHide();showControls();}else{exo.play();showControls();}updatePlayIcon();});
+        playPause.setOnClickListener(v->{if(exo==null)return;if(reconnectPending){reconnect();return;}if(!exo.isPlaying()&&exo.getPlaybackState()==Player.STATE_IDLE){resetReconnect();restartStream(entry!=null&&!"live".equals(entry.type)?Math.max(0,exo.getCurrentPosition()):0);showControls();return;}if(exo.isPlaying()){exo.pause();cancelControlsHide();showControls();}else{exo.play();showControls();}updatePlayIcon();});
         rewind.setOnClickListener(v->{if(exo!=null)exo.seekTo(Math.max(0,exo.getCurrentPosition()-10000));showControls();});
         forward.setOnClickListener(v->{if(exo!=null)exo.seekTo(exo.getDuration()>0?Math.min(exo.getDuration(),exo.getCurrentPosition()+10000):exo.getCurrentPosition()+10000);showControls();});
         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onStartTrackingTouch(SeekBar b){userSeeking=true;cancelControlsHide();}public void onStopTrackingTouch(SeekBar b){userSeeking=false;if(exo!=null&&exo.getDuration()>0)exo.seekTo((long)(exo.getDuration()*(b.getProgress()/1000f)));showControls();}public void onProgressChanged(SeekBar b,int p,boolean u){}});
@@ -83,7 +87,7 @@ public class PlayerActivity extends FragmentActivity {
         catch(Exception unavailable){Toast.makeText(this,T("source_unavailable"),Toast.LENGTH_LONG).show();finish();return;}
         ArrayList<String> urls=new ArrayList<>(entry.candidates);if(urls.isEmpty()&&entry.url!=null&&!entry.url.isEmpty())urls.add(entry.url);if(urls.isEmpty()){status.setText(T("no_stream_url"));return;}
         exo=new ExoPlayer.Builder(this,PlayerAudio.renderers(this)).setMediaSourceFactory(DemoSource.mediaSourceFactory(this,entry)).build();applyLanguagePreferences();media3View.setPlayer(exo);streamUrls=urls;streamIndex=0;exo.setMediaItem(MediaItem.fromUri(urls.get(0)));long resume=library.progress(entry);exo.prepare();if(resume>10000&&!"live".equals(entry.type))exo.seekTo(resume);exo.play();status.setText(T("playing"));
-        exo.addListener(new Player.Listener(){@Override public void onPlaybackStateChanged(int state){if(state==Player.STATE_READY){status.setText(T("playing"));scheduleControlsHide();}else if(state==Player.STATE_ENDED){library.markWatched(entry);finish();}}@Override public void onIsPlayingChanged(boolean playing){if(playing)scheduleControlsHide();else{cancelControlsHide();showControls();}}@Override public void onPlayerError(PlaybackException e){if(tryNextStream())return;cancelControlsHide();showControls();status.setText(friendlyError(e));}});
+        exo.addListener(new Player.Listener(){@Override public void onPlaybackStateChanged(int state){if(state==Player.STATE_READY){resetReconnect();status.setText(T("playing"));scheduleControlsHide();}else if(state==Player.STATE_ENDED){library.markWatched(entry);finish();}}@Override public void onIsPlayingChanged(boolean playing){if(playing)scheduleControlsHide();else{cancelControlsHide();showControls();}}@Override public void onPlayerError(PlaybackException e){if(com.nenotv.player.core.Reconnect.restartAtLiveEdge(e.errorCode)&&exo!=null){try{exo.seekToDefaultPosition();exo.prepare();exo.play();}catch(Exception ignored){}return;}if(tryNextStream())return;if(scheduleReconnect(e.errorCode))return;cancelControlsHide();showControls();status.setText(friendlyError(e));}});
         updatePlayIcon();
     }
 
@@ -98,12 +102,30 @@ public class PlayerActivity extends FragmentActivity {
     void applyLanguagePreferences(){if(exo==null)return;TrackSelectionParameters.Builder ts=exo.getTrackSelectionParameters().buildUpon();String[] ac=SettingsStore.audioLanguageCodes(this),sc=SettingsStore.subtitleLanguageCodes(this);if(ac.length>0)ts.setPreferredAudioLanguages(ac);if("off".equals(SettingsStore.subtitles(this)))ts.setTrackTypeDisabled(C.TRACK_TYPE_TEXT,true);else{ts.setTrackTypeDisabled(C.TRACK_TYPE_TEXT,false);if(sc.length>0)ts.setPreferredTextLanguages(sc);}exo.setTrackSelectionParameters(ts.build());}
     /** A channel often has several stream addresses (e.g. .m3u8 and .ts); try the next one before showing an error. */
     boolean tryNextStream(){if(exo==null||streamIndex+1>=streamUrls.size())return false;streamIndex++;exo.setMediaItem(MediaItem.fromUri(streamUrls.get(streamIndex)));exo.prepare();exo.play();return true;}
+    boolean scheduleReconnect(int code){
+        if(destroyed||isFinishing()||exo==null)return false;
+        long now=SystemClock.elapsedRealtime();if(firstFailureAt==0)firstFailureAt=now;
+        if(!com.nenotv.player.core.Reconnect.retryable(code,reconnectAttempt)||com.nenotv.player.core.Reconnect.giveUp(firstFailureAt,now)){resetReconnect();return false;}
+        long delay=com.nenotv.player.core.Reconnect.delayMs(reconnectAttempt);reconnectAttempt++;reconnectPending=true;
+        reconnectResumeMs=entry!=null&&!"live".equals(entry.type)?Math.max(0,exo.getCurrentPosition()):0;
+        status.setText(String.format(T("reconnecting"),String.valueOf(delay/1000),String.valueOf(reconnectAttempt)));cancelControlsHide();showControls();
+        ui.removeCallbacks(reconnectNow);ui.postDelayed(reconnectNow,delay);return true;
+    }
+    void reconnect(){if(destroyed||!reconnectPending)return;reconnectPending=false;ui.removeCallbacks(reconnectNow);restartStream(reconnectResumeMs);}
+    void restartStream(long resumeMs){if(exo==null||streamUrls.isEmpty())return;streamIndex=0;exo.setMediaItem(MediaItem.fromUri(streamUrls.get(0)));exo.prepare();if(resumeMs>0)exo.seekTo(resumeMs);exo.play();updatePlayIcon();}
+    void resetReconnect(){reconnectAttempt=0;firstFailureAt=0L;reconnectPending=false;ui.removeCallbacks(reconnectNow);}
+    void watchNetwork(boolean on){
+        try{android.net.ConnectivityManager cm=getSystemService(android.net.ConnectivityManager.class);if(cm==null)return;
+            if(on&&netCallback==null){netCallback=new android.net.ConnectivityManager.NetworkCallback(){@Override public void onAvailable(android.net.Network n){ui.post(()->{if(reconnectPending&&!destroyed)reconnect();});}};cm.registerDefaultNetworkCallback(netCallback);}
+            else if(!on&&netCallback!=null){cm.unregisterNetworkCallback(netCallback);netCallback=null;}
+        }catch(Exception ignored){}
+    }
     String friendlyError(PlaybackException e){int c=e.errorCode;if(c==PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS||c==PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND)return T("play_err_unavailable");if(c>=2000&&c<3000)return T("play_err_network");if(c>=3000&&c<5000)return T("play_err_format");return T("play_err_generic");}
     void showTracks(int type){if(exo==null)return;Tracks tr=exo.getCurrentTracks();ArrayList<String> names=new ArrayList<>();ArrayList<TrackSelectionOverride> picks=new ArrayList<>();for(Tracks.Group g:tr.getGroups()){if(g.getType()!=type)continue;for(int i=0;i<g.length;i++){Format f=g.getTrackFormat(i);String n=f.label!=null?f.label:(f.language!=null?SettingsStore.displayLanguage(this,f.language):T(type==C.TRACK_TYPE_AUDIO?"audio":"subtitles"));names.add(n);picks.add(new TrackSelectionOverride(g.getMediaTrackGroup(),Collections.singletonList(i)));}}if(names.isEmpty()){Toast.makeText(this,type==C.TRACK_TYPE_AUDIO?T("no_audio_tracks"):T("no_subtitles"),Toast.LENGTH_SHORT).show();return;}new AlertDialog.Builder(this).setTitle(type==C.TRACK_TYPE_AUDIO?T("audio_track"):T("subtitles")).setItems(names.toArray(new String[0]),(d,w)->{TrackSelectionParameters.Builder pb=exo.getTrackSelectionParameters().buildUpon();pb.setOverrideForType(picks.get(w));exo.setTrackSelectionParameters(pb.build());}).show();}
     @Override protected void onStop(){super.onStop();if(entry!=null&&exo!=null&&!"live".equals(entry.type))library.saveProgress(entry,Math.max(0,exo.getCurrentPosition()),Math.max(0,exo.getDuration()),true);
         // Stop sound and data when the viewer leaves the player (Home button, other app).
-        if(exo!=null){resumeOnStart=exo.getPlayWhenReady();exo.pause();}ui.removeCallbacks(tick);}
-    @Override protected void onStart(){super.onStart();if(exo!=null&&resumeOnStart){resumeOnStart=false;if(entry!=null&&"live".equals(entry.type))exo.seekToDefaultPosition();exo.play();}if(exo!=null&&!destroyed){ui.removeCallbacks(tick);ui.post(tick);}}
+        if(exo!=null){resumeOnStart=exo.getPlayWhenReady();exo.pause();}ui.removeCallbacks(tick);ui.removeCallbacks(reconnectNow);watchNetwork(false);}
+    @Override protected void onStart(){super.onStart();watchNetwork(true);if(exo!=null&&resumeOnStart){resumeOnStart=false;if(entry!=null&&"live".equals(entry.type))exo.seekToDefaultPosition();exo.play();}if(exo!=null&&!destroyed){ui.removeCallbacks(tick);ui.post(tick);}}
     /** Remote control: the first press shows the controls, media keys work directly. */
     @Override public boolean dispatchKeyEvent(KeyEvent event){
         int k=event.getKeyCode();

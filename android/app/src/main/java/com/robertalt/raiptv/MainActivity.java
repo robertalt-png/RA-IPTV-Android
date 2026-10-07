@@ -1178,7 +1178,7 @@ TextView addInfoBlock(LinearLayout b,String l,String x){TextView h=new TextView(
         pauseIndexForPlayback();
         if(DemoPolicy.blockPlayback(this)){recreate();return;}if(!"catchup".equals(e.type))library.recent(e);Intent i=ProModuleInstaller.playerIntent(this);i.putExtra("media",e);i.putExtra("profileType",playbackProfile.type.name());
         String queueToken="";
-        if("live".equals(e.type)){ArrayList<MediaEntry>q=new ArrayList<>();for(MediaEntry z:all)if("live".equals(z.type)&&!isAdultLocked(z)){q.add(z);if(q.size()>=250)break;}int at=-1;for(int n=0;n<q.size();n++)if(q.get(n).uniqueKey().equals(e.uniqueKey())){at=n;break;}if(at>=0)queueToken=com.nenotv.player.storage.PlaybackQueueStore.put("live",q,at);}
+        if("live".equals(e.type)){ArrayList<MediaEntry>q=new ArrayList<>();for(MediaEntry z:all)if("live".equals(z.type)&&!isAdultLocked(z)){q.add(z);if(q.size()>=5000)break;}int at=-1;for(int n=0;n<q.size();n++)if(q.get(n).uniqueKey().equals(e.uniqueKey())){at=n;break;}if(at>=0)queueToken=com.nenotv.player.storage.PlaybackQueueStore.put("live",q,at);}
         else if("episode".equals(e.type)&&seriesEpisodeMode){ArrayList<MediaEntry>q=new ArrayList<>();for(MediaEntry z:seriesEpisodes)if("episode".equals(z.type)&&!isAdultLocked(z))q.add(z);int at=-1;for(int n=0;n<q.size();n++)if(q.get(n).uniqueKey().equals(e.uniqueKey())){at=n;break;}if(at>=0)queueToken=com.nenotv.player.storage.PlaybackQueueStore.put("episode",q,at);}
         if(!queueToken.isEmpty())i.putExtra("queueToken",queueToken);
         try{startActivity(i);}catch(RuntimeException ex){playbackActive=false;activityPaused=false;resumeIndexAfterPlayback=true;resumeIndexSoon();Toast.makeText(this,T("play_err_generic"),Toast.LENGTH_LONG).show();}
