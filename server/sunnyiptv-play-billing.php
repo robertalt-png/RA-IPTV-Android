@@ -35,7 +35,7 @@ trait SunnyIPTV_Play_Billing {
                 'methods' => 'POST',
                 'permission_callback' => '__return_true',
                 'callback' => static fn(WP_REST_Request $r) => self::app_entitlement_direct($r, $action),
-            ]);
+            ], true); // override: the legacy nenotv-app-bridge proxy registers the same routes and would skip auto_trial and the Play recheck
         }
     }
 
