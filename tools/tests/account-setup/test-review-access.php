@@ -176,7 +176,7 @@ check('provision lock failure denied',provision()->data['error']==='review_busy'
 $GLOBALS['wpdb']->lock=true;
 $p=provision(); $token=$p->data['activation_token']; $id=$GLOBALS['options']['sunnyiptv_review_access']['entitlement_id'];
 check('dedicated provision succeeds',$p->data['ok']===true);
-check('code compatible with Android',preg_match('/^NENO-(?:[A-Z0-9]{4}-){3}[A-Z0-9]{4}$/D',$token)===1);
+check('code compatible with Android',preg_match('/^SUNNY-(?:[A-Z0-9]{4}-){3}[A-Z0-9]{4}$/D',$token)===1);
 check('code response never cached',$p->headers['Cache-Control']==='no-store');
 check('no end date',$GLOBALS['wpdb']->ent[$id]['expires_at']===null&&$p->data['expires_at']===null);
 check('only hash stored',$GLOBALS['wpdb']->ent[$id]['activation_hash']!==$token && !str_contains(json_encode($GLOBALS['wpdb']->ent),$token));
