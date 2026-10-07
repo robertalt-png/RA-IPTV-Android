@@ -2,7 +2,22 @@
 set -euo pipefail
 device="$1"
 mkdir -p qa-results
-trap 'timeout 15s adb logcat -d > qa-results/logcat.txt || true; timeout 15s adb pull /sdcard/Android/data/com.nenotv.player/files/qa qa-results/final-screenshots || true' EXIT
+report_failure() {
+  rc=$?
+  timeout 15s adb logcat -d > qa-results/logcat.txt || true
+  timeout 15s adb pull /sdcard/Android/data/com.nenotv.player/files/qa qa-results/final-screenshots || true
+  [ "$rc" -eq 0 ] && return 0
+  # Surface the cause as annotations: the last instrumentation output and any crash, so failures are readable without the log archive.
+  last=$(ls -t qa-results/*.txt 2>/dev/null | grep -v logcat | head -1 || true)
+  if [ -n "$last" ]; then
+    msg=$(tail -n 25 "$last" | tr -d '\r' | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
+    echo "::error title=QA failed in $(basename "$last")::$msg"
+  fi
+  crash=$(rg -A 12 'FATAL EXCEPTION' qa-results/logcat.txt 2>/dev/null | head -30 | tr -d '\r' | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}' || true)
+  [ -n "$crash" ] && echo "::error title=App crash::$crash"
+  return 0
+}
+trap report_failure EXIT
 apk="$PWD/distribution/SunnyIPTV-Pro-v0.14.35-vc129-TEST-SIGNED.apk"
 light_apk="$PWD/distribution/SunnyIPTV-Light-v0.14.35-vc129-TEST-SIGNED.apk"
 adb install "$light_apk"
