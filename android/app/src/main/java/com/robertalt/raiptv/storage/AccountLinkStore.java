@@ -29,6 +29,11 @@ public final class AccountLinkStore {
     /** Offline grace period: a linked device keeps working this long without reaching the server. */
     public static final long GRACE_MS=7L*24*60*60*1000;
     public boolean usable(){long age=System.currentTimeMillis()-prefs.getLong("checked_at",0);return linked()&&age>=0&&age<GRACE_MS;}
+    /** Trying the app without an account: Light with an own or demo source; linking later adds the trial and cloud features. */
+    public void startGuest(){prefs.edit().putBoolean("guest",true).putString("guest_binding",binding()).commit();}
+    public boolean guest(){return !linked()&&prefs.getBoolean("guest",false)&&binding().equals(prefs.getString("guest_binding",""));}
+    /** May open the app: a linked account (within the offline grace period) or a guest. */
+    public boolean allowed(){return usable()||guest();}
     public boolean recent(){long age=System.currentTimeMillis()-prefs.getLong("checked_at",0);return linked()&&age>=0&&age<15*60*1000L;}
     public void clear(){ExtraPrivacyStore.clear(context);prefs.edit().clear().commit();}
 }

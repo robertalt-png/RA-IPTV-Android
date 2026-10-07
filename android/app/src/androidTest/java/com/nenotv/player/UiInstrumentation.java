@@ -428,11 +428,21 @@ public final class UiInstrumentation extends ImportInstrumentation {
                 Thread.sleep(600);waitForIdleSync();
                 runOnMainSync(()->{
                     Button skip=firstScreen.findViewById(android.R.id.content).findViewWithTag("start_without_account");
-                    check(skip==null,"Mandatory account can be bypassed");
+                    check(skip!=null&&skip.getVisibility()==View.VISIBLE&&skip.isEnabled()&&skip.isFocusable(),"First start has no way to try the app without an account");
+                    assertUnclippedText(skip);
                     check(opened.get()==beforeFirst,"First start automatically opened browser");
                 });
                 check(sourceMonitor.getHits()==0,"First start opened source screen before approval");
             }finally{removeMonitor(sourceMonitor);runOnMainSync(firstScreen::finish);}
+            {   // Guest: allowed without an account, bound to this device, gone after sign-out, and never stronger than a real link.
+                com.nenotv.player.storage.AccountLinkStore guest=new com.nenotv.player.storage.AccountLinkStore(getTargetContext());
+                guest.clear();check(!guest.allowed()&&!guest.guest(),"Signed-out device was allowed in");
+                guest.startGuest();check(guest.guest()&&guest.allowed()&&!guest.linked()&&guest.accountId().isEmpty(),"Guest mode did not open the app");
+                getTargetContext().getSharedPreferences("nenotv_account_link_v1",Context.MODE_PRIVATE).edit().putString("guest_binding","other-device").commit();
+                check(!guest.guest()&&!guest.allowed(),"Guest mode copied from another device was accepted");
+                guest.startGuest();guest.clear();check(!guest.guest(),"Sign-out kept guest mode");
+                guest.startGuest();verifiedAccount();check(guest.linked()&&!guest.guest()&&guest.allowed(),"Linking did not replace guest mode");
+            }
             for(String language:new String[]{"nl","en","de"}){
                 SettingsStore.setPrimaryLanguage(getTargetContext(),language);state.set("pending");
                 PairingActivity a=(PairingActivity)startActivitySync(new Intent(getTargetContext(),PairingActivity.class).putExtra("auto_web",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
