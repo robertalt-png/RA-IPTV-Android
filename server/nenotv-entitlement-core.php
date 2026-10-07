@@ -330,7 +330,7 @@ final class NenoTV_Entitlement_Core {
 
     private static function activation_code(): string {
         $raw = strtoupper(wp_generate_password(16, false, false));
-        return 'NENO-' . substr($raw,0,4) . '-' . substr($raw,4,4) . '-' . substr($raw,8,4) . '-' . substr($raw,12,4);
+        return 'SUNNY-' . substr($raw,0,4) . '-' . substr($raw,4,4) . '-' . substr($raw,8,4) . '-' . substr($raw,12,4);
     }
 
     private static function upsert_order_entitlement($order, string $status, bool $issue_token): array {

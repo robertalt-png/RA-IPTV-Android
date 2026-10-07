@@ -40,6 +40,8 @@ trait SunnyIPTV_Admin_API {
                 update_option('nenotv_admin_pair_expires', time() + 10 * MINUTE_IN_SECONDS, false);
                 set_transient('nenotv_admin_pair_plain_once', $code, 10 * MINUTE_IN_SECONDS);
                 $notice = 'Nieuwe koppelcode aangemaakt (10 minuten geldig).';
+            } elseif ($action === 'pro_test') {
+                $notice = self::admin_api_extend_pro_test();
             } elseif ($action === 'revoke') {
                 delete_option('nenotv_admin_app_access_hash');
                 delete_option('nenotv_admin_pair_hash');
@@ -63,7 +65,39 @@ trait SunnyIPTV_Admin_API {
         wp_nonce_field('sunny_admin_app_pair');
         echo '<button class="button button-primary button-hero" name="sunny_admin_app_action" value="generate">Nieuwe koppelcode maken</button> ';
         if ($paired) echo '<button class="button" name="sunny_admin_app_action" value="revoke" onclick="return confirm(\'Toegang van de huidige admin-app intrekken?\')">Toegang intrekken</button>';
-        echo '</form></div>';
+        echo '</form>';
+        $test = self::find_by_source('internal_catalog_test', 'admin:' . get_current_user_id());
+        echo '<h2 style="margin-top:32px">Pro-test voor jouw account</h2>';
+        echo '<p>Status: ' . ($test && self::entitlement_is_active($test) ? 'actief tot ' . esc_html(wp_date('j F Y', (int)strtotime($test['expires_at'] . ' UTC'))) . ', max. ' . (int)$test['max_devices'] . ' apparaten' : 'geen actieve Pro-test') . '.</p>';
+        echo '<p class="description">Koppel daarna je apparaat in de app (Account → Koppelen) en log in met dit beheerdersaccount. Dit is interne testtoegang: telt niet als klant of verkoop.</p>';
+        echo '<form method="post">';
+        wp_nonce_field('sunny_admin_app_pair');
+        echo '<button class="button button-primary" name="sunny_admin_app_action" value="pro_test">Pro-test op 90 dagen zetten</button></form>';
+        echo '</div>';
+    }
+
+    /** Internal Pro test for the logged-in administrator: 90 days, 5 devices; the same row the catalog test uses (source internal_catalog_test, ref admin:ID). */
+    private static function admin_api_extend_pro_test(): string {
+        global $wpdb;
+        $user = wp_get_current_user();
+        $email = self::normalize_email((string)$user->user_email);
+        if (!is_email($email)) return 'Je beheerdersaccount heeft geen geldig e-mailadres.';
+        $existing = self::current_user_entitlement();
+        if ($existing && self::entitlement_is_active($existing) && ($existing['source'] ?? '') !== 'internal_catalog_test') return 'Dit account heeft al echte Pro-toegang; er is niets gewijzigd.';
+        $now = self::now_mysql();
+        $expires = time() + 90 * DAY_IN_SECONDS;
+        $ref = 'admin:' . get_current_user_id();
+        $ent = self::find_by_source('internal_catalog_test', $ref);
+        $values = ['email' => $email, 'email_hash' => self::email_hash($email), 'level' => 'pro', 'plan' => 'annual', 'status' => 'active', 'max_devices' => 5, 'source' => 'internal_catalog_test', 'source_ref' => $ref, 'payment_mode' => 'internal_test', 'starts_at' => $now, 'expires_at' => gmdate('Y-m-d H:i:s', $expires), 'updated_at' => $now];
+        if ($ent) { $ok = $wpdb->update(self::ent_table(), $values, ['id' => (int)$ent['id']]) !== false; $id = (int)$ent['id']; $reference = (string)$ent['reference']; }
+        else { $values['reference'] = $reference = self::ref(); $values['created_at'] = $now; $values['activation_hash'] = ''; $values['activation_expires_at'] = null; $values['language'] = 'nl'; $ok = $wpdb->insert(self::ent_table(), $values) !== false; $id = (int)$wpdb->insert_id; }
+        if (!$ok || !$id) return 'Opslaan mislukt; er is niets gewijzigd.';
+        $tests = get_option('nenotv_catalog_internal_tests', []);
+        if (!is_array($tests)) $tests = [];
+        $tests[(string)$id] = $expires;
+        update_option('nenotv_catalog_internal_tests', $tests, false);
+        self::log_event('internal_pro_test', $reference, $ref, 'success', 'Internal 90-day Pro test set for the requesting administrator only.');
+        return 'Pro-test staat nu op 90 dagen (5 apparaten).';
     }
 
     public static function admin_api_allowed(WP_REST_Request $request): bool {

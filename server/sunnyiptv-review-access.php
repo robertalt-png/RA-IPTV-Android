@@ -83,7 +83,7 @@ trait SunnyIPTV_Review_Access {
             $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
             $raw = '';
             for ($i=0; $i<16; $i++) $raw .= $alphabet[random_int(0, strlen($alphabet)-1)];
-            $token = 'NENO-'.implode('-', str_split($raw, 4));
+            $token = 'SUNNY-'.implode('-', str_split($raw, 4));
             $now = self::now_mysql();
             $reference = self::ref();
             $written = $wpdb->insert(self::ent_table(), [
