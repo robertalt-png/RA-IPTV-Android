@@ -94,7 +94,7 @@ public final class RecordingService extends Service {
         } catch (Throwable unexpected) {
             result = null;
         } finally {
-            RUNNING.remove(id);
+            // Save the final state before leaving RUNNING, so anyone who sees "not running" also sees the result.
             RecordingStore.Recording cur = RecordingStore.get(this, id);
             if (cur != null) {
                 cur.bytes = out.length();
@@ -105,6 +105,7 @@ public final class RecordingService extends Service {
                 if (cur.bytes == 0) out.delete();
                 finish(cur, state, error);
             }
+            RUNNING.remove(id);
             BYTES.remove(id);
             ui.post(() -> { updateNotification(); stopIfIdle(); });
         }
