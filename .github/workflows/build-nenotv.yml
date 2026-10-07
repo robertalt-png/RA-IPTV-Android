@@ -138,6 +138,21 @@ jobs:
               if i.filename.startswith('base/lib/') and i.filename.endswith('/libffmpegJNI.so'): sizes[i.filename.split('/')[2]]+=i.file_size
             print('FFmpeg audio decoder per ABI (MB):',{k:round(v/1048576,2) for k,v in sizes.items()})
           PY
+      - name: Sign the Play bundle with the upload key (only when the UPLOAD_* secrets are set)
+        env:
+          KS_B64: ${{ secrets.UPLOAD_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KS_B64" ]; then echo "No upload key secret: the Play bundle stays unsigned"; exit 0; fi
+          f=$(ls distribution/*-UNSIGNED.aab | head -1); out="${f/-UNSIGNED/-SIGNED}"
+          printf '%s' "$KS_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          if [ -z "$KEY_PASS" ]; then KEY_PASS="$KS_PASS"; fi
+          jarsigner -keystore "$RUNNER_TEMP/upload.jks" -storepass:env KS_PASS -keypass:env KEY_PASS -sigalg SHA256withRSA -digestalg SHA-256 -signedjar "$out" "$f" "$KEY_ALIAS"
+          rm -f "$RUNNER_TEMP/upload.jks"
+          jarsigner -verify "$out" | tail -1
+          keytool -printcert -jarfile "$out" | grep -m1 "SHA256:" || true
       - uses: actions/upload-artifact@v4
         with:
           name: SunnyIPTV-v0.14.38-Play-bundle
