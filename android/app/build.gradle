@@ -13,8 +13,8 @@ android {
         applicationId 'com.nenotv.player'
         minSdk 26
         targetSdk 36
-        versionCode 133
-        versionName '0.14.39'
+        versionCode 134
+        versionName '0.14.40'
         buildConfigField 'String', 'NENOTV_CAST_RECEIVER_ID', '"' + nenotvCastReceiverId + '"'
         buildConfigField 'boolean', 'LIGHT_BUILD', 'false'
     
@@ -37,6 +37,8 @@ android {
 
 dependencies {
     implementation 'com.google.zxing:core:3.5.4'
+    // On-device text recognition for scanned provider details (model delivered by Google Play services, not bundled).
+    implementation 'com.google.android.gms:play-services-mlkit-text-recognition:19.0.1'
     implementation 'com.google.code.gson:gson:2.13.2'
     implementation 'com.google.android.play:feature-delivery:2.1.0'
     implementation 'com.google.android.play:app-update:2.1.0'

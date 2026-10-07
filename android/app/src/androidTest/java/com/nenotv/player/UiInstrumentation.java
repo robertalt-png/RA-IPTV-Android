@@ -227,6 +227,18 @@ public final class UiInstrumentation extends ImportInstrumentation {
                 a.finish();
             });
         }
+        {   // Paste box: a provider message fills the Xtream fields; show-password is present.
+            SettingsStore.setPrimaryLanguage(c,"nl");
+            ProfileActivity p=(ProfileActivity)startActivitySync(new Intent(c,ProfileActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));waitForIdleSync();
+            runOnMainSync(()->{EditText smart=p.findViewById(android.R.id.content).findViewWithTag("source_smart_text");check(smart!=null&&smart.isShown(),"Paste box missing");
+                assertUnclippedText(p.xtream);smart.setText("Username: klant4471\nPassword: Zx81kT\nServer URL: http://best.example.net:25461");});
+            Thread.sleep(800);waitForIdleSync();
+            runOnMainSync(()->{check(p.xtream.isChecked()&&p.xtreamFields.getVisibility()==View.VISIBLE,"Recognised source did not select Xtream");
+                check("http://best.example.net:25461".equals(p.server.getText().toString())&&"klant4471".equals(p.user.getText().toString())&&"Zx81kT".equals(p.pass.getText().toString()),"Pasted provider details not filled in");
+                check(p.findViewById(android.R.id.content).findViewWithTag("source_show_password")!=null,"Show-password button missing");});
+            snapshot("source-paste-nl");
+            runOnMainSync(p::finish);
+        }
         Profile demo=new Profile();demo.type=Profile.Type.M3U;demo.m3uUrl=BuildConfig.NENOTV_DEMO_M3U_URL;demo.name="Saved NenoTV";profiles.save(demo);
         ProfileActivity saved=(ProfileActivity)startActivitySync(new Intent(c,ProfileActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));waitForIdleSync();
         runOnMainSync(()->{check(saved.demoRadio.isChecked(),"Saved NenoTV offer reopened as own M3U");saved.finish();});

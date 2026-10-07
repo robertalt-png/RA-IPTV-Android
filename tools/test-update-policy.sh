@@ -41,3 +41,6 @@ open(sys.argv[1], 'w', encoding='utf-8').write(s[:i] + '}')
 PY
 javac -d "$classes/uitext" "$classes/uitext/UiText.java"
 echo "UiText: compiles within the method size limit"
+javac -d "$classes" android/app/src/main/java/com/robertalt/raiptv/core/SourceParse.java tools/tests/SourceParseTest.java
+java -cp "$classes" com.nenotv.player.core.SourceParseTest
+if command -v node >/dev/null; then node tools/tests/source-parse-test.js; fi

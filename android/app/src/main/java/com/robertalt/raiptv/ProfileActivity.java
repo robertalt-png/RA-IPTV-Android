@@ -15,6 +15,7 @@ public class ProfileActivity extends Activity {
     LinearLayout xtreamFields,m3uFields,advancedFields; SecureProfileStore store; SourceStore sources; String sourceId=""; boolean newSource=false,websiteSetup=false; Profile editingProfile; ExecutorService exec=Executors.newSingleThreadExecutor();
 
     boolean websiteFirst,foreground,polling,pairLaunched;
+    SourceEntryUi entry;
     long setupBackgroundUntil;
     final Handler setupHandler=new Handler(Looper.getMainLooper());
     final Runnable sourcePoll=()->checkWebsiteSource();
@@ -53,6 +54,7 @@ public class ProfileActivity extends Activity {
         Button website=new Button(this);website.setText(T("Link devices (optional)","Apparaten koppelen (optioneel)","Geräte verbinden (optional)"));website.setTag("optional_device_link");website.setAllCaps(false);website.setMinHeight(Math.round(56*getResources().getDisplayMetrics().density));website.setTextColor(0xFFF7F8FA);website.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));
         website.setOnClickListener(v->startAccountSetup());
         LinearLayout container=(LinearLayout)findViewById(R.id.profileIntro).getParent();container.addView(website,container.getChildCount()-1);
+        entry=new SourceEntryUi(this,server,user,pass,m3u,xtream,m3uRadio,demoRadio,this::updateMode);entry.install(container,findViewById(R.id.profileIntro));
 
         findViewById(R.id.typeGroup).setOnClickListener(v->updateMode());
         xtream.setOnClickListener(v->updateMode()); m3uRadio.setOnClickListener(v->updateMode()); demoRadio.setOnClickListener(v->{updateMode();if(demoRadio.isEnabled())connectAndSave();});
@@ -62,7 +64,7 @@ public class ProfileActivity extends Activity {
 
     @Override protected void onResume(){super.onResume();foreground=true;if(websiteSetup)setupHandler.post(sourcePoll);}
     @Override protected void onPause(){foreground=false;setupHandler.removeCallbacks(sourcePoll);if(websiteFirst){setupBackgroundUntil=SystemClock.elapsedRealtime()+300000;setupHandler.postDelayed(sourcePoll,5000);}super.onPause();}
-    @Override protected void onActivityResult(int request,int result,android.content.Intent data){super.onActivityResult(request,result,data);if(request==31){pairLaunched=false;if(result==RESULT_OK){chooseOffer();setupHandler.post(sourcePoll);}}}
+    @Override protected void onActivityResult(int request,int result,android.content.Intent data){super.onActivityResult(request,result,data);if(request==SourceEntryUi.PICK_IMAGE){if(result==RESULT_OK&&entry!=null&&data!=null)entry.onImage(data.getData());return;}if(request==31){pairLaunched=false;if(result==RESULT_OK){chooseOffer();setupHandler.post(sourcePoll);}}}
 
     void applyLanguage(){
         ((TextView)findViewById(R.id.profileTitle)).setText("SunnyIPTV");
@@ -168,5 +170,5 @@ public class ProfileActivity extends Activity {
             runOnUiThread(()->{setResult(RESULT_OK);finish();});
         }catch(Exception error){runOnUiThread(()->{connecting=false;findViewById(R.id.saveButton).setEnabled(true);status.setText(T("Could not prepare. Your previous library is kept.","Voorbereiden niet gelukt. Uw bestaande bibliotheek is behouden.","Vorbereitung fehlgeschlagen. Deine bisherige Bibliothek bleibt erhalten."));});}});
     }
-    @Override protected void onDestroy(){super.onDestroy();setupHandler.removeCallbacksAndMessages(null);exec.shutdownNow();}
+    @Override protected void onDestroy(){super.onDestroy();if(entry!=null)entry.close();setupHandler.removeCallbacksAndMessages(null);exec.shutdownNow();}
 }
