@@ -695,7 +695,7 @@ void scheduleBackgroundIndex(){
         for(Object[] h:hits){guideHitChannels.add((MediaEntry)h[0]);guideHitEntries.add((EpgEntry)h[1]);}
         if(guideHitsButton==null)return;
         if(hits.isEmpty()){guideHitsButton.setVisibility(View.GONE);return;}
-        guideHitsButton.setText("📅 "+hits.size()+" "+T("guide_hits"));guideHitsButton.setVisibility(View.VISIBLE);
+        guideHitsButton.setText("📅 "+hits.size()+" "+T(hits.size()==1?"guide_hit_one":"guide_hits"));guideHitsButton.setVisibility(View.VISIBLE);
     }
     void showGuideHits(){
         epgRequestSerial++;hideContentViews();epgBoard.setVisibility(View.VISIBLE);epgBoardContainer.removeAllViews();
@@ -708,7 +708,7 @@ void scheduleBackgroundIndex(){
             TextView row=epgTimelineCard(when+"\n"+(replay?"↶ ":"")+e.title,e.isNow());row.setMaxLines(3);tvFocusable(row,e.isNow()?getResources().getColor(R.color.accent):0xFF1A1F29);row.setPadding(dp(10),dp(8),dp(10),dp(8));row.setOnClickListener(v->showProgramme(ch,e));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.topMargin=dp(4);epgBoardContainer.addView(row,lp);
         }
-        epgBoard.scrollTo(0,0);status.setText(guideHitEntries.size()+" "+T("guide_hits"));
+        epgBoard.scrollTo(0,0);status.setText(guideHitEntries.size()+" "+T(guideHitEntries.size()==1?"guide_hit_one":"guide_hits"));
     }
     /** G3: one programme from the grid, with watch live, catch-up or "from the start" when the channel has an archive. */
     void showProgramme(MediaEntry ch,EpgEntry e){

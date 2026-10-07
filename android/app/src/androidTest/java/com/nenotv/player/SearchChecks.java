@@ -52,6 +52,39 @@ final class SearchChecks {
                 for (String section : new String[]{"series", "vod", "live"}) index.replaceSection(profile, section, Collections.emptyList());
             }
         }
+        providerNames(c);
+    }
+
+    /** 0.14.34: provider names where the title carries the language and the category another one; no matches inside words. */
+    static void providerNames(Context c) throws Exception {
+        String profile = "qa-search-names-" + UUID.randomUUID();
+        MediaEntry gr = item("p1", "series", "[GR] Silo", "|EN| SERIES 2023");
+        MediaEntry ar = item("p2", "series", "|AR| Silo (2023)", "|EN| SERIES 2023");
+        MediaEntry nl = item("p3", "series", "|NL| Silo", "|EN| SERIES 2023");
+        MediaEntry multi = item("p4", "series", "|MULTI| Silo (2023)", "|EN| SERIES 2023");
+        MediaEntry mind = item("p5", "series", "How to Change Your Mind", "|EN| SERIES 2022");
+        mind.plot = "A docuseries about psilocybin and other psychedelics.";
+        MediaEntry asilo = item("p6", "vod", "Una notte all'asilo", "|IT| FILM");
+        MediaEntry tight = item("p8", "vod", "[DE]Silo Doku", "|DE| FILM");
+        MediaEntry plot = item("p7", "vod", "Farm Story", "|EN| FILM");
+        plot.plot = "A farmer guards the old silo.";
+        try (SearchIndexStore index = new SearchIndexStore(c)) {
+            index.replaceSection(profile, "series", Arrays.asList(gr, ar, nl, multi, mind));
+            index.replaceSection(profile, "vod", Arrays.asList(asilo, plot, tight));
+            try {
+                List<MediaEntry> all = index.searchAll(profile, "", "silo", "nl", 100);
+                List<String> names = new ArrayList<>();
+                for (MediaEntry e : all) names.add(e.name);
+                check(!all.isEmpty() && "|NL| Silo".equals(all.get(0).name), "Dutch title not first: " + names);
+                check(names.size() > 1 && "|MULTI| Silo (2023)".equals(all.get(1).name), "MULTI not second: " + names);
+                check(!names.contains("Una notte all'asilo") && !names.contains("How to Change Your Mind"), "Matched inside a word: " + names);
+                check(names.contains("Farm Story"), "Whole word in the description no longer found: " + names);
+                check(names.contains("[DE]Silo Doku"), "Title glued to its language tag not found: " + names);
+                check(names.containsAll(Arrays.asList("[GR] Silo", "|AR| Silo (2023)")), "Other languages dropped: " + names);
+            } finally {
+                for (String section : new String[]{"series", "vod"}) index.replaceSection(profile, section, Collections.emptyList());
+            }
+        }
     }
 
     static void check(boolean ok, String message) { if (!ok) throw new AssertionError(message); }

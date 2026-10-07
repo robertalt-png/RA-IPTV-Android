@@ -450,7 +450,7 @@ public class SearchIndexStore extends SQLiteOpenHelper {
     public synchronized List<MediaEntry> searchFiltered(String profile,String section,String query,String tag,int limit){profile=physical(profile);
         String q=norm(query);if(q.isEmpty())return Collections.emptyList();String sec=section==null?"":section.trim();String t=tag==null?"":tag.trim().toLowerCase(Locale.ROOT);SQLiteDatabase db=getWritableDatabase();if(!sec.isEmpty())ensureLanguageHints(db,profile,sec);
         StringBuilder where=new StringBuilder("profile=?");ArrayList<String> base=new ArrayList<>();base.add(profile);if(!sec.isEmpty()){where.append(" AND type=?");base.add(sec);}if("other".equals(t)){where.append(" AND (lang_tag='' OR lang_tag IS NULL)");}else if(!t.isEmpty()){where.append(" AND lang_tag=?");base.add(t);}
-        LinkedHashMap<String,MediaEntry> out=new LinkedHashMap<>();queryFilteredInto(out,where.toString(),base,"name_norm=?",q,limit);if(out.size()<limit)queryFilteredInto(out,where.toString(),base,"name_norm LIKE ?",q+"%",limit);if(out.size()<limit)queryFilteredInto(out,where.toString(),base,"hay_norm LIKE ?","%"+q+"%",limit*2);
+        LinkedHashMap<String,MediaEntry> out=new LinkedHashMap<>();queryFilteredInto(out,where.toString(),base,"name_norm=?",q,limit);if(out.size()<limit)queryFilteredInto(out,where.toString(),base,"name_norm LIKE ?",q+"%",limit);if(out.size()<limit)queryFilteredInto(out,where.toString(),base,"(' '||hay_norm) LIKE ?","% "+q+"%",limit*2);
         List<MediaEntry> result=new ArrayList<>(out.values());result.sort((a,b)->Integer.compare(score(b,q),score(a,q)));if(result.size()>limit)return new ArrayList<>(result.subList(0,limit));return result;
     }
     /**
@@ -466,8 +466,10 @@ public class SearchIndexStore extends SQLiteOpenHelper {
         queryTaggedInto(out,tags,where.toString(),base,"name_norm=?",q,limit);
         if(out.size()<limit)queryTaggedInto(out,tags,where.toString(),base,"name_norm LIKE ?",q+"%",limit);
         if(out.size()<limit)queryTaggedInto(out,tags,where.toString(),base,"hay_norm LIKE ?","%"+q+"%",limit*2);
-        List<MediaEntry> result=new ArrayList<>(out.values());
-        result.sort((a,b)->{boolean pa=!pref.isEmpty()&&pref.equals(tags.get(a.uniqueKey())),pb=!pref.isEmpty()&&pref.equals(tags.get(b.uniqueKey()));if(pa!=pb)return pa?-1:1;return Integer.compare(score(b,q),score(a,q));});
+        List<MediaEntry> result=new ArrayList<>();for(MediaEntry e:out.values())if(startsWord(e,q))result.add(e);
+        // Same language as the badge on the card (title first, then the stored tag): app language, then MULTI, then the rest.
+        HashMap<String,Integer> rank=new HashMap<>();for(MediaEntry e:result)rank.put(e.uniqueKey(),languageRank(e,tags.get(e.uniqueKey()),pref));
+        result.sort((a,b)->{int ra=rank.get(a.uniqueKey()),rb=rank.get(b.uniqueKey());if(ra!=rb)return Integer.compare(ra,rb);return Integer.compare(score(b,q),score(a,q));});
         if(result.size()>limit)return new ArrayList<>(result.subList(0,limit));return result;
     }
     private void queryTaggedInto(LinkedHashMap<String,MediaEntry> out,Map<String,String> tags,String where,List<String> base,String extra,String value,int limit){ArrayList<String>a=new ArrayList<>(base);a.add(value);a.add(String.valueOf(limit));try(Cursor c=getReadableDatabase().rawQuery("SELECT payload,lang_tag FROM entries WHERE "+where+" AND "+extra+" LIMIT ?",a.toArray(new String[0]))){while(c.moveToNext()){MediaEntry e=decode(c.getString(0));if(e!=null&&out.putIfAbsent(e.uniqueKey(),e)==null){String t=c.getString(1);tags.put(e.uniqueKey(),t==null?"":t.toLowerCase(Locale.ROOT));}}}catch(Exception ignored){}}
@@ -491,6 +493,21 @@ public class SearchIndexStore extends SQLiteOpenHelper {
         }
     }
 
+    /** "silo" matches "Silo", "[NL]Silo" and "the old silo", not "all'asilo" or "psilocybin". */
+    static boolean startsWord(MediaEntry e,String q){
+        String hay=norm(metadata(e.name)+" "+metadata(e.plot)+" "+metadata(e.group)+" "+metadata(e.seriesTitle)+" "+metadata(e.tvgName));
+        for(int i=hay.indexOf(q);i>=0;i=hay.indexOf(q,i+1)){if(i==0||!Character.isLetterOrDigit(hay.charAt(i-1)))return true;}
+        return false;
+    }
+    /** Language of a result as the card shows it: the tag in the title wins over the category's tag. */
+    static String resultLanguage(MediaEntry e,String storedTag){
+        try{for(String t:com.nenotv.player.DisplayText.parse(e).tags){String x=com.nenotv.player.ContentLanguage.normalizeTag(t);if(!x.isEmpty())return x;}}catch(RuntimeException ignored){}
+        String x=com.nenotv.player.ContentLanguage.normalizeTag(storedTag);return x.isEmpty()?com.nenotv.player.ContentLanguage.detectTag(e):x;
+    }
+    /** 0 app language, 1 MULTI, 2 unknown, 3 another language. */
+    static int languageRank(MediaEntry e,String storedTag,String preferred){
+        String x=resultLanguage(e,storedTag);if(x.isEmpty())return 2;if("multi".equals(x))return 1;return !preferred.isEmpty()&&preferred.equals(x)?0:3;
+    }
     private static int score(MediaEntry e,String q){
         String n=norm(e.name), g=norm(e.group); int s=0;
         if(n.equals(q))s+=1000; else if(n.startsWith(q))s+=500; else if(n.contains(" "+q)||n.contains(q+" "))s+=250; else if(n.contains(q))s+=120;
