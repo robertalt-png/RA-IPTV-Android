@@ -60,6 +60,7 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public class ProPlayerActivity extends FragmentActivity {
+    @Override protected void attachBaseContext(android.content.Context base){super.attachBaseContext(base);com.google.android.play.core.splitcompat.SplitCompat.installActivity(this);}
     FrameLayout root,controls;
     PlayerView media3View;
     TextView title,status,timeText;

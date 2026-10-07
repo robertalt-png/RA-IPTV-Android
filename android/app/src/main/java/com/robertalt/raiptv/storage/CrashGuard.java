@@ -6,7 +6,10 @@ import java.io.StringWriter;
 
 public final class CrashGuard {
     private CrashGuard(){}
-    public static void install(Context c){
+    private static volatile boolean installed=false;
+    /** Installs one handler per process; later calls (every screen used to call this) do nothing. */
+    public static synchronized void install(Context c){
+        if(installed)return;installed=true;
         final Context app=c.getApplicationContext();
         final Thread.UncaughtExceptionHandler previous=Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler((thread,error)->{

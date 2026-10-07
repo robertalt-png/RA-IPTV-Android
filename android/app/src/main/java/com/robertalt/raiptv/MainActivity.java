@@ -126,7 +126,7 @@ public class MainActivity extends Activity {
 
     void wire(){
         if(languageBadge!=null)languageBadge.setOnClickListener(v->showLanguageQuickMenu());
-        if(planBadge!=null)planBadge.setOnClickListener(v->startActivity(new Intent(this,AccountActivity.class)));
+        if(planBadge!=null)planBadge.setOnClickListener(v->{if(ProGate.allowed(this))startActivity(new Intent(this,AccountActivity.class));else showProOverview();});
         findViewById(R.id.menuButton).setOnClickListener(v->showNenoMenu());
         findViewById(R.id.profileButton).setOnClickListener(v->startActivityForResult(ProModuleInstaller.sourcesIntent(this),10));
         settingsButton.setOnClickListener(v->startActivity(new Intent(this,SettingsActivity.class)));
@@ -286,6 +286,11 @@ void scheduleBackgroundIndex(){
         new AlertDialog.Builder(this).setTitle("🔔 "+T("reminders")+" ("+list.size()+")").setItems(rows,(d,w)->{com.nenotv.player.storage.ReminderStore.Reminder r=list.get(w);
             new AlertDialog.Builder(this).setTitle(r.title).setMessage(rows[w]).setPositiveButton(T("watch"),(dd,ww)->play(r.channel)).setNeutralButton("🔕 "+T("reminder_remove"),(dd,ww)->{Reminders.remove(this,r.id);Toast.makeText(this,T("reminder_removed"),Toast.LENGTH_SHORT).show();refreshEpgBoardIfShown();showReminders();}).setNegativeButton(T("close"),null).show();
         }).setNegativeButton(T("close"),null).show();
+    }
+    /** What Pro adds, in one screen, from the LIGHT badge. */
+    void showProOverview(){
+        new AlertDialog.Builder(this).setTitle("⭐ SunnyIPTV Pro").setMessage(T("pro_overview"))
+            .setPositiveButton(T("view_pro"),(d,w)->startActivity(new Intent(this,AccountActivity.class))).setNegativeButton(T("not_now"),null).show();
     }
     void toggleReminder(MediaEntry ch,EpgEntry e){
         if(com.nenotv.player.storage.ReminderStore.has(this,ch,e.startEpoch)){Reminders.remove(this,com.nenotv.player.storage.ReminderStore.id(ch,e.startEpoch));Toast.makeText(this,T("reminder_removed"),Toast.LENGTH_SHORT).show();refreshEpgBoardIfShown();return;}
@@ -568,7 +573,7 @@ void scheduleBackgroundIndex(){
     hideContentViews();epgBoard.setVisibility(View.VISIBLE);epgBoardContainer.removeAllViews();epgMoreView=null;epgBoardShown=0;
     boolean pro=ProGate.allowed(this);long now=System.currentTimeMillis()/1000L;
     epgBaseEpoch=com.nenotv.player.core.GuideWindow.clamp(pro?epgViewStart:0L,now,pro);epgViewStart=pro?epgBaseEpoch:0L;
-    if(pro)addEpgNavigation(now);
+    addEpgNavigation(now,pro);
     addEpgTimelineHeader();
     epgGridStarted=android.os.SystemClock.elapsedRealtime();epgGridPending=0;
     appendEpgRows(pro?40:(getResources().getConfiguration().screenWidthDp>=600?18:10));
@@ -584,15 +589,19 @@ void scheduleBackgroundIndex(){
     void moveEpgView(long start){epgViewStart=start;drawEpgBoard();}
     String epgDayLabel(long epoch,long now){int off=com.nenotv.player.core.GuideWindow.dayOffset(epoch,now,java.time.ZoneId.systemDefault());if(off==0)return T("today");try{return java.time.Instant.ofEpochSecond(epoch).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM",SettingsStore.appLocale(this)));}catch(Exception e){return "";}}
     Button epgNavButton(String text,View.OnClickListener click){Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setTextSize(12);b.setTextColor(getResources().getColor(R.color.text));b.setMinWidth(0);b.setMinimumWidth(0);b.setMinHeight(0);b.setMinimumHeight(0);b.setPadding(dp(10),dp(6),dp(10),dp(6));b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(getResources().getColor(R.color.panel2)));b.setOnClickListener(click);return b;}
-    void addEpgNavigation(long now){
+    /** Pro: navigate 7 days back and ahead. Free: the same bar with locks, so the Pro guide is visible where it matters. */
+    void addEpgNavigation(long now,boolean pro){
     LinearLayout bar=new LinearLayout(this);bar.setOrientation(LinearLayout.HORIZONTAL);bar.setGravity(Gravity.CENTER_VERTICAL);bar.setPadding(0,dp(2),0,dp(6));
     final long base=epgBaseEpoch,step=com.nenotv.player.core.GuideWindow.SPAN;
-    Button back=epgNavButton("◀ "+T("two_hours"),v->moveEpgView(base-step));back.setContentDescription(T("earlier"));
-    Button day=epgNavButton("📅 "+epgDayLabel(base,now),v->showEpgDayPicker());
+    final String lock=pro?"":"🔒 ";final View.OnClickListener locked=v->ProGate.require(this,T("advanced_epg"));
+    Button back=epgNavButton(lock+"◀ "+T("two_hours"),pro?v->moveEpgView(base-step):locked);back.setContentDescription(T("earlier"));
+    Button day=epgNavButton(lock+"📅 "+epgDayLabel(base,now),pro?v->showEpgDayPicker():locked);
     Button nowButton=epgNavButton(T("now"),v->moveEpgView(0L));
-    Button next=epgNavButton(T("two_hours")+" ▶",v->moveEpgView(base+step));next.setContentDescription(T("later"));
-    long min=com.nenotv.player.core.GuideWindow.clamp(1L,now,true);back.setEnabled(base>min);back.setAlpha(base>min?1f:.4f);
-    long max=com.nenotv.player.core.GuideWindow.clamp(Long.MAX_VALUE/2,now,true);next.setEnabled(base<max);next.setAlpha(base<max?1f:.4f);
+    Button next=epgNavButton(lock+T("two_hours")+" ▶",pro?v->moveEpgView(base+step):locked);next.setContentDescription(T("later"));
+    if(pro){
+        long min=com.nenotv.player.core.GuideWindow.clamp(1L,now,true);back.setEnabled(base>min);back.setAlpha(base>min?1f:.4f);
+        long max=com.nenotv.player.core.GuideWindow.clamp(Long.MAX_VALUE/2,now,true);next.setEnabled(base<max);next.setAlpha(base<max?1f:.4f);
+    }
     LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(38));lp.rightMargin=dp(6);
     Button info=epgNavButton("ℹ",v->showGuideStats());info.setContentDescription(T("guide_stats"));
     bar.addView(back,lp);bar.addView(day,new LinearLayout.LayoutParams(lp));bar.addView(nowButton,new LinearLayout.LayoutParams(lp));bar.addView(next,new LinearLayout.LayoutParams(lp));bar.addView(info,new LinearLayout.LayoutParams(lp));

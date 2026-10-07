@@ -13,6 +13,7 @@ import java.net.*;
 import java.util.concurrent.*;
 
 public class ProNetworkActivity extends Activity {
+    @Override protected void attachBaseContext(android.content.Context base){super.attachBaseContext(base);com.google.android.play.core.splitcompat.SplitCompat.installActivity(this);}
     LinearLayout box; TextView vpnState,latencyState; ExecutorService exec=Executors.newSingleThreadExecutor();
     int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
     String L(String en,String nl,String de){String l=SettingsStore.language(this);return "nl".equals(l)?nl:"de".equals(l)?de:en;}

@@ -24,12 +24,35 @@ public final class ProModuleInstaller {
             SplitInstallManager m=SplitInstallManagerFactory.create(a);
             if(isInstalled(a))return;
             SplitInstallRequest r=SplitInstallRequest.newBuilder().addModule(MODULE).build();
+            listen(a,m);
             m.startInstall(r)
-              .addOnSuccessListener(id->Toast.makeText(a,"SunnyIPTV Pro Media Pack wordt gedownload…",Toast.LENGTH_LONG).show())
-              .addOnFailureListener(e->Toast.makeText(a,"SunnyIPTV Pro Media Pack kon niet worden gestart.",Toast.LENGTH_LONG).show());
+              .addOnSuccessListener(id->Toast.makeText(a,UiText.t(a,"pro_pack_downloading"),Toast.LENGTH_LONG).show())
+              .addOnFailureListener(e->Toast.makeText(a,UiText.t(a,"pro_pack_failed"),Toast.LENGTH_LONG).show());
         }catch(Throwable t){
-            Toast.makeText(a,"SunnyIPTV Pro Media Pack is beschikbaar via Google Play.",Toast.LENGTH_LONG).show();
+            Toast.makeText(a,UiText.t(a,"pro_pack_failed"),Toast.LENGTH_LONG).show();
         }
+    }
+
+    private static SplitInstallStateUpdatedListener listener;
+    /** Large downloads need the user's OK; when installed, SplitCompat loads the module at once (no restart). */
+    private static synchronized void listen(Activity a,SplitInstallManager m){
+        if(listener!=null)try{m.unregisterListener(listener);}catch(Throwable ignored){}
+        final java.lang.ref.WeakReference<Activity> ref=new java.lang.ref.WeakReference<>(a);
+        listener=state->{
+            if(!state.moduleNames().contains(MODULE))return;
+            Activity now=ref.get();
+            if(state.status()==SplitInstallSessionStatus.REQUIRES_USER_CONFIRMATION&&now!=null&&!now.isFinishing()){
+                try{m.startConfirmationDialogForResult(state,now,4401);}catch(Throwable ignored){}
+            }else if(state.status()==SplitInstallSessionStatus.INSTALLED){
+                if(now!=null){try{com.google.android.play.core.splitcompat.SplitCompat.install(now);}catch(Throwable ignored){}
+                    Toast.makeText(now,UiText.t(now,"pro_pack_ready"),Toast.LENGTH_SHORT).show();}
+                try{m.unregisterListener(listener);}catch(Throwable ignored){}
+            }else if(state.status()==SplitInstallSessionStatus.FAILED||state.status()==SplitInstallSessionStatus.CANCELED){
+                if(now!=null)Toast.makeText(now,UiText.t(now,"pro_pack_failed"),Toast.LENGTH_LONG).show();
+                try{m.unregisterListener(listener);}catch(Throwable ignored){}
+            }
+        };
+        m.registerListener(listener);
     }
 
     public static void syncEntitlement(Activity a){

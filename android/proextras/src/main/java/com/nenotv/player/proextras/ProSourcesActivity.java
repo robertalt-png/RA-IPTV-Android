@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.concurrent.*;
 
 public class ProSourcesActivity extends Activity {
+    @Override protected void attachBaseContext(android.content.Context base){super.attachBaseContext(base);com.google.android.play.core.splitcompat.SplitCompat.installActivity(this);}
     LinearLayout box;
     SourceStore sources;
     ExecutorService exec=Executors.newSingleThreadExecutor();
