@@ -17,6 +17,53 @@ trait SunnyIPTV_Admin_API {
                 'callback' => [__CLASS__, 'admin_api_status'],
             ]);
         });
+        add_action('admin_menu', [__CLASS__, 'admin_api_menu'], 5);
+    }
+
+    /** Top-level wp-admin page for pairing the phone admin app (the WooCommerce submenu is hard to reach on a phone). */
+    public static function admin_api_menu(): void {
+        add_menu_page('SunnyIPTV Admin-app', 'Admin-app koppelen', 'manage_options', 'sunnyiptv-admin-app', [__CLASS__, 'admin_api_pair_page'], 'dashicons-smartphone', 3);
+    }
+
+    public static function admin_api_pair_page(): void {
+        if (!current_user_can('manage_options')) return;
+        $notice = '';
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['sunny_admin_app_action'])) {
+            check_admin_referer('sunny_admin_app_pair');
+            $action = sanitize_key((string)$_POST['sunny_admin_app_action']);
+            if ($action === 'generate') {
+                $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                $code = '';
+                for ($i = 0; $i < 10; $i++) $code .= $alphabet[wp_rand(0, strlen($alphabet) - 1)];
+                // Same storage as NenoTV_Dashboard_API, so POST nenotv-dashboard/v1/admin-pair accepts it.
+                update_option('nenotv_admin_pair_hash', hash_hmac('sha256', $code, wp_salt('auth')), false);
+                update_option('nenotv_admin_pair_expires', time() + 10 * MINUTE_IN_SECONDS, false);
+                set_transient('nenotv_admin_pair_plain_once', $code, 10 * MINUTE_IN_SECONDS);
+                $notice = 'Nieuwe koppelcode aangemaakt (10 minuten geldig).';
+            } elseif ($action === 'revoke') {
+                delete_option('nenotv_admin_app_access_hash');
+                delete_option('nenotv_admin_pair_hash');
+                delete_option('nenotv_admin_pair_expires');
+                delete_transient('nenotv_admin_pair_plain_once');
+                $notice = 'Toegang van de admin-app is ingetrokken.';
+            }
+        }
+        $code = (string)get_transient('nenotv_admin_pair_plain_once');
+        $expires = (int)get_option('nenotv_admin_pair_expires', 0);
+        $paired = (string)get_option('nenotv_admin_app_access_hash', '') !== '';
+        echo '<div class="wrap"><h1>SunnyIPTV Admin-app koppelen</h1>';
+        echo '<p>De admin-app kan alleen lezen: overzicht, statistieken en waarschuwingen. Hij kan niets wijzigen.</p>';
+        if ($notice !== '') echo '<div class="notice notice-success"><p>' . esc_html($notice) . '</p></div>';
+        echo '<p><strong>Status:</strong> ' . ($paired ? 'gekoppeld' : 'nog niet gekoppeld') . '</p>';
+        if ($code !== '' && $expires >= time()) {
+            echo '<p>Typ deze code in de app:</p><div style="font-size:30px;font-weight:700;letter-spacing:4px;padding:14px 18px;background:#f6f7f7;border-radius:8px;display:inline-block;user-select:all">' . esc_html($code) . '</div>';
+            echo '<p class="description">Geldig tot ' . esc_html(wp_date('H:i', $expires)) . '. Na het koppelen vervalt de code.</p>';
+        }
+        echo '<form method="post" style="margin-top:18px">';
+        wp_nonce_field('sunny_admin_app_pair');
+        echo '<button class="button button-primary button-hero" name="sunny_admin_app_action" value="generate">Nieuwe koppelcode maken</button> ';
+        if ($paired) echo '<button class="button" name="sunny_admin_app_action" value="revoke" onclick="return confirm(\'Toegang van de huidige admin-app intrekken?\')">Toegang intrekken</button>';
+        echo '</form></div>';
     }
 
     public static function admin_api_allowed(WP_REST_Request $request): bool {
