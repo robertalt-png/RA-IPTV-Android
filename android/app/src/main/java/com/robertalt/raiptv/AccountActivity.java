@@ -127,10 +127,34 @@ public class AccountActivity extends Activity {
     }
     void showProducts(java.util.List<com.android.billingclient.api.ProductDetails> list,String error){
         if(list.isEmpty()){new AlertDialog.Builder(this).setTitle(T("buy_pro")).setMessage(T(error.isEmpty()?"pro_coming_soon":error)).setPositiveButton(T("close"),null).show();return;}
-        String[] rows=new String[list.size()];
-        for(int i=0;i<rows.length;i++){com.android.billingclient.api.ProductDetails d=list.get(i);int n=PlayPurchases.devices(d);
-            rows[i]=(n==1?"Solo":"Multi")+" · "+n+" "+T(n==1?"device_one":"device_many")+"\n"+PlayPurchases.price(d,T("per_year"),T("lifetime"));}
-        new AlertDialog.Builder(this).setTitle(T("buy_pro")).setItems(rows,(dlg,w)->{serverText.setText(T("checking_status"));play().buy(list.get(w));}).setNegativeButton(T("close"),null).show();
+        // One clear, tappable block per product (remote-friendly): plan, devices, price from Google Play and a yellow "Buy" button.
+        LinearLayout l=dialogBox();l.setPadding(dp(16),dp(8),dp(16),dp(8));
+        ScrollView scroll=new ScrollView(this);scroll.addView(l);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle(T("buy_pro")).setView(scroll).setNegativeButton(T("close"),null).create();
+        for(com.android.billingclient.api.ProductDetails d:list)l.addView(productBlock(d,dialog),blockParams());
+        dialog.show();
+    }
+    LinearLayout.LayoutParams blockParams(){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(10);return p;}
+    View productBlock(com.android.billingclient.api.ProductDetails d,AlertDialog dialog){
+        int n=PlayPurchases.devices(d);
+        boolean lifetime=!com.android.billingclient.api.BillingClient.ProductType.SUBS.equals(d.getProductType());
+        LinearLayout block=new LinearLayout(this);block.setOrientation(LinearLayout.HORIZONTAL);block.setGravity(Gravity.CENTER_VERTICAL);
+        block.setBackground(Tiles.background(this,false));block.setPadding(dp(16),dp(14),dp(12),dp(14));
+        block.setFocusable(true);block.setClickable(true);
+        LinearLayout info=new LinearLayout(this);info.setOrientation(LinearLayout.VERTICAL);
+        TextView plan=new TextView(this);plan.setText((n==1?"Solo":"Multi")+" · "+n+" "+T(n==1?"device_one":"device_many"));
+        plan.setTextColor(Tiles.TEXT);plan.setTextSize(17);plan.setTypeface(Typeface.DEFAULT_BOLD);info.addView(plan);
+        TextView price=new TextView(this);price.setText(PlayPurchases.price(d,T("per_year"),T("lifetime")));
+        price.setTextColor(Tiles.ACCENT);price.setTextSize(20);price.setTypeface(Typeface.DEFAULT_BOLD);price.setPadding(0,dp(4),0,0);info.addView(price);
+        TextView kind=new TextView(this);kind.setText(lifetime?text("Eenmalig betalen","One-time payment","Einmalig bezahlen"):text("Jaarabonnement, opzegbaar via Google Play","Yearly, cancel anytime in Google Play","Jährlich, kündbar über Google Play"));
+        kind.setTextColor(Tiles.MUTED);kind.setTextSize(13);info.addView(kind);
+        block.addView(info,new LinearLayout.LayoutParams(0,-2,1f));
+        TextView buy=new TextView(this);buy.setText(text("Kopen","Buy","Kaufen"));buy.setTextColor(0xFF111111);buy.setTextSize(16);buy.setTypeface(Typeface.DEFAULT_BOLD);
+        buy.setGravity(Gravity.CENTER);buy.setPadding(dp(18),dp(10),dp(18),dp(10));
+        android.graphics.drawable.GradientDrawable pill=new android.graphics.drawable.GradientDrawable();pill.setColor(Tiles.ACCENT);pill.setCornerRadius(dp(10));buy.setBackground(pill);
+        block.addView(buy,new LinearLayout.LayoutParams(-2,-2));
+        block.setOnClickListener(v->{dialog.dismiss();serverText.setText(T("checking_status"));play().buy(d);});
+        return block;
     }
 
     LinearLayout dialogBox(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(20),dp(8),dp(20),0);return l;}
