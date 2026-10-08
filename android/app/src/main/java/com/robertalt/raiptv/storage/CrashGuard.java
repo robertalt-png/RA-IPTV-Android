@@ -10,10 +10,11 @@ public final class CrashGuard {
     /** Installs one handler per process; later calls (every screen used to call this) do nothing. */
     public static synchronized void install(Context c){
         if(installed)return;installed=true;
-        final Context app=c.getApplicationContext();
+        final Context app=c.getApplicationContext()!=null?c.getApplicationContext():c;
         final Thread.UncaughtExceptionHandler previous=Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler((thread,error)->{
             try{StringWriter sw=new StringWriter();error.printStackTrace(new PrintWriter(sw));String txt=sw.toString();if(txt.length()>12000)txt=txt.substring(0,12000);app.getSharedPreferences("crash_guard",Context.MODE_PRIVATE).edit().putLong("at",System.currentTimeMillis()).putString("type",error.getClass().getSimpleName()).putString("trace",txt).commit();}catch(Throwable ignored){}
+            CrashReporter.capture(app,thread,error);
             if(previous!=null)previous.uncaughtException(thread,error);
         });
     }

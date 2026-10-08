@@ -18,8 +18,8 @@ report_failure() {
   return 0
 }
 trap report_failure EXIT
-apk="$PWD/distribution/SunnyIPTV-Pro-v0.14.42-vc136-TEST-SIGNED.apk"
-light_apk="$PWD/distribution/SunnyIPTV-Light-v0.14.42-vc136-TEST-SIGNED.apk"
+apk="$PWD/distribution/SunnyIPTV-Pro-v0.14.43-vc137-TEST-SIGNED.apk"
+light_apk="$PWD/distribution/SunnyIPTV-Light-v0.14.43-vc137-TEST-SIGNED.apk"
 adb install "$light_apk"
 adb install qa-tools/tests.apk
 adb shell am instrument -w -e phase family com.nenotv.player.test/com.nenotv.player.UiInstrumentation | tee qa-results/family-light.txt
@@ -92,6 +92,15 @@ if [ "$device" = phone ]; then
   rg -q 'NENOTV_UI_SCREENSHOTS=passed' qa-results/tablet-ui.txt
   adb pull /sdcard/Android/data/com.nenotv.player/files/qa qa-results/tablet-screenshots
 fi
+# Real-life restart: a set-up app closed by the viewer and opened again from the launcher, twice.
+adb logcat -b crash -c || true
+for attempt in 1 2; do
+  adb shell am force-stop com.nenotv.player
+  adb shell monkey -p com.nenotv.player -c android.intent.category.LAUNCHER 1 >/dev/null
+  sleep 10
+  test -n "$(adb shell pidof com.nenotv.player | tr -d '\r')" || { adb logcat -b crash -d > qa-results/restart-crash.txt; echo "::error title=Crash after restart $attempt::$(head -c 3000 qa-results/restart-crash.txt | tr -d '\r' | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')"; exit 2; }
+done
+adb logcat -b crash -d > qa-results/restart-crash.txt || true
+if rg -q 'FATAL EXCEPTION' qa-results/restart-crash.txt; then exit 2; fi
 adb logcat -d > qa-results/logcat.txt
 if rg -q 'FATAL EXCEPTION' qa-results/logcat.txt; then exit 2; fi
-
