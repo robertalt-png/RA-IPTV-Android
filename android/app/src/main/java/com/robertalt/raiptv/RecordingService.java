@@ -39,9 +39,14 @@ public final class RecordingService extends Service {
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? "" : String.valueOf(intent.getAction());
         String id = intent == null ? null : intent.getStringExtra(Recordings.EXTRA_ID);
-        goForeground();
         if (ACTION_STOP_ALL.equals(action)) { for (RecordingEngine e : RUNNING.values()) e.cancel(); stopIfIdle(); return START_NOT_STICKY; }
         if (ACTION_STOP.equals(action)) { RecordingEngine e = id == null ? null : RUNNING.get(id); if (e != null) e.cancel(); stopIfIdle(); return START_NOT_STICKY; }
+        if (!goForeground()) {
+            RecordingStore.Recording r = id == null ? null : RecordingStore.get(this, id);
+            if (r != null && !r.finished()) finish(r, RecordingStore.FAILED, "unavailable");
+            stopIfIdle();
+            return START_NOT_STICKY;
+        }
         if (ACTION_START.equals(action) && id != null && !RUNNING.containsKey(id)) begin(id);
         stopIfIdle();
         return START_NOT_STICKY;
@@ -135,6 +140,8 @@ public final class RecordingService extends Service {
     /** Android 15 limits background data work to 6 hours a day: stop cleanly and keep what was recorded. */
     @Override public void onTimeout(int startId, int fgsType) {
         timedOut = true;
+        // Android requires the service to stop before network workers finish unwinding.
+        stopSelf();
         for (RecordingEngine e : RUNNING.values()) e.cancel();
     }
 
@@ -187,11 +194,12 @@ public final class RecordingService extends Service {
         return b.build();
     }
 
-    private void goForeground() {
+    private boolean goForeground() {
         try {
             if (Build.VERSION.SDK_INT >= 29) startForeground(ONGOING_ID, ongoing(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
             else startForeground(ONGOING_ID, ongoing());
-        } catch (RuntimeException e) { /* Android refused (background start limit); begin() still records while the process lives */ }
+            return true;
+        } catch (RuntimeException e) { return false; }
     }
 
     private void updateNotification() {

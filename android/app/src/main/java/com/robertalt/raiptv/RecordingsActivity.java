@@ -46,6 +46,8 @@ public class RecordingsActivity extends Activity {
         List<File> volumes = Recordings.volumes(this);
         int current = Recordings.volumeIndex(this);
         Tiles.note(this, box, String.format(T("recording_storage"), volumeName(current), RecordingService.size(folder.getUsableSpace())));
+        TextView folderPath = Tiles.note(this, box, T("recording_folder") + "\n" + folder.getAbsolutePath());
+        folderPath.setTextIsSelectable(true);
         if (volumes.size() > 1) {
             Tiles.Grid g = new Tiles.Grid(this, box);
             for (int i = 0; i < volumes.size(); i++) {
@@ -68,7 +70,7 @@ public class RecordingsActivity extends Activity {
             Tiles.Grid g = new Tiles.Grid(this, box, Tiles.columns(this) == 3 ? 2 : 1);
             for (RecordingStore.Recording r : running) {
                 long bytes = Math.max(r.bytes, RecordingService.bytes(r.id));
-                g.add("🔴", label(r), r.channelName + " · " + RecordingService.size(bytes) + " · " + T("until") + " " + time(RecordingPlan.stopAt(r.end)), false, v -> confirm(r, T("recording_stop"), () -> { Recordings.stop(this, r.id); ui.postDelayed(this::build, 800); }));
+                g.add("🔴", label(r), r.channelName + " · " + RecordingService.size(bytes) + " · " + T("until") + " " + time(RecordingPlan.stopAt(r.end)) + fileLocation(r), false, v -> confirm(r, T("recording_stop"), () -> { Recordings.stop(this, r.id); ui.postDelayed(this::build, 800); }));
             }
             g.finish();
         }
@@ -85,10 +87,14 @@ public class RecordingsActivity extends Activity {
             for (RecordingStore.Recording r : done) {
                 String state = RecordingStore.DONE.equals(r.state) ? "" : " · " + T(RecordingStore.PARTIAL.equals(r.state) ? "recording_partial" : "recording_failed");
                 String reason = r.error.isEmpty() || "cancelled".equals(r.error) && RecordingStore.PARTIAL.equals(r.state) ? "" : " · " + reason(r.error);
-                g.add(RecordingStore.FAILED.equals(r.state) ? "⚠" : "🎬", label(r), day(r.start) + " · " + time(r.start) + " · " + r.channelName + " · " + RecordingService.size(r.bytes) + state + reason, false, v -> finishedMenu(r));
+                g.add(RecordingStore.FAILED.equals(r.state) ? "⚠" : "🎬", label(r), day(r.start) + " · " + time(r.start) + " · " + r.channelName + " · " + RecordingService.size(r.bytes) + state + reason + fileLocation(r), false, v -> finishedMenu(r));
             }
             g.finish();
         }
+    }
+
+    private String fileLocation(RecordingStore.Recording r) {
+        return r.file.isEmpty() ? "" : "\n" + T("recording_file") + "\n" + r.file;
     }
 
     private void finishedMenu(RecordingStore.Recording r) {

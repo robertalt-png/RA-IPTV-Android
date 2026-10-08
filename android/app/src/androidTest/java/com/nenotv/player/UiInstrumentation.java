@@ -570,7 +570,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
         new SecureProfileStore(c).clear();awaitPlaybackStopped(basic,"Light kept playing after removing its primary source");
         runOnMainSync(()->check(basic.exo==null,"Revoked Light player retained its decoder"));new SecureProfileStore(c).save(profile());waitForIdleSync();
         c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE).edit().putString("level","PRO").commit();
-        check(ProLibraryBridge.isActive(a),"Pro entitlement did not enable module");RecordingChecks.run(c);result.putString("NENOTV_RECORDING","passed");
+        check(ProLibraryBridge.isActive(a),"Pro entitlement did not enable module");RecordingChecks.run(this,c);result.putString("NENOTV_RECORDING","passed");
         check(ProModuleInstaller.sourcesIntent(a).getComponent().getClassName().contains("ProSourcesActivity"),"Pro source manager route missing");
         check(ProModuleInstaller.networkIntent(a).getComponent().getClassName().contains("ProNetworkActivity"),"Pro network route missing");
         MediaEntry langEn=new MediaEntry();langEn.type="live";langEn.id="lang-en";langEn.name="EN - QA";langEn.group="EN | General";
@@ -630,6 +630,8 @@ public final class UiInstrumentation extends ImportInstrumentation {
         long end=SystemClock.elapsedRealtime()+90000;while(!playing.get()&&SystemClock.elapsedRealtime()<end){runOnMainSync(()->{try{androidx.media3.exoplayer.ExoPlayer exo=(androidx.media3.exoplayer.ExoPlayer)field.get(player);playing.set(exo!=null&&exo.getCurrentPosition()>1500&&exo.getVideoFormat()!=null&&exo.getAudioFormat()!=null);}catch(Exception e){throw new RuntimeException(e);}});Thread.sleep(100);}
         check(playing.get(),"Actual Pro player did not play packaged demo");snapshot("pro-player");
         runOnMainSync(()->{if(Build.VERSION.SDK_INT>=30){WindowInsets in=player.getWindow().getDecorView().getRootWindowInsets();check(in!=null&&!in.isVisible(WindowInsets.Type.systemBars()),"Pro player is not fullscreen");}});
+        runOnMainSync(()->{callActivityOnPause(player);callActivityOnStop(player);try{check(field.get(player)==null,"Background Pro player retained its audio decoder");}catch(IllegalAccessException e){throw new RuntimeException(e);}});
+        runOnMainSync(()->{callActivityOnStart(player);callActivityOnResume(player);try{check(field.get(player)!=null,"Pro player did not recreate its decoder on return");}catch(IllegalAccessException e){throw new RuntimeException(e);}});
         SettingsStore.prefs(c).edit().putLong("demo_expires_at",System.currentTimeMillis()-1).commit();
         long stop=SystemClock.elapsedRealtime()+5000;while(!player.isFinishing()&&!player.isDestroyed()&&SystemClock.elapsedRealtime()<stop)Thread.sleep(100);check(player.isFinishing()||player.isDestroyed(),"Open Pro player ignored demo expiry");
         c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE).edit().putString("level","FREE").commit();new SecureProfileStore(c).clear();runOnMainSync(a::finish);result.putString("NENOTV_PRO_RUNTIME","passed");finish(Activity.RESULT_OK,result);

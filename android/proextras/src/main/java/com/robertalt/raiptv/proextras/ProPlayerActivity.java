@@ -64,7 +64,8 @@ public class ProPlayerActivity extends FragmentActivity {
     FrameLayout root,controls;
     PlayerView media3View;
     TextView title,status,timeText;
-    Button playPause,rewind,forward,audio,subtitle,pip,channelPrev,channelNext,speed,aspect,sleep,favorite,castButton,record;
+    Button playPause,rewind,forward,audio,subtitle,pip,channelPrev,channelNext,speed,aspect,sleep,favorite,castButton,record,stopRecording,recordDuration;
+    String pendingRecordingId="";
     CastContext castContext; CastSession castSession; RemoteMediaClient castClient;
     MediaRouteChooserDialog castDialog;
     long castPrivacyGeneration;
@@ -89,7 +90,7 @@ public class ProPlayerActivity extends FragmentActivity {
     ArrayList<MediaEntry>liveQueue=new ArrayList<>(),episodeQueue=new ArrayList<>();
     int index=0,liveIndex=-1,episodeIndex=-1,aspectMode=0;
     float playbackSpeed=1f;
-    boolean destroyed=false,userSeeking=false,wantPlaying=true,recovering=false;
+    boolean destroyed=false,userSeeking=false,wantPlaying=true,recovering=false,playbackSuspended=false;
     ExecutorService exec=Executors.newSingleThreadExecutor();
     Handler ui=new Handler(Looper.getMainLooper());
     Profile profile=new Profile();
@@ -133,6 +134,7 @@ public class ProPlayerActivity extends FragmentActivity {
 
     Runnable tick=new Runnable(){@Override public void run(){if(destroyed||isFinishing())return;if(DemoPolicy.blockPlayback(ProPlayerActivity.this)){revokePlayback();return;}if(!currentPlaybackRoute())return;updateProgress();antiFreezeTick();ui.postDelayed(this,500);}};
     Runnable hide=new Runnable(){@Override public void run(){controls.animate().alpha(0f).setDuration(220).withEndAction(()->controls.setVisibility(View.GONE));}};
+    final Runnable recordingTick=new Runnable(){@Override public void run(){if(destroyed||isFinishing())return;updateRecordingUi();ui.postDelayed(this,1000);}};
     Runnable sleepStop=()->{if(destroyed)return;status.setText(T("sleep_done"));saveProgress();releasePlayers();finish();};
 
     @SuppressWarnings("unchecked")
@@ -145,6 +147,14 @@ public class ProPlayerActivity extends FragmentActivity {
         library=new LibraryStore(this);
         root=findViewById(R.id.playerRoot);controls=findViewById(R.id.playerControls);media3View=findViewById(R.id.media3View);title=findViewById(R.id.playerTitle);status=findViewById(R.id.playerStatus);timeText=findViewById(R.id.timeText);playPause=findViewById(R.id.playPauseButton);rewind=findViewById(R.id.rewindButton);forward=findViewById(R.id.forwardButton);audio=findViewById(R.id.audioButton);subtitle=findViewById(R.id.subtitleButton);pip=findViewById(R.id.pipButton);seek=findViewById(R.id.seekBar);channelPrev=findViewById(R.id.channelPrevButton);channelNext=findViewById(R.id.channelNextButton);speed=findViewById(R.id.speedButton);aspect=findViewById(R.id.aspectButton);sleep=findViewById(R.id.sleepButton);favorite=findViewById(R.id.favoriteButton);castButton=findViewById(R.id.castRouteButton);record=findViewById(R.id.recordButton);
         audio.setText(T("audio"));subtitle.setText(T("subtitles"));aspect.setText(T("fit"));sleep.setText(T("sleep_short"));pip.setContentDescription(T("picture_in_picture"));
+        stopRecording=findViewById(R.id.stopRecordingButton);
+        stopRecording.setContentDescription(T("recording_stop"));
+        stopRecording.setTooltipText(T("recording_stop"));
+        stopRecording.setOnClickListener(v->{if(com.nenotv.player.Recordings.runningForChannel(this,entry).isEmpty())startActivity(new android.content.Intent(this,com.nenotv.player.RecordingsActivity.class));else stopCurrentRecording();});
+        recordDuration=findViewById(R.id.recordDurationButton);
+        recordDuration.setContentDescription(T("recording_duration"));
+        recordDuration.setTooltipText(T("recording_duration"));
+        recordDuration.setOnClickListener(v->{showRecordMenu();showControls();});
         entry=(MediaEntry)getIntent().getSerializableExtra("media");if(entry==null||!com.nenotv.player.storage.FamilyStore.allowed(this,entry)){finish();return;}
         PlaybackQueueStore.Payload qp=PlaybackQueueStore.take(getIntent().getStringExtra("queueToken"));
         if(qp!=null){if("live".equals(qp.kind)){liveQueue=qp.items;liveIndex=qp.index;}else if("episode".equals(qp.kind)){episodeQueue=qp.items;episodeIndex=qp.index;}}
@@ -200,6 +210,8 @@ public class ProPlayerActivity extends FragmentActivity {
         speed.setEnabled(!isCasting());aspect.setEnabled(!isCasting());audio.setEnabled(!isCasting());subtitle.setEnabled(!isCasting());
         seek.setVisibility(live?View.INVISIBLE:View.VISIBLE);
         if(record!=null)record.setVisibility("live".equals(entry.type)&&!DemoSource.isEntry(entry)?View.VISIBLE:View.GONE);
+        if(recordDuration!=null)recordDuration.setVisibility("live".equals(entry.type)&&!DemoSource.isEntry(entry)?View.VISIBLE:View.GONE);
+        updateRecordingUi();
         rewind.setVisibility(live?View.GONE:View.VISIBLE);forward.setVisibility(live?View.GONE:View.VISIBLE);
     }
 
@@ -265,7 +277,7 @@ public class ProPlayerActivity extends FragmentActivity {
         aspect.setOnClickListener(v->{cycleAspect();showControls();});
         sleep.setOnClickListener(v->{showSleepMenu();showControls();});
         pip.setOnClickListener(v->enterPip());
-        if(record!=null){record.setText("● "+T("record"));record.setOnClickListener(v->{showRecordMenu();showControls();});}
+        if(record!=null){record.setText("● "+T("record"));record.setOnClickListener(v->{if(com.nenotv.player.Recordings.runningForChannel(this,entry).isEmpty())startRecording((int)(com.nenotv.player.core.RecordingPlan.MAX_DURATION_S/60));else stopCurrentRecording();showControls();});}
         seek.setMax(1000);
         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
             public void onStartTrackingTouch(SeekBar b){userSeeking=true;ui.removeCallbacks(hide);}
@@ -288,11 +300,11 @@ public class ProPlayerActivity extends FragmentActivity {
         TrackSelectionParameters.Builder ts=exo.getTrackSelectionParameters().buildUpon();String[] ac=SettingsStore.audioLanguageCodes(this),sc=SettingsStore.subtitleLanguageCodes(this);if(ac.length>0)ts.setPreferredAudioLanguages(ac);if("off".equals(SettingsStore.subtitles(this)))ts.setTrackTypeDisabled(C.TRACK_TYPE_TEXT,true);else{ts.setTrackTypeDisabled(C.TRACK_TYPE_TEXT,false);if(sc.length>0)ts.setPreferredTextLanguages(sc);}exo.setTrackSelectionParameters(ts.build());media3View.setPlayer(exo);
         if(media3View.getSubtitleView()!=null){media3View.getSubtitleView().setApplyEmbeddedStyles(false);media3View.getSubtitleView().setApplyEmbeddedFontSizes(false);media3View.getSubtitleView().setStyle(new CaptionStyleCompat(0xFFFFFFFF,0x00000000,0x00000000,CaptionStyleCompat.EDGE_TYPE_OUTLINE,0xFF000000,null));}
         // Resume where casting or freeze recovery left off (this was only done in the removed VLC path).
-        long start=pendingResumeMs>0?pendingResumeMs:resume>0?resume:library.progress(entry);pendingResumeMs=0;
+        long start="live".equals(entry.type)?0:pendingResumeMs>0?pendingResumeMs:resume>0?resume:library.progress(entry);pendingResumeMs=0;
         index=0;playMedia3Candidate(start);
         exo.addListener(new Player.Listener(){
             @Override public void onPlayerError(PlaybackException error){runOnUiThread(()->{
-                if(destroyed)return;
+                if(destroyed||playbackSuspended||isFinishing())return;
                 // A live stream that fell behind its window restarts at the live edge at once.
                 if(com.nenotv.player.core.Reconnect.restartAtLiveEdge(error.errorCode)&&exo!=null){try{exo.seekToDefaultPosition();exo.prepare();exo.play();}catch(Exception ignored){}return;}
                 long resumeAt=entry!=null&&!"live".equals(entry.type)?currentLocalPosition():0;
@@ -308,7 +320,7 @@ public class ProPlayerActivity extends FragmentActivity {
         if(!currentPlaybackRoute())return;
         if(index>=candidates.size())return;status.setText(T("opening_stream")+" "+(index+1)+"/"+candidates.size()+"…");resetWatchdogGrace();MediaItem.Builder b=new MediaItem.Builder().setUri(candidates.get(index));
         if(externalSubtitle!=null){MediaItem.SubtitleConfiguration sc=new MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(externalSubtitle)).setMimeType("text/vtt").setLanguage(SettingsStore.resolvedSubtitleLanguage(this)).setLabel(SettingsStore.displayLanguage(this,SettingsStore.resolvedSubtitleLanguage(this))+" "+T("external_subtitle")).setSelectionFlags(C.SELECTION_FLAG_DEFAULT).build();b.setSubtitleConfigurations(Collections.singletonList(sc));}
-        exo.setMediaItem(b.build());exo.prepare();if(resume>0)exo.seekTo(resume);exo.play();
+        exo.setMediaItem(b.build());exo.prepare();if(resume>0)exo.seekTo(resume);exo.setPlayWhenReady(wantPlaying);
     }
 
     void onMediaEnded(){if(playbackRevoked||destroyed||isFinishing())return;if(library!=null&&entry!=null)library.markWatched(entry);if("episode".equals(entry.type)&&SettingsStore.autoplay(this)&&episodeQueue.size()>1){switchEpisode(1);return;}wantPlaying=false;updatePlayIcon();}
@@ -392,22 +404,48 @@ public class ProPlayerActivity extends FragmentActivity {
     }
     void attachSubtitle(File f,String label){if(destroyed)return;if(exo!=null){long pos=exo.getCurrentPosition();boolean was=exo.isPlaying();playMedia3Candidate(pos);if(was)exo.play();status.setText(T("subtitles")+": "+label);}}
     // ---- Recording: record the channel that is playing ----
+    void updateRecordingUi(){
+        if(record==null||stopRecording==null)return;
+        boolean running=!com.nenotv.player.Recordings.runningForChannel(this,entry).isEmpty();
+        com.nenotv.player.storage.RecordingStore.Recording pending=com.nenotv.player.storage.RecordingStore.get(this,pendingRecordingId);
+        boolean starting=pending!=null&&com.nenotv.player.storage.RecordingStore.SCHEDULED.equals(pending.state)&&pending.channel!=null&&entry!=null&&pending.channel.uniqueKey().equals(entry.uniqueKey());
+        if(pending==null||!com.nenotv.player.storage.RecordingStore.SCHEDULED.equals(pending.state))pendingRecordingId="";
+        record.setEnabled(!starting);
+        if(recordDuration!=null)recordDuration.setEnabled(!running&&!starting);
+        record.setText(running?"■ "+T("recording_stop"):"● "+T("record"));
+        record.setContentDescription(T(running?"recording_stop":"record"));
+        int active=com.nenotv.player.RecordingService.runningCount();
+        stopRecording.setText(running?"■":"● "+active);
+        stopRecording.setContentDescription(T(running?"recording_stop":"recordings"));
+        stopRecording.setTooltipText(T(running?"recording_stop":"recordings"));
+        // Separate from the auto-hidden controls, so stopping remains reachable while watching.
+        stopRecording.setVisibility((running||active>0)&&!isInPictureInPictureMode()?View.VISIBLE:View.GONE);
+    }
+    void stopCurrentRecording(){
+        for(String id:com.nenotv.player.Recordings.runningForChannel(this,entry))com.nenotv.player.Recordings.stop(this,id);
+        updateRecordingUi();
+    }
     void showRecordMenu(){
-        if(entry==null||!"live".equals(entry.type))return;
+        if(entry==null||!"live".equals(entry.type)||!com.nenotv.player.Recordings.runningForChannel(this,entry).isEmpty())return;
         final int[] mins={30,60,120,180};String[] labels=new String[mins.length];
         for(int i=0;i<mins.length;i++)labels[i]=mins[i]+" "+T("minutes");
-        new AlertDialog.Builder(this).setTitle("● "+T("record")+" · "+DisplayText.title(entry)).setItems(labels,(d,w)->{
-            com.nenotv.player.Recordings.Planned p=com.nenotv.player.Recordings.recordNow(this,entry,DisplayText.title(entry),mins[w]);
-            if(!p.refused.isEmpty()){Toast.makeText(this,T("recording_refused_"+p.refused),Toast.LENGTH_LONG).show();return;}
-            Toast.makeText(this,T("recording_started")+"\n"+T("recording_connection_note"),Toast.LENGTH_LONG).show();
-        }).setNegativeButton(T("cancel"),null).show();
+        new AlertDialog.Builder(this).setTitle(T("recording_duration")+" · "+DisplayText.title(entry)).setItems(labels,(d,w)->startRecording(mins[w])).setNegativeButton(T("cancel"),null).show();
+    }
+    void startRecording(int minutes){
+        if(entry==null||!"live".equals(entry.type)||DemoSource.isEntry(entry))return;
+        com.nenotv.player.Recordings.Planned p=com.nenotv.player.Recordings.recordNow(this,entry,DisplayText.title(entry),minutes);
+        if(!p.refused.isEmpty()){Toast.makeText(this,T("recording_refused_"+p.refused),Toast.LENGTH_LONG).show();return;}
+        if(p.recording!=null)pendingRecordingId=p.recording.id;
+        String limit=minutes==com.nenotv.player.core.RecordingPlan.MAX_DURATION_S/60?"\n"+T("recording_manual_limit"):"";
+        Toast.makeText(this,T("recording_started")+limit+"\n"+T("recording_connection_note"),Toast.LENGTH_LONG).show();
+        updateRecordingUi();
     }
 
     // ---- Step 3: number zapping ----
     void createZapOverlay(){
         float d=getResources().getDisplayMetrics().density;int pad=Math.round(14*d);
         zapView=new TextView(this);zapView.setTextSize(30);zapView.setTextColor(Color.WHITE);zapView.setBackgroundColor(0xCC000000);zapView.setPadding(pad*2,pad,pad*2,pad);zapView.setVisibility(View.GONE);zapView.setMaxLines(2);
-        FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT,Gravity.TOP|Gravity.END);lp.setMargins(pad*2,pad*2,pad*2,pad*2);root.addView(zapView,lp);
+        FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT,Gravity.TOP|Gravity.END);lp.setMargins(pad*2,pad*6,pad*2,pad*2);root.addView(zapView,lp);
     }
     static int digitFor(int k){if(k>=KeyEvent.KEYCODE_0&&k<=KeyEvent.KEYCODE_9)return k-KeyEvent.KEYCODE_0;if(k>=KeyEvent.KEYCODE_NUMPAD_0&&k<=KeyEvent.KEYCODE_NUMPAD_9)return k-KeyEvent.KEYCODE_NUMPAD_0;return -1;}
     int[] liveNumbers(){int[] n=new int[liveQueue.size()];for(int i=0;i<n.length;i++)n[i]=liveQueue.get(i).number;return n;}
@@ -449,8 +487,8 @@ public class ProPlayerActivity extends FragmentActivity {
         }catch(Exception ignored){}
     }
 
-    void releasePlayers(){if(exo!=null){try{exo.release();}catch(Exception ignored){}exo=null;}}
-    void saveProgress(){if(library!=null&&entry!=null)library.saveProgress(entry,currentPosition(),duration(),true);}
+    void releasePlayers(){if(exo!=null){ExoPlayer closing=exo;exo=null;try{closing.pause();}catch(Exception ignored){}try{if(media3View!=null)media3View.setPlayer(null);}catch(Exception ignored){}try{closing.release();}catch(Exception ignored){}}}
+    void saveProgress(){if(library!=null&&entry!=null&&(exo!=null||isCasting()))library.saveProgress(entry,currentPosition(),duration(),true);}
 
     /** Number keys go to channel entry before any focused button sees them. */
     @Override public boolean dispatchKeyEvent(KeyEvent ev){
@@ -472,10 +510,12 @@ public class ProPlayerActivity extends FragmentActivity {
 
     @Override public void onUserLeaveHint(){super.onUserLeaveHint();enterPip();}
     @Override public void onConfigurationChanged(Configuration c){super.onConfigurationChanged(c);}
+    @Override public void onPictureInPictureModeChanged(boolean inPip,Configuration c){super.onPictureInPictureModeChanged(inPip,c);updateRecordingUi();}
     @Override protected void onStart(){super.onStart();watchNetwork(true);com.nenotv.player.ExtraPrivacySession.addListener(privacyRevoked);setupCast();if(!com.nenotv.player.storage.ExtraPrivacyStore.allowsSdk(this)){privacyRevoked.run();return;}try{castContext=ProCastPrivacy.get(this);castPrivacyGeneration=com.nenotv.player.ExtraPrivacySession.generation();if(castContext!=null){castContext.getSessionManager().addSessionManagerListener(castSessionListener,CastSession.class);CastSession c=castContext.getSessionManager().getCurrentCastSession();if(c!=null&&c.isConnected()&&!casting)connectCastSession(c,true);}}catch(Throwable ignored){}}
-    @Override protected void onStop(){watchNetwork(false);if(castContext!=null)try{castContext.getSessionManager().removeSessionManagerListener(castSessionListener,CastSession.class);}catch(Exception ignored){}super.onStop();}
+    @Override protected void onStop(){if(!isInPictureInPictureMode()&&exo!=null){pendingResumeMs=currentLocalPosition();playbackSuspended=true;ui.removeCallbacks(tick);resetReconnect();releasePlayers();}watchNetwork(false);if(castContext!=null)try{castContext.getSessionManager().removeSessionManagerListener(castSessionListener,CastSession.class);}catch(Exception ignored){}super.onStop();}
     @Override public void onWindowFocusChanged(boolean focus){super.onWindowFocusChanged(focus);if(focus)ScreenInsets.player(this);}
-    @Override protected void onPause(){saveProgress();super.onPause();}
+    @Override protected void onResume(){super.onResume();if(playbackSuspended&&!destroyed&&!isFinishing()){playbackSuspended=false;startPreferredPlayer();ui.removeCallbacks(tick);ui.post(tick);}ui.removeCallbacks(recordingTick);ui.post(recordingTick);}
+    @Override protected void onPause(){ui.removeCallbacks(recordingTick);saveProgress();if(isFinishing())releasePlayers();super.onPause();}
     @Override protected void onDestroy(){destroyed=true;com.nenotv.player.ExtraPrivacySession.removeListener(privacyRevoked);ui.removeCallbacksAndMessages(null);saveProgress();if(castDialog!=null){castDialog.dismiss();castDialog=null;}try{if(castClient!=null)castClient.unregisterCallback(castMediaCallback);}catch(Exception ignored){}closeCastRelay();releasePlayers();exec.shutdownNow();super.onDestroy();}
 }
 

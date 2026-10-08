@@ -1,6 +1,9 @@
 package com.nenotv.player;
 
 import android.content.Context;
+import android.app.Activity;
+import android.content.Intent;
+import android.view.View;
 import android.os.SystemClock;
 import com.nenotv.player.model.MediaEntry;
 import com.nenotv.player.storage.RecordingStore;
@@ -14,7 +17,13 @@ final class RecordingChecks {
 
     static void check(boolean ok, String message) { if (!ok) throw new AssertionError(message); }
 
-    static void run(Context c) throws Exception {
+    static Object field(Activity a, String name) throws Exception {
+        java.lang.reflect.Field f = a.getClass().getDeclaredField(name);
+        f.setAccessible(true);
+        return f.get(a);
+    }
+
+    static void run(UiInstrumentation ui, Context c) throws Exception {
         ServerSocket server = new ServerSocket(0, 4, InetAddress.getByName("127.0.0.1"));
         Thread serve = new Thread(() -> {
             while (!server.isClosed()) {
@@ -32,6 +41,7 @@ final class RecordingChecks {
         serve.setDaemon(true);
         serve.start();
         String id = null;
+        Activity player = null;
         try {
             MediaEntry ch = new MediaEntry();
             ch.type = "live"; ch.id = "rec-qa"; ch.name = "QA Recording"; ch.group = "NL | Algemeen";
@@ -47,16 +57,36 @@ final class RecordingChecks {
             while (SystemClock.elapsedRealtime() < deadline && (r == null || r.file.isEmpty() || new File(r.file).length() < 188 * 200)) { Thread.sleep(500); r = RecordingStore.get(c, id); }
             check(r != null && RecordingStore.RECORDING.equals(r.state), "Recording did not start: " + (r == null ? "missing" : r.state + " " + r.error));
             check(RecordingService.isRunning(id), "Recording service is not running");
+            check(Recordings.runningForChannel(c, ch).contains(id), "Player cannot find its active recording");
+            MediaEntry other = new MediaEntry(); other.type = "live"; other.id = "other-channel"; other.url = "http://127.0.0.1/other.ts";
+            check(Recordings.runningForChannel(c, other).isEmpty(), "Player would stop another channel's recording");
+            check(Recordings.runningForChannel(c, null).isEmpty(), "Missing channel matched a recording");
             File f = new File(r.file);
             check(f.length() >= 188 * 200, "Recording file did not grow: " + f.length());
             check(Recordings.insideRecordingFolders(c, f), "Recording written outside the app folder: " + f);
 
-            Recordings.stop(c, id);
+            player = ui.startActivitySync(ProModuleInstaller.playerIntent(c).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("media", ch));
+            ui.waitForIdleSync();
+            Activity visiblePlayer = player;
+            View stop = (View) field(player, "stopRecording");
+            View timer = (View) field(player, "recordDuration");
+            View controls = (View) field(player, "controls");
+            ui.runOnMainSync(() -> {
+                check(stop.getVisibility() == View.VISIBLE && stop.isEnabled(), "Player has no accessible stop button");
+                check(!timer.isEnabled(), "Player allows a duplicate timed recording");
+                controls.setVisibility(View.GONE);
+                check(stop.isShown(), "Stop button disappeared with playback controls");
+            });
+            ui.snapshot("pro-recording-stop");
+            ui.runOnMainSync(() -> check(stop.performClick(), "Stop button has no action"));
             deadline = SystemClock.elapsedRealtime() + 30000;
             while (SystemClock.elapsedRealtime() < deadline && RecordingService.isRunning(id)) Thread.sleep(300);
             r = RecordingStore.get(c, id);
             check(r != null && RecordingStore.PARTIAL.equals(r.state) && "cancelled".equals(r.error), "Stopped recording state: " + (r == null ? "missing" : r.state + " " + r.error));
             check(r.bytes == f.length() && r.bytes > 0, "Recorded size not saved");
+            check(Recordings.runningForChannel(c, ch).isEmpty(), "Player stop button remains active after stopping");
+            ui.runOnMainSync(() -> { visiblePlayer.finish(); ui.callActivityOnPause(visiblePlayer); try { check(field(visiblePlayer, "exo") == null, "Closing the player retained its audio decoder"); } catch (Exception e) { throw new RuntimeException(e); } });
+            player = null;
 
             MediaEntry play = Recordings.playable(c, r);
             check(play != null && Recordings.isLocalRecording(c, play) && "recording".equals(play.type), "Recording is not playable");
@@ -70,6 +100,7 @@ final class RecordingChecks {
             check(!f.exists() && RecordingStore.get(c, id) == null, "Recording was not deleted");
             id = null;
         } finally {
+            if (player != null) { Activity closing = player; ui.runOnMainSync(closing::finish); }
             if (id != null) { Recordings.stop(c, id); Thread.sleep(1500); Recordings.delete(c, id); }
             server.close();
         }

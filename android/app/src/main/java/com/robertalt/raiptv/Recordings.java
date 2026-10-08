@@ -103,6 +103,16 @@ public final class Recordings {
         }
     }
 
+    /** Running recordings for this channel only, including recordings started outside the player. */
+    public static List<String> runningForChannel(Context c, MediaEntry channel) {
+        List<String> ids = new ArrayList<>();
+        if (channel == null) return ids;
+        for (RecordingStore.Recording r : RecordingStore.all(c))
+            if (RecordingStore.RECORDING.equals(r.state) && r.channel != null
+                    && channel.uniqueKey().equals(r.channel.uniqueKey())) ids.add(r.id);
+        return ids;
+    }
+
     /** Stops a running recording or cancels a planned one; finished recordings stay. */
     public static void stop(Context c, String id) {
         RecordingStore.Recording r = RecordingStore.get(c, id);
