@@ -570,7 +570,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
         new SecureProfileStore(c).clear();awaitPlaybackStopped(basic,"Light kept playing after removing its primary source");
         runOnMainSync(()->check(basic.exo==null,"Revoked Light player retained its decoder"));new SecureProfileStore(c).save(profile());waitForIdleSync();
         c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE).edit().putString("level","PRO").commit();
-        check(ProLibraryBridge.isActive(a),"Pro entitlement did not enable module");RecordingChecks.run(this,c);result.putString("NENOTV_RECORDING","passed");
+        check(ProLibraryBridge.isActive(a),"Pro entitlement did not enable module");RecordingChecks.run(this,c,a);result.putString("NENOTV_RECORDING","passed");
         check(ProModuleInstaller.sourcesIntent(a).getComponent().getClassName().contains("ProSourcesActivity"),"Pro source manager route missing");
         check(ProModuleInstaller.networkIntent(a).getComponent().getClassName().contains("ProNetworkActivity"),"Pro network route missing");
         MediaEntry langEn=new MediaEntry();langEn.type="live";langEn.id="lang-en";langEn.name="EN - QA";langEn.group="EN | General";

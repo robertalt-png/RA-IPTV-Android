@@ -23,7 +23,7 @@ final class RecordingChecks {
         return f.get(a);
     }
 
-    static void run(UiInstrumentation ui, Context c) throws Exception {
+    static void run(UiInstrumentation ui, Context c, Activity owner) throws Exception {
         ServerSocket server = new ServerSocket(0, 4, InetAddress.getByName("127.0.0.1"));
         Thread serve = new Thread(() -> {
             while (!server.isClosed()) {
@@ -65,7 +65,7 @@ final class RecordingChecks {
             check(f.length() >= 188 * 200, "Recording file did not grow: " + f.length());
             check(Recordings.insideRecordingFolders(c, f), "Recording written outside the app folder: " + f);
 
-            player = ui.startActivitySync(ProModuleInstaller.playerIntent(c).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("media", ch));
+            player = ui.startActivitySync(ProModuleInstaller.playerIntent(owner).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("media", ch));
             ui.waitForIdleSync();
             Activity visiblePlayer = player;
             View stop = (View) field(player, "stopRecording");
