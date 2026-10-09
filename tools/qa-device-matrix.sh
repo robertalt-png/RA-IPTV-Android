@@ -62,6 +62,10 @@ adb logcat -c >/dev/null 2>&1 || true
 play_install light || { note "FAIL install light"; annot error "Play-style install failed" "$out/install.txt"; exit 2; }
 adb shell pm path $pkg > "$out/paths-light.txt"
 step light-first-start start_ok 10
+adb install -r qa-tools/tests.apk >> "$out/install.txt" 2>&1
+timeout 300 adb shell am instrument -w -e phase mlkit $pkg.test/$pkg.UiInstrumentation > "$out/mlkit-light.txt" 2>&1 || true
+if rg -q 'NENOTV_MLKIT_SCAN=passed' "$out/mlkit-light.txt"; then note "ok   mlkit scan (light)"; else note "FAIL mlkit scan (light)"; annot error "text scanning cannot start ML Kit in Light" "$out/mlkit-light.txt"; fail=1; fi
+check_crash mlkit-light
 adb shell am force-stop $pkg
 play_install pro || { note "FAIL install pro"; annot error "Play-style Pro install failed" "$out/install.txt"; exit 2; }
 adb shell pm path $pkg > "$out/paths-pro.txt"
@@ -77,7 +81,7 @@ adb install -r qa-tools/tests.apk >> "$out/install.txt" 2>&1 || { note "FAIL ins
 # 1. ML Kit on demand with the Pro split installed: text scanning and Pro language detection.
 timeout 300 adb shell am instrument -w -e phase mlkit $pkg.test/$pkg.UiInstrumentation > "$out/mlkit.txt" 2>&1 || true
 if rg -q 'NENOTV_MLKIT_SCAN=passed' "$out/mlkit.txt"; then note "ok   mlkit scan"; else note "FAIL mlkit scan"; annot error "text scanning cannot start ML Kit" "$out/mlkit.txt"; fail=1; fi
-if rg -q 'NENOTV_MLKIT_PRO=passed' "$out/mlkit.txt"; then note "ok   mlkit pro"; else note "warn mlkit pro"; annot warning "Pro language detection cannot start ML Kit" "$out/mlkit.txt"; fi
+if rg -q 'NENOTV_MLKIT_PRO=passed' "$out/mlkit.txt"; then note "ok   mlkit pro"; else note "FAIL mlkit pro"; annot error "Pro language detection cannot start ML Kit" "$out/mlkit.txt"; fail=1; fi
 check_crash mlkit
 
 # 2. Set up like a viewer: demo source and the Pro checks (playback, recording, EPG).

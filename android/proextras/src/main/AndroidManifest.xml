@@ -11,6 +11,12 @@
       android:name="com.google.mlkit.common.internal.MlKitInitProvider"
       android:authorities="${applicationId}.mlkitinitprovider"
       tools:node="remove"/>
+    <!-- One ML Kit registrar list only, in the base app. A second, shorter list declared by this split
+         replaced the base list when Play installed Pro, so ML Kit lost its common parts
+         (MissingDependencyException: ExecutorSelector / ModelFileHelper). -->
+    <service
+      android:name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService"
+      tools:node="remove"/>
     <activity android:name="com.nenotv.player.proextras.ProSourcesActivity" android:exported="false"/>
     <activity android:name="com.nenotv.player.proextras.ProNetworkActivity" android:exported="false"/>
     <activity

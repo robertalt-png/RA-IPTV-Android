@@ -17,6 +17,13 @@
              crashed every launch (0.14.40-0.14.43). Text scanning and Pro translation start ML Kit
              themselves, only when used, and fall back without a crash. -->
         <provider android:name="com.google.mlkit.common.internal.MlKitInitProvider" android:authorities="${applicationId}.mlkitinitprovider" tools:node="remove" />
+        <!-- The single ML Kit registrar list (text scanning + Pro translation/language detection).
+             Pro's registrar classes arrive with the Pro split; without Pro, ML Kit skips registrars it cannot load. -->
+        <service android:name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService" android:exported="false">
+            <meta-data android:name="com.google.firebase.components:com.google.mlkit.nl.translate.NaturalLanguageTranslateRegistrar" android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data android:name="com.google.firebase.components:com.google.mlkit.nl.languageid.bundled.internal.ThickLanguageIdRegistrar" android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data android:name="com.google.firebase.components:com.google.mlkit.nl.languageid.internal.LanguageIdRegistrar" android:value="com.google.firebase.components.ComponentRegistrar" />
+        </service>
 
         <meta-data android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME" android:value="com.nenotv.player.NenoTVCastOptionsProvider" />
 
