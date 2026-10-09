@@ -8,7 +8,11 @@ set -uo pipefail
 kind="$1"; api="$2"
 pkg=com.nenotv.player
 out=qa-results; mkdir -p "$out"
-apk=$(ls "$PWD"/distribution/SunnyIPTV-Pro-v*-TEST-SIGNED.apk | head -1)
+# Installed the way Play does it: base + config splits, with or without the Pro module as its own split.
+play_install() { # play_install <light|pro>
+  local mods=""; [ "$1" = pro ] && mods="--modules=_ALL_"
+  java -jar qa-tools/bundletool.jar install-apks --apks=qa-tools/all.apks $mods --allow-downgrade >> "$out/install.txt" 2>&1
+}
 fail=0
 summary="$out/summary.txt"; : > "$summary"
 
@@ -53,13 +57,28 @@ adb shell wm size > "$out/screen.txt"
 adb logcat -b crash -c >/dev/null 2>&1 || true
 adb logcat -c >/dev/null 2>&1 || true
 
-adb install -r "$apk" > "$out/install.txt" 2>&1 || { note "FAIL install"; annot error "install failed" "$out/install.txt"; exit 2; }
+# 0. Light first (as from the Play Store), opened, then the Pro module added and the app reopened:
+#    the exact sequence that crashed every start in 0.14.40-0.14.43 (ML Kit start-up with Pro installed).
+play_install light || { note "FAIL install light"; annot error "Play-style install failed" "$out/install.txt"; exit 2; }
+adb shell pm path $pkg > "$out/paths-light.txt"
+step light-first-start start_ok 10
+adb shell am force-stop $pkg
+play_install pro || { note "FAIL install pro"; annot error "Play-style Pro install failed" "$out/install.txt"; exit 2; }
+adb shell pm path $pkg > "$out/paths-pro.txt"
+if rg -qi proextras "$out/paths-pro.txt"; then note "ok   pro split installed"; else note "FAIL pro split missing"; fail=1; fi
+for i in 1 2 3; do
+  adb shell am force-stop $pkg
+  step "pro-split-start-$i" start_ok 10
+done
 adb install -r qa-tools/tests.apk >> "$out/install.txt" 2>&1 || { note "FAIL install tests"; annot error "test APK install failed" "$out/install.txt"; exit 2; }
 # Notifications allowed, as a viewer would after the first prompt (Android 13+).
 [ "$api" -ge 33 ] && adb shell pm grant $pkg android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
 
-# 1. Very first start on a clean install.
-step first-start start_ok 10
+# 1. ML Kit on demand with the Pro split installed: text scanning and Pro language detection.
+timeout 300 adb shell am instrument -w -e phase mlkit $pkg.test/$pkg.UiInstrumentation > "$out/mlkit.txt" 2>&1 || true
+if rg -q 'NENOTV_MLKIT_SCAN=passed' "$out/mlkit.txt"; then note "ok   mlkit scan"; else note "FAIL mlkit scan"; annot error "text scanning cannot start ML Kit" "$out/mlkit.txt"; fail=1; fi
+if rg -q 'NENOTV_MLKIT_PRO=passed' "$out/mlkit.txt"; then note "ok   mlkit pro"; else note "warn mlkit pro"; annot warning "Pro language detection cannot start ML Kit" "$out/mlkit.txt"; fi
+check_crash mlkit
 
 # 2. Set up like a viewer: demo source and the Pro checks (playback, recording, EPG).
 setup family SUNNYIPTV_FAMILY_TESTS
@@ -108,7 +127,7 @@ for i in 1 2; do
 done
 
 # 9. Update over itself (Play update path), then start.
-adb install -r "$apk" >> "$out/install.txt" 2>&1
+play_install pro
 step after-reinstall start_ok 10
 
 adb logcat -d > "$out/logcat.txt" 2>/dev/null || true

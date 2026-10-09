@@ -2,7 +2,6 @@ package com.nenotv.player.proextras;
 
 import com.nenotv.player.InfoTranslator;
 import com.nenotv.player.ExtraPrivacySession;
-import com.google.mlkit.common.MlKit;
 import com.google.mlkit.nl.languageid.*;
 import com.google.mlkit.nl.translate.*;
 import com.google.mlkit.common.model.DownloadConditions;
@@ -36,7 +35,7 @@ public final class ProInfoTranslator {
         if (text == null || text.trim().isEmpty() || target == null) { cb.done(text == null ? "" : text); return; }
         Request request = new Request(text, target, cb);
         request.advance(() -> {
-            if (!mlKitReady) { MlKit.initialize(InfoTranslator.context()); mlKitReady = true; }
+            if (!mlKitReady) { com.google.mlkit.common.sdkinternal.MlKitContext.initializeIfNeeded(InfoTranslator.context()); mlKitReady = true; }
             String cached = CACHE.get(request.key);
             if (cached != null) { request.finish(cached); return; }
             pending.add(request);

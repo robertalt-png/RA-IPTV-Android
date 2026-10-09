@@ -284,6 +284,7 @@ final class SourceEntryUi {
     private void readText(Bitmap bmp) {
         say(T("Recognising text…", "Tekst herkennen…", "Text wird erkannt…"), MUTED);
         try {
+            com.google.mlkit.common.sdkinternal.MlKitContext.initializeIfNeeded(a.getApplicationContext());
             com.google.mlkit.vision.text.TextRecognition.getClient(com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
                     .process(com.google.mlkit.vision.common.InputImage.fromBitmap(bmp, 0))
                     .addOnSuccessListener(t -> { smart.setText(t.getText()); if (pending != null) ui.removeCallbacks(pending); apply(SourceParse.parse(t.getText(), true), true); })
