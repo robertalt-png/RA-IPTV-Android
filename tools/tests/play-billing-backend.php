@@ -88,6 +88,7 @@ class PlayFixture {
     public static string $mode='live';
     public static bool $bindFailure=false;
     private static function mode() { return self::$mode; }
+    private static function trial_days() { return 14; }
     private static function free_lock($id) { global $locked; if($locked)return false; $locked=true; return true; }
     private static function free_unlock($id) { global $locked; $locked=false; }
     private static function json($data,$status) { return new WP_REST_Response($data,$status); }
@@ -117,6 +118,9 @@ class PlayFixture {
 }
 $wpdb=new PlayDb();
 $key=str_repeat('k',43);
+$options['sunnyiptv_google_play_only']='1';
+$offer=PlayFixture::app_entitlement_direct(new WP_REST_Request(['device_id'=>'fixture-device','device_key'=>$key]),'offer');
+check($offer->data['google_play_test']===true,'Existing live Google Play testing flag preserved');
 function purchase($token,$product='sunnyiptv_pro_solo',$device='fixture-device') {
     global $key;
     return PlayFixture::app_entitlement_direct(new WP_REST_Request(['device_id'=>$device,'device_key'=>$key,'purchase_token'=>$token,'product_id'=>$product]),'play');

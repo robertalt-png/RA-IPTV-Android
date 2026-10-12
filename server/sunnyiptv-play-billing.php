@@ -93,7 +93,8 @@ trait SunnyIPTV_Play_Billing {
 
         if ($action === 'offer') {
             return self::json(['ok' => true, 'play_billing' => self::play_billing_enabled(), 'trial_days' => self::trial_days(),
-                'products' => array_keys(self::$play_products), 'mode' => self::mode()], 200);
+                'products' => array_keys(self::$play_products), 'mode' => self::mode(),
+                'google_play_test' => get_option('sunnyiptv_google_play_only', '0') === '1'], 200);
         }
         if ($action === 'play') return self::play_purchase($request, $p);
         if ($action === 'refresh') {
