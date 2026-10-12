@@ -1,0 +1,56 @@
+name: Verify Pro sales readiness
+on:
+  push:
+    branches: [codex/pro-sales-readiness-0147]
+  pull_request:
+    branches: [sunnyiptv-0.14.46]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP syntax and purchase lifecycle
+        run: |
+          php -l server/nenotv-entitlement-core.php
+          php -l server/sunnyiptv-play-billing.php
+          php -l server/sunnyiptv-feedback.php
+          php tools/tests/play-billing-backend.php
+          php tools/tests/play-billing-backend.php action-scheduler
+          php tools/tests/pairing-backend.php
+          php tools/tests/feedback-backend.php
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - uses: android-actions/setup-android@v3
+      - name: Android SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - uses: actions/cache@v4
+        id: audio
+        with:
+          path: android/app/libs/ffmpeg
+          key: ffmpeg-audio-${{ hashFiles('tools/build-ffmpeg-audio.sh') }}
+      - name: Prepare licensed audio decoder
+        if: steps.audio.outputs.cache-hit != 'true'
+        run: |
+          sdkmanager "ndk;26.1.10909125" "cmake;3.22.1" >/dev/null
+          NDK_PATH="$ANDROID_HOME/ndk/26.1.10909125" bash tools/build-ffmpeg-audio.sh android/app/libs/ffmpeg
+      - name: Compile customer app and instrumentation
+        working-directory: android
+        run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SunnyIPTV-0147-debug-validation
+          path: android/**/build/outputs/apk/**/*.apk

@@ -27,6 +27,46 @@ trait SunnyIPTV_Play_Billing {
     public static function play_hooks(): void {
         add_action('rest_api_init', [__CLASS__, 'play_routes']);
         add_action('profile_update', [__CLASS__, 'play_sync_account_email'], 20, 1);
+        add_filter('cron_schedules', [__CLASS__, 'play_cron_schedules']);
+        add_action('init', [__CLASS__, 'play_schedule_maintenance']);
+        add_action('sunnyiptv_play_maintenance', [__CLASS__, 'play_maintenance']);
+        add_action('sunnyiptv_play_ack_retry', [__CLASS__, 'play_ack_retry'], 10, 1);
+        add_action('sunnyiptv_play_check', [__CLASS__, 'play_check'], 10, 1);
+    }
+
+    public static function play_cron_schedules(array $schedules): array {
+        $schedules['sunnyiptv_five_minutes'] = ['interval'=>300,'display'=>'SunnyIPTV purchase maintenance'];
+        return $schedules;
+    }
+
+    public static function play_schedule_maintenance(): void {
+        if (!wp_next_scheduled('sunnyiptv_play_maintenance')) wp_schedule_event(time()+60,'sunnyiptv_five_minutes','sunnyiptv_play_maintenance');
+    }
+
+    private static function play_schedule_job(string $hook, int $id, int $when): void {
+        $args = [$id];
+        if (function_exists('as_schedule_single_action') && function_exists('as_has_scheduled_action')) {
+            if (!as_has_scheduled_action($hook,$args,'sunnyiptv-play')) as_schedule_single_action($when,$hook,$args,'sunnyiptv-play',true);
+        } elseif (!wp_next_scheduled($hook,$args)) wp_schedule_single_event($when,$hook,$args);
+    }
+
+    /** Dispatch only: network work runs separately, and jobs contain ids rather than purchase tokens. */
+    public static function play_maintenance(): void {
+        if (!self::play_billing_enabled()) return;
+        global $wpdb;
+        $ack_cursor = (string)get_option('sunnyiptv_play_ack_cursor','');
+        $keys = $wpdb->get_col($wpdb->prepare('SELECT option_name FROM '.$wpdb->options.' WHERE option_name LIKE %s AND option_name>%s ORDER BY option_name ASC LIMIT 100', $wpdb->esc_like('sunnyiptv_play_ack_pending_').'%', $ack_cursor));
+        foreach ((array)$keys as $index=>$key) {
+            $id = (int)substr($key,strlen('sunnyiptv_play_ack_pending_'));
+            $pending = get_option($key,[]);
+            if (is_array($pending)) self::play_schedule_job('sunnyiptv_play_ack_retry',$id,max(time()+$index,(int)($pending['next']??0)));
+        }
+        if (is_array($keys)) update_option('sunnyiptv_play_ack_cursor',count($keys)===100 ? (string)end($keys) : '',false);
+        $cursor = (int)get_option('sunnyiptv_play_check_cursor',0);
+        $ids = $wpdb->get_col($wpdb->prepare("SELECT id FROM ".self::ent_table()." WHERE source='play' AND status IN ('active','expired') AND id>%d AND (status='active' OR expires_at IS NULL OR expires_at>DATE_SUB(UTC_TIMESTAMP(),INTERVAL 30 DAY)) ORDER BY id ASC LIMIT 50",$cursor));
+        if (!is_array($ids)) return;
+        foreach ($ids as $index=>$id) self::play_schedule_job('sunnyiptv_play_check',(int)$id,time()+$index*5);
+        update_option('sunnyiptv_play_check_cursor',count($ids)===50 ? (int)end($ids) : 0,false);
     }
 
     public static function play_routes(): void {
@@ -176,12 +216,13 @@ trait SunnyIPTV_Play_Billing {
     private static function play_ref(string $token): string { return 'play:' . hash('sha256', $token); }
 
     /** Records the purchase token encrypted so the server can re-check renewals; never returned to anyone. */
-    private static function play_store_token(int $entitlement_id, string $product, string $token): void {
+    private static function play_store_token(int $entitlement_id, string $product, string $token): bool {
         $key = hash('sha256', 'sunnyiptv-play-token-v1|' . wp_salt('auth'), true);
         $iv = random_bytes(12); $tag = '';
         $cipher = openssl_encrypt($product . "\n" . $token, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag);
-        if ($cipher === false) return;
+        if ($cipher === false) return false;
         update_option('sunnyiptv_play_token_' . $entitlement_id, base64_encode($iv . $tag . $cipher), false);
+        return self::play_read_token($entitlement_id) === [$product,$token];
     }
 
     private static function play_read_token(int $entitlement_id): ?array {
@@ -232,7 +273,7 @@ trait SunnyIPTV_Play_Billing {
         }
         $ent = self::find_by_source('play', $ref);
         if (!is_array($ent)) return self::json(['ok' => false, 'error' => 'entitlement_write_failed'], 503);
-        self::play_store_token((int)$ent['id'], $product, $token);
+        if (!self::play_store_token((int)$ent['id'], $product, $token)) return self::json(['ok'=>false,'error'=>'purchase_storage_failed'],503);
         // An upgrade or resubscription replaces the previous subscription.
         if ($linked !== '' && $linked !== $token) {
             $old = self::find_by_source('play', self::play_ref($linked));
@@ -249,33 +290,88 @@ trait SunnyIPTV_Play_Billing {
         $bound = self::bind_device($ent, $p);
         if (empty($bound['ok'])) return self::json($bound, 200);
         if (!$acknowledged) {
-            // Google refunds purchases that are not acknowledged within three days.
-            try { self::play_acknowledge($product, $token); }
-            catch (Throwable $e) { self::log_event('play_ack_failed', (string)$ent['reference'], $ref, 'failed', $e->getMessage()); }
+            if (!self::play_queue_ack((int)$ent['id'])) return self::json(['ok'=>false,'error'=>'purchase_confirmation_unavailable'],503);
+            self::play_ack_retry((int)$ent['id']);
         }
-        return self::json(['ok' => true, 'entitlement' => self::pro_payload(self::find_by_id((int)$ent['id'])), 'mode' => 'live', 'message' => 'SunnyIPTV Pro activated.'], 200);
+        $current = self::find_by_id((int)$ent['id']);
+        if (!$current || !self::entitlement_is_active($current)) return self::json(['ok'=>false,'error'=>'play_purchase_inactive'],409);
+        return self::json(['ok' => true, 'entitlement' => self::pro_payload($current), 'confirmation_pending'=>is_array(get_option('sunnyiptv_play_ack_pending_'.(int)$ent['id'],null)), 'mode' => 'live', 'message' => 'SunnyIPTV Pro activated.'], 200);
     }
 
-    /** On refresh: a Play subscription that reached its expiry date is checked again with Google (renewal), at most every 6 hours. */
+    private static function play_queue_ack(int $id): bool {
+        $key = 'sunnyiptv_play_ack_pending_'.$id;
+        if (!is_array(get_option($key,null))) add_option($key,['attempts'=>0,'created'=>time(),'next'=>time()],'',false);
+        $pending = get_option($key,null);
+        if (!is_array($pending)) return false;
+        self::play_schedule_job('sunnyiptv_play_ack_retry',$id,max(time()+60,(int)$pending['next']));
+        return true;
+    }
+
+    public static function play_ack_retry(int $id): void {
+        if ($id < 1 || !self::play_billing_enabled() || !self::free_lock('play-ent:'.$id)) return;
+        $key = 'sunnyiptv_play_ack_pending_'.$id;
+        try {
+            $pending = get_option($key,null);
+            if (!is_array($pending) || (int)$pending['next'] > time()) return;
+            $ent = self::find_by_id($id);
+            if (!$ent || $ent['source'] !== 'play' || !in_array($ent['status'],['active','expired'],true)) { delete_option($key); return; }
+            try {
+                $stored = self::play_read_token($id);
+                if (!$stored) throw new RuntimeException('purchase_storage_failed');
+                [$active,$expires,,$acknowledged] = self::play_lookup($stored[0],$stored[1]);
+                if (!$active) {
+                    self::play_apply_state($ent,false,$expires);
+                    delete_option($key);
+                    return;
+                }
+                if (!$acknowledged) self::play_acknowledge($stored[0],$stored[1]);
+                delete_option($key);
+                self::log_event('play_ack_success',(string)$ent['reference'],(string)$ent['source_ref'],'success','Google Play purchase confirmation completed.');
+            } catch (Throwable $e) {
+                $pending['attempts'] = (int)$pending['attempts']+1;
+                $pending['next'] = time()+min(3600,60*(2**min(6,$pending['attempts']-1)));
+                update_option($key,$pending,false);
+                self::play_schedule_job('sunnyiptv_play_ack_retry',$id,(int)$pending['next']);
+                self::log_event('play_ack_failed',(string)$ent['reference'],(string)$ent['source_ref'],'failed','Google Play confirmation failed; durable retry remains pending.');
+            }
+        } finally { self::free_unlock('play-ent:'.$id); }
+    }
+
+    private static function play_apply_state(array $ent, bool $active, ?string $expires): void {
+        global $wpdb;
+        $status = $active ? 'active' : ($expires === null ? 'revoked' : 'expired');
+        $written = $wpdb->update(self::ent_table(),['status'=>$status,'expires_at'=>$expires,'updated_at'=>self::now_mysql()],['id'=>(int)$ent['id']]);
+        if ($written === false) throw new RuntimeException('entitlement_write_failed');
+        if ($ent['status'] !== $status || ($ent['expires_at']??null) !== $expires) self::log_event('play_recheck',(string)$ent['reference'],(string)$ent['source_ref'],$active?'renewed':'expired','Google Play purchase state synchronized.');
+    }
+
+    /** Re-check both subscriptions and lifetime purchases; preserve access on transport errors. */
+    public static function play_check(int $id): void {
+        if ($id < 1 || !self::play_billing_enabled() || !self::free_lock('play-ent:'.$id)) return;
+        try {
+            $ent = self::find_by_id($id);
+            if (!$ent || $ent['source'] !== 'play' || !in_array($ent['status'],['active','expired'],true)) return;
+            if (get_transient('sunnyiptv_play_checked_'.$id)) return;
+            try {
+                $stored = self::play_read_token($id);
+                if (!$stored) throw new RuntimeException('purchase_storage_failed');
+                [$active,$expires,,$acknowledged] = self::play_lookup($stored[0],$stored[1]);
+                self::play_apply_state($ent,$active,$expires);
+                set_transient('sunnyiptv_play_checked_'.$id,1,15*MINUTE_IN_SECONDS);
+                if ($active && !$acknowledged && !self::play_queue_ack($id)) throw new RuntimeException('purchase_confirmation_unavailable');
+                if (!$active || $acknowledged) delete_option('sunnyiptv_play_ack_pending_'.$id);
+            } catch (Throwable $e) {
+                set_transient('sunnyiptv_play_checked_'.$id,1,MINUTE_IN_SECONDS);
+                self::log_event('play_recheck_failed',(string)$ent['reference'],(string)$ent['source_ref'],'failed','Google Play purchase check failed; existing access was preserved.');
+            }
+        } finally { self::free_unlock('play-ent:'.$id); }
+    }
+
     private static function play_recheck_device(array $p): void {
         if (!self::play_billing_enabled()) return;
         $device = self::find_device((string)$p['device_id']);
         if (!$device || ($device['status'] ?? '') !== 'active') return;
-        $ent = self::find_by_id((int)$device['entitlement_id']);
-        if (!is_array($ent) || ($ent['source'] ?? '') !== 'play' || empty($ent['expires_at'])) return;
-        if (strtotime($ent['expires_at'] . ' UTC') > time() + HOUR_IN_SECONDS) return;
-        $lock = 'sunnyiptv_play_recheck_' . (int)$ent['id'];
-        if (get_transient($lock)) return;
-        set_transient($lock, 1, 6 * HOUR_IN_SECONDS);
-        $stored = self::play_read_token((int)$ent['id']);
-        if (!$stored) return;
-        try {
-            [$active, $expires] = self::play_lookup($stored[0], $stored[1]);
-            global $wpdb;
-            $wpdb->update(self::ent_table(), ['status' => $active ? 'active' : 'expired', 'expires_at' => $expires, 'updated_at' => self::now_mysql()], ['id' => (int)$ent['id']]);
-            self::log_event('play_recheck', (string)$ent['reference'], (string)$ent['source_ref'], $active ? 'renewed' : 'expired', 'Google Play subscription re-checked.');
-        } catch (Throwable $e) {
-            self::log_event('play_recheck_failed', (string)$ent['reference'], (string)$ent['source_ref'], 'failed', $e->getMessage());
-        }
+        if (!hash_equals((string)$device['device_key_hash'],self::key_hash((string)($p['device_key']??'')))) return;
+        self::play_check((int)$device['entitlement_id']);
     }
 }

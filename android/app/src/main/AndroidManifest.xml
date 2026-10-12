@@ -67,5 +67,6 @@
         <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
     </intent-filter>
 </activity>
-    <activity android:name="com.nenotv.player.AccountActivity" android:exported="false" /></application>
+    <activity android:name="com.nenotv.player.AccountActivity" android:exported="false" />
+    <activity android:name="com.nenotv.player.FeedbackActivity" android:exported="false" /></application>
 </manifest>

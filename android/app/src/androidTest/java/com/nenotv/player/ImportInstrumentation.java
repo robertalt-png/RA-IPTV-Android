@@ -207,7 +207,7 @@ public class ImportInstrumentation extends Instrumentation {
         require(!SiteEndpoints.isDemoUrl("https://example.com/customer.m3u"),"Customer source treated as demo");
         entries.addAll(films);
         java.util.HashSet<String> ids=new java.util.HashSet<>();
-        for(MediaEntry e:entries){require(java.util.Arrays.asList("film-46670912","film-29654117","film-52325031").contains(e.tvgId),"Unreviewed demo film");require(ids.add(e.tvgId),"Duplicate catalogue item");require(e.plot.contains("https://"),"Missing credits");require(provider.items(e.type,e.group).contains(e),"Category lost entry");}
+        for(MediaEntry e:entries){require(java.util.Arrays.asList("film-46670912","film-29654117","film-52325031").contains(e.tvgId),"Unreviewed demo film");require(ids.add(e.tvgId),"Duplicate catalogue item");require(e.plot.contains("https://"),"Missing credits");require(e.plot.contains("Commercial reuse allowed"),"Missing commercial reuse note");require(!e.plot.contains("official live feed"),"Demo film described as live feed");require(provider.items(e.type,e.group).contains(e),"Category lost entry");}
         for(MediaEntry item:entries){
             final androidx.media3.exoplayer.ExoPlayer[] player={null};
             final android.graphics.SurfaceTexture[] texture={null};

@@ -9,6 +9,9 @@
     "year": "2013",
     "credit": "Blender Foundation",
     "license": "CC BY-SA 3.0",
+    "commercial_reuse": true,
+    "attribution_required": true,
+    "reuse_note": "Creative Commons Attribution-ShareAlike 3.0 permits commercial reuse when attribution is retained and derivatives follow the same license.",
     "license_url": "https://creativecommons.org/licenses/by-sa/3.0",
     "source": "https://commons.wikimedia.org/wiki/File:Caminandes,_Gran_Dillama_-_Blender_Foundation.webm"
   },
@@ -22,6 +25,9 @@
     "year": "2013",
     "credit": "Pablo Vazquez, Beorn Leonard, and Francesco Siddi. Music and Sound by Jan Morgenstern",
     "license": "CC BY 3.0",
+    "commercial_reuse": true,
+    "attribution_required": true,
+    "reuse_note": "Creative Commons Attribution 3.0 permits commercial reuse when attribution is retained.",
     "license_url": "https://creativecommons.org/licenses/by/3.0",
     "source": "https://commons.wikimedia.org/wiki/File:Caminandes-_Llama_Drama_-_Short_Movie.ogv"
   },
@@ -35,6 +41,9 @@
     "year": "2016",
     "credit": "Blender",
     "license": "CC BY 3.0",
+    "commercial_reuse": true,
+    "attribution_required": true,
+    "reuse_note": "Creative Commons Attribution 3.0 permits commercial reuse when attribution is retained.",
     "license_url": "https://creativecommons.org/licenses/by/3.0",
     "source": "https://commons.wikimedia.org/wiki/File:Caminandes_3_-_Llamigos_-_Blender_Animated_Short.webm"
   }

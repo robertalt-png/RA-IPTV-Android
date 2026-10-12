@@ -21,6 +21,7 @@ public class AccountActivity extends Activity {
     Button refresh,trial,link;
     boolean requestRunning;
     long lastAutoRefresh;
+    boolean googlePlayTest;
     ExecutorService exec=Executors.newSingleThreadExecutor();
     EntitlementStore ent;
 
@@ -45,7 +46,7 @@ public class AccountActivity extends Activity {
         long now=SystemClock.elapsedRealtime();
         if(!requestRunning&&(lastAutoRefresh==0||now-lastAutoRefresh>60000)){lastAutoRefresh=now;refreshServer(true);
             // A paid purchase the server has not confirmed yet (network, app closed) is sent again; silent when there is none.
-            if(ent.level()!=EntitlementStore.Level.PRO)try{play().restore();}catch(RuntimeException noPlay){}}
+            try{play().restore();}catch(RuntimeException noPlay){}}
     }
 
     /** Input fields live in dialogs, but are created once so state and checks stay in one place. */
@@ -88,6 +89,8 @@ public class AccountActivity extends Activity {
         grid.add("📱",T("this_device"),T("device_code")+": "+ent.publicDeviceId(),false,v->showDeviceDialog());
         if(!new AccountLinkStore(this).linked())grid.add("📲",T("pair_by_phone"),text("Koppel dit apparaat aan je account","Link this device to your account","Dieses Gerät mit deinem Konto verbinden"),false,v->startActivity(new Intent(this,PairingActivity.class)));
         grid.finish();
+
+        if(googlePlayTest)Tiles.link(this,box,text("Google Play-test","Google Play test","Google-Play-Test"),v->showGooglePlayTest());
 
         String language=SettingsStore.language(this);
         TextView privacy=Tiles.link(this,box,"nl".equals(language)?"Privacyverklaring":"de".equals(language)?"Datenschutzerklärung":"Privacy policy",v->openWeb(SiteEndpoints.privacyUrl(SettingsStore.language(this))));
@@ -177,6 +180,18 @@ public class AccountActivity extends Activity {
         new AlertDialog.Builder(this).setTitle(T("this_device")).setMessage(msg).setPositiveButton(android.R.string.ok,null).show();
     }
 
+    void showGooglePlayTest(){
+        String message=text(
+                "Je test SunnyIPTV via Google Play en geeft daar je feedback. Er zijn geen aparte SunnyIPTV-testopdrachten. Na onze goedkeuring krijgt je SunnyIPTV-account gratis 1 jaar Pro voor 1 apparaat. Je ontvangt een bedankmail zodra Pro actief is.",
+                "Test SunnyIPTV through Google Play and send your feedback there. There are no separate SunnyIPTV test tasks. After our approval, your SunnyIPTV account receives 1 free year of Pro for 1 device. You receive a thank-you email when Pro is active.",
+                "Teste SunnyIPTV über Google Play und gib dort dein Feedback. Es gibt keine separaten SunnyIPTV-Testaufgaben. Nach unserer Freigabe erhält dein SunnyIPTV-Konto 1 Jahr Pro kostenlos für 1 Gerät. Du erhältst eine Dankes-E-Mail, sobald Pro aktiv ist.");
+        new AlertDialog.Builder(this).setTitle(text("Google Play-test","Google Play test","Google-Play-Test"))
+                .setMessage(message)
+                .setPositiveButton(text("Feedback via Google Play","Feedback through Google Play","Feedback über Google Play"),
+                        (d,w)->openWeb("https://play.google.com/store/apps/details?id="+BuildConfig.APPLICATION_ID))
+                .setNegativeButton(T("close"),null).show();
+    }
+
     void refreshUi(){
         if(statusText==null)return;
         EntitlementStore.Level l=ent.level();
@@ -216,7 +231,10 @@ public class AccountActivity extends Activity {
             // Background refresh on open: never blocks the buttons or shows "checking".
             quietRefreshRunning=true;
             exec.execute(()->{
-                boolean ok=false;try{new EntitlementClient(this).refresh();ok=true;}catch(Exception ignored){}
+                boolean ok=false;
+                EntitlementClient client=new EntitlementClient(this);
+                try{googlePlayTest=client.offer().optBoolean("google_play_test",false);ok=true;}catch(Exception ignored){}
+                try{client.refresh();ok=true;}catch(Exception ignored){}
                 final boolean updated=ok;
                 runOnUiThread(()->{quietRefreshRunning=false;if(updated&&!isFinishing()&&!isDestroyed()&&!requestRunning){build();ProModuleInstaller.syncEntitlement(this);}});
             });
