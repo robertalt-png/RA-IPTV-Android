@@ -7,6 +7,7 @@ if($case==='complete')$session['state']='complete';
 if($case==='foreign'){$session['state']='complete';$session['account_user_id']=9;}
 if($case==='expired')$session=null;
 if($case==='legacy')$session['flow']='';
+if($case==='trial')$session['trial_intent']=true;
 $_GET=['code'=>'AB23','flow'=>'pro','lang'=>'nl'];
 function nocache_headers(){}function do_action(...$args){}function status_header(...$args){}function get_header(){}function get_footer(){}
 function esc_html($s){return htmlspecialchars($s,ENT_QUOTES);}

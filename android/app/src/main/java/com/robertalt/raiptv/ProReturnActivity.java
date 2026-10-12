@@ -10,8 +10,9 @@ public final class ProReturnActivity extends Activity {
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);
         boolean stop=getIntent().getData()!=null&&"1".equals(getIntent().getData().getQueryParameter("stop"));
-        Class<?> target=stop||new AccountLinkStore(this).linked()?AccountActivity.class:PairingActivity.class;
-        startActivity(new Intent(this,target).putExtra("pro_activation",true).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP));
+        boolean home=getIntent().getData()!=null&&"1".equals(getIntent().getData().getQueryParameter("home"));
+        Class<?> target=stop?(home?MainActivity.class:AccountActivity.class):PairingActivity.class;
+        startActivity(new Intent(this,target).putExtra("pro_activation",true).putExtra("trial_activation",home).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP));
         finish();
     }
 }

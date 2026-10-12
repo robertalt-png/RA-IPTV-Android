@@ -102,7 +102,12 @@ class PlayFixture {
     private static function normalize_language($language) { return $language; }
     private static function ref() { return 'fixture-reference'; }
     private static function key_hash($key) { return hash('sha256',$key); }
-    private static function free_device($p) { return null; }
+    public static array $freeRecords=[];
+    private static function free_device($p) { return self::$freeRecords[$p['device_id']]??null; }
+    private static function free_customer($id) { return $id===7; }
+    private static function free_device_key($id) { return hash('sha256',$id); }
+    private static function free_links($id) { $links=[];foreach(self::$freeRecords as $device=>$record)if($record['user_id']===$id)$links[self::free_device_key($device)]=true;return $links; }
+    private static function find_trial_by_email($email) { global $wpdb;foreach($wpdb->rows as $row)if($row['source']==='trial'&&$row['email']===$email)return $row;return null; }
     private static function find_device($id) { return self::$devices[$id]??null; }
     private static function find_by_id($id) { global $wpdb; return $wpdb->rows[$id]??null; }
     private static function find_by_source($source,$ref) { global $wpdb; foreach($wpdb->rows as $r)if($r['source']===$source&&$r['source_ref']===$ref)return $r; return null; }
@@ -213,4 +218,15 @@ $old=$wpdb->rows[1];PlayFixture::$mode='shadow';$before=count($requests);checkNo
 check(count($requests)===$before&&$wpdb->rows[1]===$old,'Commercial switch respected');
 PlayFixture::$mode='live';$revokeDuringLookup=true;checkNow(1);
 check($wpdb->rows[1]['status']==='revoked','Concurrent admin revocation survives in-flight Google response');
+$wpdb=new PlayDb();PlayFixture::$devices=[];$options['sunnyiptv_auto_trial']='1';
+$trial=new ReflectionMethod(PlayFixture::class,'auto_trial');$p=['device_id'=>'trial-device','device_key'=>$key];
+PlayFixture::$freeRecords['trial-device']=['user_id'=>7,'key_hash'=>hash('sha256',$key)];
+$trial->invoke(null,$p);check($wpdb->rows===[],'Signing in or linking must not silently start a trial');
+PlayFixture::$freeRecords['trial-device']['trial_consent']=true;
+$trial->invoke(null,array_merge($p,['device_key'=>str_repeat('x',43)]));check($wpdb->rows===[],'Trial consent cannot replace device proof');
+$trial->invoke(null,$p);check(count($wpdb->rows)===1&&$wpdb->rows[1]['level']==='pro_trial','Explicit consent starts trial');
+$trial->invoke(null,$p);check(count($wpdb->rows)===1,'Retry created a second trial');
+$wpdb->rows[1]['expires_at']=gmdate('Y-m-d H:i:s',time()-60);$trial->invoke(null,$p);check(count($wpdb->rows)===1&&strtotime($wpdb->rows[1]['expires_at'].' UTC')<time(),'Expired trial restarted');
+PlayFixture::$freeRecords['second-trial-device']=['user_id'=>7,'key_hash'=>hash('sha256',$key),'trial_consent'=>true];
+$trial->invoke(null,['device_id'=>'second-trial-device','device_key'=>$key]);check(count($wpdb->rows)===1,'Another device renewed account trial');
 echo "Play billing backend: $checks checks passed (".(($argv[1]??'')==='action-scheduler'?'Action Scheduler':'WP-Cron').")\n";

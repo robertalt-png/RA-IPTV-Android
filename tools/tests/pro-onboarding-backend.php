@@ -1,17 +1,18 @@
 <?php
 $checks=0;
 function check($value,$message){global $checks;if(!$value)throw new RuntimeException($message);$checks++;}
-foreach(['anonymous','customer','administrator','complete','foreign','expired','legacy','limited'] as $case){
+foreach(['anonymous','customer','administrator','complete','foreign','expired','legacy','limited','trial'] as $case){
     $command=escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/pro-onboarding-render.php').' '.escapeshellarg($case);
     $html=shell_exec($command);
-    check(is_string($html)&&str_contains($html,'Pro activeren'),$case.' did not render');
-    check(str_contains($html,'pro-return?stop=1'),$case.' has no stop action');
+    check(is_string($html)&&str_contains($html,$case==='trial'?'Mijn SunnyIPTV Pro':'Pro activeren'),$case.' did not render');
+    check(str_contains($html,'stop=1'),$case.' has no stop action');
     if($case==='anonymous'){
         check(str_contains($html,'Google')&&str_contains($html,'Met e-mail'),'One sign-in entry missing');
         check(!str_contains($html,'nenotv_pair_approve'),'Anonymous approval exposed');
-    }elseif($case==='customer'){
+    }elseif($case==='customer'||$case==='trial'){
         check(str_contains($html,'nenotv_pair_approve')&&str_contains($html,'_wpnonce'),'Signed approval lacks nonce');
         check(str_contains($html,'qa@example.invalid'),'Customer cannot see chosen account');
+        if($case==='trial')check(str_contains($html,'Pro-proef activeren')&&str_contains($html,'name="trial_start" value="1"'),'Explicit trial activation missing');
     }else{
         check(!str_contains($html,'nenotv_pair_approve'),$case.' can approve a device');
         if($case==='complete')check(str_contains($html,'href="nenotv://pro-return"'),'Completed flow has no app return');

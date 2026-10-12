@@ -50,6 +50,7 @@ public final class PairingActivity extends Activity {
     Button button(String key){Button view=new Button(this);view.setText(text(key));view.setAllCaps(false);view.setTextColor(0xFFF7F8FA);view.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));view.setMinHeight(dp(52));return view;}
 
     boolean proFlow(){return getIntent().getBooleanExtra("pro_activation",false);}
+    boolean trialFlow(){return getIntent().getBooleanExtra("trial_activation",false);}
     boolean television(){android.app.UiModeManager mode=(android.app.UiModeManager)getSystemService(UI_MODE_SERVICE);return mode!=null&&mode.getCurrentModeType()==android.content.res.Configuration.UI_MODE_TYPE_TELEVISION;}
     String words(String nl,String en,String de){return FamilyUi.text(this,nl,en,de);}
     String linkLabel(){if(proFlow())return words("Ga door","Continue","Weiter");String language=com.nenotv.player.storage.SettingsStore.language(this);return "nl".equals(language)?"Klik hier om te koppelen":"de".equals(language)?"Hier klicken zum Verbinden":"Tap here to link";}
@@ -179,7 +180,11 @@ public final class PairingActivity extends Activity {
         });
     }
     void continueSetup(){
-        if(proFlow()){setResult(RESULT_OK);finish();}
+        if(trialFlow()){
+            if(!new com.nenotv.player.storage.EntitlementStore(this).isPro())Toast.makeText(this,words("De proef is nog niet actief. Probeer opnieuw of beheer je bestaande toegang.","The trial is not active yet. Try again or manage your existing access.","Der Test ist noch nicht aktiv. Versuche es erneut oder verwalte deinen bestehenden Zugang."),Toast.LENGTH_LONG).show();
+            startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP));finish();
+        }
+        else if(proFlow()){setResult(RESULT_OK);finish();}
         else if(firstRun())localSetup();
         else if(getIntent().getBooleanExtra("setup",false)){setResult(RESULT_OK);finish();}
         else if(!new com.nenotv.player.storage.SecureProfileStore(this).exists()){startActivity(new Intent(this,WebsiteSetupActivity.class));finish();}

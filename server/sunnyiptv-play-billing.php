@@ -110,6 +110,7 @@ trait SunnyIPTV_Play_Billing {
         if (self::find_device((string)$p['device_id'])) return;
         $record = self::free_device($p);
         if (!$record || !hash_equals((string)$record['key_hash'], self::key_hash((string)$p['device_key']))) return;
+        if(($record['trial_consent']??false)!==true)return;
         $uid = (int)$record['user_id'];
         if (!self::free_customer($uid) || !isset(self::free_links($uid)[self::free_device_key((string)$p['device_id'])])) return;
         if (self::find_by_source('trial', 'trial-account:' . $uid)) return;

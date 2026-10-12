@@ -28,6 +28,7 @@ public final class ProFlowInstrumentation extends Instrumentation {
         };
         PairingActivity.browserOpener=(activity,url)->opened.incrementAndGet();
         try{
+            TrialJourneyChecks.run(this);
             for(String lang:new String[]{"nl","en","de"}){
                 SettingsStore.setPrimaryLanguage(getTargetContext(),lang);
                 PairingActivity a=(PairingActivity)startActivitySync(new Intent(getTargetContext(),PairingActivity.class).putExtra("pro_activation",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));

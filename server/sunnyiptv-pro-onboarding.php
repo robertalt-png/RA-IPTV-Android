@@ -18,11 +18,13 @@ trait SunnyIPTV_Pro_Onboarding {
         $lang=$session['lang']??(in_array($_GET['lang']??null,['nl','en','de'],true)?$_GET['lang']:'en');
         $t=static fn(string $nl,string $en,string $de):string=>$lang==='nl'?$nl:($lang==='de'?$de:$en);
         $valid=$session&&($session['flow']??'')==='pro';
+        $trial=!empty($session['trial_intent']);
+        $return='nenotv://pro-return'.($trial?'?home=1':'');
         if($valid&&!is_user_logged_in()&&class_exists('SunnyIPTV_Customer_Pairing'))SunnyIPTV_Customer_Pairing::remember_pro($code,$lang);
         status_header(200);
         if(isset($GLOBALS['wp_query']))$GLOBALS['wp_query']->is_404=false;
         get_header();
-        echo '<main class="nv-pro-account nv-pro-onboarding"><h1>'.esc_html($t('Pro activeren','Activate Pro','Pro aktivieren')).'</h1>';
+        echo '<main class="nv-pro-account nv-pro-onboarding"><h1>'.esc_html($trial?$t('Mijn SunnyIPTV Pro','My SunnyIPTV Pro','Mein SunnyIPTV Pro'):$t('Pro activeren','Activate Pro','Pro aktivieren')).'</h1>';
         echo '<style>.nv-pro-onboarding{max-width:560px;margin:32px auto;padding:20px}.nv-pro-onboarding form{max-width:100%}.nv-pro-onboarding input{max-width:100%;box-sizing:border-box}.nv-pro-onboarding .button,.nv-pro-onboarding button{min-height:48px}.nv-pro-onboarding details{margin:24px 0}.nv-pro-onboarding #customer_login{display:block}.nv-pro-onboarding #customer_login>div{float:none;width:100%}.nv-pro-onboarding .woocommerce-MyAccount-navigation{display:none}</style>';
         if(!$valid){
             echo '<p>'.esc_html($t('Deze aanvraag is verlopen. Ga terug naar de app en probeer opnieuw.','This request has expired. Return to the app and try again.','Diese Anfrage ist abgelaufen. Kehre zur App zurück und versuche es erneut.')).'</p>';
@@ -40,18 +42,19 @@ trait SunnyIPTV_Pro_Onboarding {
         }elseif($session['state']==='pending'){
             echo '<h2>'.esc_html((string)$session['name']).'</h2>';
             $user=wp_get_current_user();
-            echo '<p>'.esc_html((string)$user->user_email).'</p>';
+            echo '<fieldset><legend>'.esc_html($t('Account','Account','Konto')).'</legend><p>'.esc_html((string)$user->user_email).'</p></fieldset>';
             echo '<form method="post" action="'.esc_url(admin_url('admin-post.php')).'">';
             echo '<input type="hidden" name="action" value="nenotv_pair_approve"><input type="hidden" name="code" value="'.esc_attr($code).'">';
             echo wp_nonce_field('nenotv_pair_approve_'.$code,'_wpnonce',true,false);
-            echo '<button type="submit">'.esc_html($t('Ga door','Continue','Weiter')).'</button></form>';
+            if($trial)echo '<input type="hidden" name="trial_start" value="1"><p>'.esc_html($t('Gratis proef. Geen betaling of betaald abonnement.','Free trial. No payment or paid subscription.','Kostenloser Test. Keine Zahlung und kein kostenpflichtiges Abonnement.')).'</p>';
+            echo '<button type="submit">'.esc_html($trial?$t('Pro-proef activeren','Activate Pro trial','Pro-Test aktivieren'):$t('Ga door','Continue','Weiter')).'</button></form>';
         }elseif((int)($session['account_user_id']??$session['approved_user_id']??0)===get_current_user_id()){
             echo '<p>'.esc_html($t('Je kunt terug naar de app.','You can return to the app.','Du kannst zur App zurückkehren.')).'</p>';
-            echo '<a class="button" href="nenotv://pro-return">'.esc_html($t('Ga door','Continue','Weiter')).'</a>';
+            echo '<a class="button" href="'.esc_url($return).'">'.esc_html($t('Ga door','Continue','Weiter')).'</a>';
         }else{
             echo '<p>'.esc_html($t('Start opnieuw vanuit de app.','Start again from the app.','Starte erneut in der App.')).'</p>';
         }
-        echo '<p><a href="nenotv://pro-return?stop=1">'.esc_html($t('Stop','Stop','Stop')).'</a></p></main>';
+        echo '<p><a href="'.esc_url($return.($trial?'&':'?').'stop=1').'">'.esc_html($t('Stop','Stop','Stop')).'</a></p></main>';
         get_footer();exit;
     }
 }

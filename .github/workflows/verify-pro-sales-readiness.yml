@@ -60,7 +60,7 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:bundleRelease
       - uses: actions/upload-artifact@v4
         with:
-          name: SunnyIPTV-0148-debug-validation
+          name: SunnyIPTV-0149-debug-validation
           path: |
             android/**/build/outputs/apk/**/*.apk
             android/app/build/outputs/bundle/release/*.aab
@@ -83,7 +83,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: SunnyIPTV-0148-phone-tests
+          name: SunnyIPTV-0149-phone-tests
           path: |
             simple-pro-tests.txt
             simple-pro-screenshots

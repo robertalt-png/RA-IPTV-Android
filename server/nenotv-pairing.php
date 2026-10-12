@@ -88,6 +88,7 @@ trait NenoTV_Pairing {
                 'public_device_id'=>$p['public_device_id']??'', 'platform'=>$p['platform']??'android',
                 'name'=>substr(sanitize_text_field(is_scalar($raw['device_name']??null)?(string)$raw['device_name']:'SunnyIPTV'),0,80),
                 'token_hash'=>self::key_hash($token), 'expires'=>time()+$duration, 'flow'=>$proFlow?'pro':'',
+                'trial_intent'=>$proFlow&&(int)($raw['pairing_version']??1)>=5&&($raw['trial_intent']??false)===true,
                 'entitlement_id'=>0, 'pairing_version'=>(int)($raw['pairing_version']??1), 'state'=>'pending', 'lang'=>in_array($raw['lang']??'',['nl','en','de'],true)?$raw['lang']:'en',
             ];
             $code='';
@@ -157,6 +158,8 @@ trait NenoTV_Pairing {
         try{
             $session=self::pairing_load($code);
             if(!$session||$session['state']!=='pending')wp_die('This pairing code is expired or already approved.');
+            if(!empty($session['trial_intent'])&&($_POST['trial_start']??'')!=='1')wp_die('Confirm trial activation.');
+            $session['trial_requested']=!empty($session['trial_intent'])&&($_POST['trial_start']??'')==='1';
             if((int)($session['pairing_version']??1)>=3&&!self::free_customer(get_current_user_id()))wp_die('Please use a customer account.');
             $ent=self::current_user_entitlement();
             if(is_array($ent)&&self::user_owns_entitlement($ent)&&self::entitlement_is_active($ent)&&self::app_service_live($ent)){
