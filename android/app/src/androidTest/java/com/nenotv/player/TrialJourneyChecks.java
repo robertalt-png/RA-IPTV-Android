@@ -37,6 +37,24 @@ final class TrialJourneyChecks {
             test.runOnMainSync(()->a.trialInvitation.getButton(AlertDialog.BUTTON_NEGATIVE).performClick());test.waitForIdleSync();
             test.runOnMainSync(()->{a.maybeInviteTrial();check(!a.trialInvitation.isShowing(),"Later caused repeated invitation");});
             check(profiles.load().server.equals(p.server)&&profiles.load().username.equals(p.username),"Invitation changed customer's source");
+            test.runOnMainSync(()->{
+                try{
+                    new EntitlementStore(c).applyServer(new org.json.JSONObject("{\"level\":\"pro_trial\",\"status\":\"trial_active\",\"test_access\":true}"));
+                    a.updateHeaderBadges();check("Test".equals(a.planBadge.getText().toString()),"Test badge missing or has ordinary countdown");
+                }catch(Exception e){throw new AssertionError(e);}
+            });
+            test.waitForIdleSync();
+            image=test.getUiAutomation().takeScreenshot();
+            try(FileOutputStream out=new FileOutputStream(new File(dir,"test-badge.png"))){image.compress(Bitmap.CompressFormat.PNG,100,out);}image.recycle();
+            test.runOnMainSync(()->{
+                try{
+                    new EntitlementStore(c).applyServer(new org.json.JSONObject("{\"level\":\"pro\",\"status\":\"active\"}"));
+                    a.updateHeaderBadges();check("PRO".equals(a.planBadge.getText().toString()),"Approved reward kept Test badge");
+                    new EntitlementStore(c).applyServer(new org.json.JSONObject("{\"level\":\"pro_trial\",\"expires_at_ms\":1}"));
+                    check(!new EntitlementStore(c).isPro(),"Expired ordinary trial retained Pro access");
+                    a.updateHeaderBadges();check("LIGHT".equals(a.planBadge.getText().toString()),"Expired ordinary trial did not show Light");
+                }catch(Exception e){throw new AssertionError(e);}
+            });
             android.app.Instrumentation.ActivityMonitor monitor=test.addMonitor(PairingActivity.class.getName(),null,false);
             try{
                 test.runOnMainSync(()->{Button button=a.browseContainer.findViewWithTag("start_pro_trial");check(button!=null,"Home trial action missing");button.performClick();});

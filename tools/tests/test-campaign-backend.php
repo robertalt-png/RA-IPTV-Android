@@ -51,12 +51,17 @@ Fixture::$records[$p['device_id']]['trial_consent']=false;Fixture::refresh($p);c
 $failSave=true;Fixture::refresh($p);check($wpdb->rows[1]['expires_at']!==null,'Failed reservation extended rights');$failSave=false;
 for($uid=1;$uid<=26;$uid++){Fixture::refresh(device($uid));check(Fixture::test_campaign_status()['enrolled']===min($uid,25),'Cap violated');}
 check($wpdb->rows[26]['expires_at']!==null&&!Fixture::access($wpdb->rows[26]),'26th customer got tester rights');
+check(abs(strtotime($wpdb->rows[26]['expires_at'].' UTC')-time()-14*86400)<5,'Ordinary trial changed from 14 days');
 check(Fixture::access($wpdb->rows[1])&&$wpdb->rows[1]['expires_at']===null,'Test does not last through campaign');
 Fixture::refresh(device(1,100));check(Fixture::test_campaign_status()['enrolled']===25,'Second device consumed another slot');
 check(!command('approve')->data['ok'],'Approval lacked explicit confirmation');
 check(!command('approve','true')->data['ok'],'String approval accepted');
 $wpdb->rows[2]['status']='revoked';$wpdb->rows[3]['level']='pro';$wpdb->rows[3]['plan']='lifetime';$wpdb->rows[3]['expires_at']=null;
-check(command('approve',true)->data['ok'],'Approval failed');
+$wpdb->failWrite=true;check(command('approve',true)->data['ok'],'Approval failed');
+$approved=$options['sunnyiptv_test_campaign_v1']['approved_at'];
+check($wpdb->rows[1]['level']==='pro_trial'&&Fixture::access($wpdb->rows[1]),'Failed conversion removed Test access');
+$wpdb->failWrite=false;Fixture::test_campaign_retry();
+check($options['sunnyiptv_test_campaign_v1']['approved_at']===$approved,'Retry reset reward start');
 $start=$options['sunnyiptv_test_campaign_v1']['approved_at'];
 check($wpdb->rows[1]['level']==='pro'&&$wpdb->rows[1]['plan']==='annual','Tester not converted');
 check(strtotime($wpdb->rows[1]['expires_at'].' UTC')-$start===365*86400,'Reward not exactly 365 days');
