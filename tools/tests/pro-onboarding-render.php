@@ -1,5 +1,6 @@
 <?php
 define('ABSPATH',__DIR__.'/');
+define('MINUTE_IN_SECONDS',60);
 $case=$argv[1]??'anonymous';
 $session=['name'=>'QA phone','lang'=>'nl','state'=>'pending','flow'=>'pro','account_user_id'=>7];
 if($case==='complete')$session['state']='complete';
@@ -24,6 +25,7 @@ class Fixture {
     use SunnyIPTV_Pro_Onboarding;
     static function pairing_code($s){return $s==='AB23'?$s:'';}
     static function pairing_load($code){global $session;return $session;}
+    static function pairing_rate(...$args){global $case;return $case!=='limited';}
     static function free_customer($id){global $case;return $case!=='administrator';}
     static function render(){self::pro_onboarding_page();}
 }

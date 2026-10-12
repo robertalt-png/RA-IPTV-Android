@@ -13,7 +13,8 @@ trait SunnyIPTV_Pro_Onboarding {
         header("Content-Security-Policy: frame-ancestors 'none'");
         do_action('litespeed_control_set_nocache', 'SunnyIPTV Pro activation');
         $code=self::pairing_code(is_string($_GET['code']??null)?$_GET['code']:'');
-        $session=self::pairing_load($code);
+        $allowed=self::pairing_rate('web_lookup',(string)($_SERVER['REMOTE_ADDR']??'unknown'),15,5*MINUTE_IN_SECONDS);
+        $session=$allowed?self::pairing_load($code):null;
         $lang=$session['lang']??(in_array($_GET['lang']??null,['nl','en','de'],true)?$_GET['lang']:'en');
         $t=static fn(string $nl,string $en,string $de):string=>$lang==='nl'?$nl:($lang==='de'?$de:$en);
         $valid=$session&&($session['flow']??'')==='pro';

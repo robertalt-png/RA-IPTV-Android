@@ -37,8 +37,11 @@ public final class PairingClient {
 
     public Session start()throws Exception{
         JSONObject body=new JSONObject().put("device_name",Build.MANUFACTURER+" "+Build.MODEL).put("pairing_version",3).put("lang",com.nenotv.player.storage.SettingsStore.language(context));
-        if(context instanceof android.app.Activity&&((android.app.Activity)context).getIntent().getBooleanExtra("pro_activation",false))body.put("pairing_version",4).put("flow","pro");
-        return new Session(client.request("pairing/start",body));
+        boolean pro=context instanceof android.app.Activity&&((android.app.Activity)context).getIntent().getBooleanExtra("pro_activation",false);
+        if(pro)body.put("pairing_version",4).put("flow","pro");
+        Session session=new Session(client.request("pairing/start",body));
+        if(pro&&!"pro".equals(Uri.parse(session.url).getQueryParameter("flow")))throw new IOException("Activation service not ready");
+        return session;
     }
     public String status(Session session)throws Exception{
         if(session.expired())return "expired";

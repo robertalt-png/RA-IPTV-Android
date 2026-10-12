@@ -1,7 +1,7 @@
 <?php
 $checks=0;
 function check($value,$message){global $checks;if(!$value)throw new RuntimeException($message);$checks++;}
-foreach(['anonymous','customer','administrator','complete','foreign','expired','legacy'] as $case){
+foreach(['anonymous','customer','administrator','complete','foreign','expired','legacy','limited'] as $case){
     $command=escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/pro-onboarding-render.php').' '.escapeshellarg($case);
     $html=shell_exec($command);
     check(is_string($html)&&str_contains($html,'Pro activeren'),$case.' did not render');
