@@ -7,6 +7,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: pro-readiness-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
 jobs:
   backend:
     runs-on: ubuntu-24.04
@@ -34,9 +37,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-      - uses: android-actions/setup-android@v3
       - name: Android SDK
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
       - uses: actions/cache@v4
         id: audio
         with:
@@ -45,7 +49,8 @@ jobs:
       - name: Prepare licensed audio decoder
         if: steps.audio.outputs.cache-hit != 'true'
         run: |
-          sdkmanager "ndk;26.1.10909125" "cmake;3.22.1" >/dev/null
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          "$SDKMANAGER" "ndk;26.1.10909125" "cmake;3.22.1" >/dev/null
           NDK_PATH="$ANDROID_HOME/ndk/26.1.10909125" bash tools/build-ffmpeg-audio.sh android/app/libs/ffmpeg
       - name: Compile customer app and instrumentation
         working-directory: android
