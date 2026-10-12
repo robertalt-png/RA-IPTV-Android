@@ -21,10 +21,13 @@ jobs:
           php -l server/nenotv-entitlement-core.php
           php -l server/sunnyiptv-play-billing.php
           php -l server/sunnyiptv-feedback.php
+          php -l server/sunnyiptv-pro-onboarding.php
+          php -l server/mu-plugins/sunnyiptv-customer-pairing.php
           php tools/tests/play-billing-backend.php
           php tools/tests/play-billing-backend.php action-scheduler
           php tools/tests/pairing-backend.php
           php tools/tests/feedback-backend.php
+          php tools/tests/pro-onboarding-backend.php
   android:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -57,7 +60,30 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:bundleRelease
       - uses: actions/upload-artifact@v4
         with:
-          name: SunnyIPTV-0147-debug-validation
+          name: SunnyIPTV-0148-debug-validation
           path: |
             android/**/build/outputs/apk/**/*.apk
             android/app/build/outputs/bundle/release/*.aab
+      - name: Enable emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - name: Test simplified phone activation
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -memory 2048
+          script: |
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            adb install -r android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb shell am instrument -w com.nenotv.player.test/com.nenotv.player.ProFlowInstrumentation | tee simple-pro-tests.txt
+            grep -q 'SUNNYIPTV_SIMPLE_PRO=passed' simple-pro-tests.txt
+            adb pull /sdcard/Android/data/com.nenotv.player/files/qa simple-pro-screenshots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: SunnyIPTV-0148-phone-tests
+          path: |
+            simple-pro-tests.txt
+            simple-pro-screenshots

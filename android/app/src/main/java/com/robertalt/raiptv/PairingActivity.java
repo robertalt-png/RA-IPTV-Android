@@ -49,8 +49,12 @@ public final class PairingActivity extends Activity {
     TextView label(String value,int size){TextView view=new TextView(this);view.setText(value);view.setTextSize(size);view.setTextColor(0xFFF7F8FA);view.setGravity(Gravity.CENTER);return view;}
     Button button(String key){Button view=new Button(this);view.setText(text(key));view.setAllCaps(false);view.setTextColor(0xFFF7F8FA);view.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));view.setMinHeight(dp(52));return view;}
 
-    String linkLabel(){String language=com.nenotv.player.storage.SettingsStore.language(this);return "nl".equals(language)?"Klik hier om te koppelen":"de".equals(language)?"Hier klicken zum Verbinden":"Tap here to link";}
+    boolean proFlow(){return getIntent().getBooleanExtra("pro_activation",false);}
+    boolean television(){android.app.UiModeManager mode=(android.app.UiModeManager)getSystemService(UI_MODE_SERVICE);return mode!=null&&mode.getCurrentModeType()==android.content.res.Configuration.UI_MODE_TYPE_TELEVISION;}
+    String words(String nl,String en,String de){return FamilyUi.text(this,nl,en,de);}
+    String linkLabel(){if(proFlow())return words("Ga door","Continue","Weiter");String language=com.nenotv.player.storage.SettingsStore.language(this);return "nl".equals(language)?"Klik hier om te koppelen":"de".equals(language)?"Hier klicken zum Verbinden":"Tap here to link";}
     void showCode(String value){
+        if(proFlow()&&!television()){open.setText(linkLabel());return;}
         String heading=linkLabel();
         android.text.SpannableString label=new android.text.SpannableString(heading+"\n"+value);
         label.setSpan(new android.text.style.AbsoluteSizeSpan(36,true),heading.length()+1,label.length(),android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
@@ -59,7 +63,7 @@ public final class PairingActivity extends Activity {
     void openPairing(){
         if(destroyed||complete||session==null||com.nenotv.player.storage.FamilyStore.active(this))return;
         if(session.expired()){expire();return;}
-        try{browserHandoff=true;browserOpener.open(this,session.url);}catch(Exception e){status.setText(text("server_unavailable"));}
+        try{browserHandoff=true;browserOpener.open(this,session.url);}catch(Exception e){browserHandoff=false;status.setText(text("server_unavailable"));}
     }
 
     boolean firstRun(){return getIntent().getBooleanExtra("first_run",false);}
@@ -80,22 +84,22 @@ public final class PairingActivity extends Activity {
         super.onCreate(saved);if(com.nenotv.player.storage.FamilyStore.active(this)){FamilyUi.blocked(this);finish();return;}client=factory.create(this);
         ScrollView scroll=new ScrollView(this);scroll.setBackgroundColor(0xFF07090D);
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setGravity(Gravity.CENTER_HORIZONTAL);box.setPadding(dp(18),dp(18),dp(18),dp(24));scroll.addView(box);
-        TextView title=label(text("link_my_nenotv"),24);box.addView(title,new LinearLayout.LayoutParams(-1,-2));
+        TextView title=label(proFlow()?words("Pro activeren","Activate Pro","Pro aktivieren"):text("link_my_nenotv"),24);box.addView(title,new LinearLayout.LayoutParams(-1,-2));
         qr=new ImageView(this);qr.setContentDescription(text("pair_qr"));qr.setVisibility(android.view.View.GONE);
         LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(dp(220),dp(220));imageParams.topMargin=dp(18);imageParams.bottomMargin=dp(12);box.addView(qr,imageParams);
-        TextView instructions=label("nl".equals(com.nenotv.player.storage.SettingsStore.language(this))?"Tik op de knop om te koppelen, of scan de QR-code met uw telefooncamera.":"de".equals(com.nenotv.player.storage.SettingsStore.language(this))?"Tippe zum Verbinden auf die Schaltfl\u00e4che oder scanne den QR-Code mit deiner Handykamera.":"Tap the button to link, or scan the QR code with your phone camera.",18);box.addView(instructions,new LinearLayout.LayoutParams(-1,-2));
+        TextView instructions=label(proFlow()&&!television()?words("Aanmelden","Sign in","Anmelden"):"nl".equals(com.nenotv.player.storage.SettingsStore.language(this))?"Tik op de knop om te koppelen, of scan de QR-code met uw telefooncamera.":"de".equals(com.nenotv.player.storage.SettingsStore.language(this))?"Tippe zum Verbinden auf die Schaltfl\u00e4che oder scanne den QR-Code mit deiner Handykamera.":"Tap the button to link, or scan the QR code with your phone camera.",18);box.addView(instructions,new LinearLayout.LayoutParams(-1,-2));
         open=button("open_my_nenotv");code=open;open.setSaveEnabled(false);open.setText(linkLabel());open.setTextSize(20);open.setTypeface(null,android.graphics.Typeface.BOLD);open.setGravity(Gravity.CENTER);open.setPadding(dp(12),dp(16),dp(12),dp(16));open.setMinHeight(dp(112));open.setTextColor(0xFF07090D);
         open.setBackgroundTintList(new android.content.res.ColorStateList(new int[][]{new int[]{-android.R.attr.state_enabled},new int[]{android.R.attr.state_focused},new int[]{}},new int[]{0xFF777777,0xFFFFFFFF,0xFFFFD600}));
         open.setEnabled(false);open.setOnClickListener(v->openPairing());LinearLayout.LayoutParams linkParams=new LinearLayout.LayoutParams(-1,-2);linkParams.topMargin=dp(16);linkParams.bottomMargin=dp(8);box.addView(open,linkParams);
         status=label(text("checking_status"),16);status.setPadding(0,dp(12),0,dp(12));status.setAccessibilityLiveRegion(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE);box.addView(status,new LinearLayout.LayoutParams(-1,-2));
-        retry=button("pair_new_code");retry.setOnClickListener(v->startPairing());box.addView(retry,new LinearLayout.LayoutParams(-1,-2));
+        retry=button("pair_new_code");if(proFlow()){retry.setText(words("Opnieuw proberen","Try again","Erneut versuchen"));retry.setVisibility(android.view.View.GONE);}retry.setOnClickListener(v->startPairing());box.addView(retry,new LinearLayout.LayoutParams(-1,-2));
         if(mandatoryLogin()){
             // Linking is optional: a guest starts in Light with an own or demo source and can link later under Account (which starts the trial).
             Button guest=button("try_without_account");guest.setTag("start_without_account");
             guest.setOnClickListener(v->{if(complete)return;new com.nenotv.player.storage.AccountLinkStore(this).startGuest();handler.removeCallbacks(poll);finishSetup();});
             box.addView(guest,new LinearLayout.LayoutParams(-1,-2));
         }
-        Button close=button("close");close.setOnClickListener(v->{if(mandatoryLogin())finishAffinity();else finish();});box.addView(close,new LinearLayout.LayoutParams(-1,-2));
+        Button close=button("close");if(proFlow())close.setText(words("Stop","Stop","Stop"));close.setOnClickListener(v->{if(mandatoryLogin())finishAffinity();else finish();});box.addView(close,new LinearLayout.LayoutParams(-1,-2));
         setContentView(scroll);ScreenInsets.browsing(this);UiText.applyDirection(this);
     }
 
@@ -133,13 +137,13 @@ public final class PairingActivity extends Activity {
                 PairingClient.Session created=client.start();Bitmap picture=qrBitmap(created.url);
                 runOnUiThread(()->{
                     if(destroyed||current!=generation){picture.recycle();return;}
-                    session=created;bitmap=picture;busy=false;qr.setImageBitmap(picture);qr.setVisibility(android.view.View.VISIBLE);
-                    showCode(created.displayCode());status.setText(text("pair_waiting"));open.setEnabled(true);retry.setEnabled(true);
+                    session=created;bitmap=picture;busy=false;qr.setImageBitmap(picture);qr.setVisibility(proFlow()&&!television()?android.view.View.GONE:android.view.View.VISIBLE);
+                    showCode(created.displayCode());status.setText(proFlow()?"":text("pair_waiting"));open.setEnabled(true);retry.setEnabled(true);if(proFlow())retry.setVisibility(android.view.View.GONE);
                     handler.postDelayed(()->{if(!destroyed&&!complete&&current==generation)expire();},Math.max(0,created.deadline-SystemClock.elapsedRealtime()));
                     if(getIntent().getBooleanExtra("auto_web",false)&&!openedWebsite){openedWebsite=true;try{browserOpener.open(this,created.url);}catch(Exception ignored){/* Android TV retains QR and the short code. */}}
                     if(resumed||backgroundAllowed())handler.postDelayed(poll,created.pollSeconds*1000L);
                 });
-            }catch(Exception error){runOnUiThread(()->{if(destroyed||current!=generation)return;busy=false;retry.setEnabled(true);status.setText(failureMessage(error));});}
+            }catch(Exception error){runOnUiThread(()->{if(destroyed||current!=generation)return;busy=false;retry.setEnabled(true);retry.setVisibility(android.view.View.VISIBLE);status.setText(failureMessage(error));});}
         });
     }
 
@@ -175,12 +179,14 @@ public final class PairingActivity extends Activity {
         });
     }
     void continueSetup(){
-        if(firstRun())localSetup();
+        if(proFlow()){setResult(RESULT_OK);finish();}
+        else if(firstRun())localSetup();
         else if(getIntent().getBooleanExtra("setup",false)){setResult(RESULT_OK);finish();}
         else if(!new com.nenotv.player.storage.SecureProfileStore(this).exists()){startActivity(new Intent(this,WebsiteSetupActivity.class));finish();}
     }
     void schedule(PairingClient.Session active){if((resumed||backgroundAllowed())&&!active.expired())handler.postDelayed(poll,active.pollSeconds*1000L);else if(active.expired())expire();}
-    void expire(){busy=false;session=null;clearCode();retry.setEnabled(true);status.setText(text("pair_expired"));}
+    void expire(){busy=false;generation++;session=null;clearCode();retry.setEnabled(true);retry.setVisibility(android.view.View.VISIBLE);status.setText(text("pair_expired"));}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);if(resumed&&session!=null&&!busy)handler.post(poll);}
     String failureMessage(Exception error){
         if(error instanceof EntitlementClient.ServiceException){
             String reason=((EntitlementClient.ServiceException)error).code;

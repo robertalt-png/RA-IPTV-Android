@@ -30,6 +30,14 @@
         <activity android:name=".PlayerActivity" android:configChanges="orientation|screenSize|keyboardHidden" android:exported="false" android:screenOrientation="sensorLandscape" android:supportsPictureInPicture="true" />
         <activity android:name=".ProfileActivity" android:exported="false" />
         <activity android:name=".PairingActivity" android:exported="false" />
+        <activity android:name=".ProReturnActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="nenotv" android:host="pro-return" />
+            </intent-filter>
+        </activity>
         <activity android:name=".WebsiteSetupActivity" android:exported="false" />
         <activity android:name=".AccountCheckActivity" android:exported="false" />
         <activity android:name=".SetupReturnActivity" android:exported="true">
