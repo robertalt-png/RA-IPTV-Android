@@ -99,7 +99,7 @@ public final class PairingActivity extends Activity {
             guest.setOnClickListener(v->{if(complete)return;new com.nenotv.player.storage.AccountLinkStore(this).startGuest();handler.removeCallbacks(poll);finishSetup();});
             box.addView(guest,new LinearLayout.LayoutParams(-1,-2));
         }
-        Button close=button("close");if(proFlow())close.setText(words("Stop","Stop","Stop"));close.setOnClickListener(v->{if(mandatoryLogin())finishAffinity();else finish();});box.addView(close,new LinearLayout.LayoutParams(-1,-2));
+        Button close=button("close");if(proFlow()){close.setText(words("Stop","Stop","Stop"));close.setTag("stop_pro");}close.setOnClickListener(v->{if(mandatoryLogin())finishAffinity();else finish();});box.addView(close,new LinearLayout.LayoutParams(-1,-2));
         setContentView(scroll);ScreenInsets.browsing(this);UiText.applyDirection(this);
     }
 

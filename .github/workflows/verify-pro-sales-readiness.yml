@@ -78,8 +78,8 @@ jobs:
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
             adb install -r android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             adb shell am instrument -w com.nenotv.player.test/com.nenotv.player.ProFlowInstrumentation | tee simple-pro-tests.txt
-            grep -q 'SUNNYIPTV_SIMPLE_PRO=passed' simple-pro-tests.txt
             adb pull /sdcard/Android/data/com.nenotv.player/files/qa simple-pro-screenshots
+            grep -q 'SUNNYIPTV_SIMPLE_PRO=passed' simple-pro-tests.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:

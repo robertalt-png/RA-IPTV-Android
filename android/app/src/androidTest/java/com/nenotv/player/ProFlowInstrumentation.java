@@ -50,8 +50,13 @@ public final class ProFlowInstrumentation extends Instrumentation {
                 }finally{runOnMainSync(a::finish);waitForIdleSync();}
             }
             PairingActivity stop=(PairingActivity)startActivitySync(new Intent(getTargetContext(),PairingActivity.class).putExtra("pro_activation",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            Thread.sleep(500);runOnMainSync(stop::finish);Thread.sleep(300);
-            check(cancelled.get()>0,"Stop did not cancel pending session");
+            AtomicBoolean stopReady=new AtomicBoolean();long until=SystemClock.elapsedRealtime()+5000;
+            while(!stopReady.get()&&SystemClock.elapsedRealtime()<until){runOnMainSync(()->stopReady.set(stop.session!=null&&!stop.busy));Thread.sleep(50);}
+            check(stopReady.get(),"Stop session not ready");int before=cancelled.get();
+            runOnMainSync(()->{Button button=stop.findViewById(android.R.id.content).findViewWithTag("stop_pro");check(button!=null,"Stop button missing");button.performClick();});
+            until=SystemClock.elapsedRealtime()+5000;
+            while(cancelled.get()==before&&SystemClock.elapsedRealtime()<until)Thread.sleep(50);
+            check(cancelled.get()>before,"Stop did not cancel pending session");
             result.putString("SUNNYIPTV_SIMPLE_PRO","passed");finish(Activity.RESULT_OK,result);
         }catch(Throwable failure){result.putString("SUNNYIPTV_SIMPLE_PRO","failed: "+failure);finish(Activity.RESULT_CANCELED,result);}
         finally{PairingActivity.factory=factory;PairingActivity.browserOpener=opener;SettingsStore.setPrimaryLanguage(getTargetContext(),language);}
