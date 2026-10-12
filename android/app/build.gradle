@@ -13,8 +13,8 @@ android {
         applicationId 'com.nenotv.player'
         minSdk 26
         targetSdk 36
-        versionCode 140
-        versionName '0.14.46'
+        versionCode 141
+        versionName '0.14.47'
         buildConfigField 'String', 'NENOTV_CAST_RECEIVER_ID', '"' + nenotvCastReceiverId + '"'
         buildConfigField 'boolean', 'LIGHT_BUILD', 'false'
     
@@ -55,3 +55,4 @@ dependencies {
     implementation 'com.google.android.gms:play-services-cast-framework:22.3.1'
     implementation 'androidx.fragment:fragment:1.8.9'
 }
+
