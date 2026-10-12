@@ -60,6 +60,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: SunnyIPTV-0149-debug-validation
+          overwrite: true
           path: |
             android/**/build/outputs/apk/**/*.apk
             android/app/build/outputs/bundle/release/*.aab
@@ -69,6 +70,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
+          target: google_apis
           arch: x86_64
           profile: pixel_2
           disable-animations: true
@@ -83,6 +85,7 @@ jobs:
         if: always()
         with:
           name: SunnyIPTV-0149-phone-tests
+          overwrite: true
           path: |
             simple-pro-tests.txt
             simple-pro-screenshots
