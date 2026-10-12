@@ -20,7 +20,8 @@ class WP_REST_Request {function __construct(public array $payload){}function get
 class WP_REST_Response {function __construct(public array $data,public int $status){}}
 class Db {public bool $available=true;function prepare($sql,...$args){return [$sql,$args];}function get_var($q){check(strlen($q[1][0])<=64,'lock too long');return $this->available?1:0;}}
 $wpdb=new Db();
-require __DIR__.'/nenotv-pairing.php';
+function add_query_arg($key,$value,$url){return $url.'?'.rawurlencode($key).'='.rawurlencode($value);}
+require __DIR__.'/../../../server/nenotv-pairing.php';
 class App {
  use NenoTV_Pairing;
  public static array $paid=[],$devices=[];public static bool $live=false;public static int $bindCalls=0;
@@ -36,7 +37,7 @@ class App {
 }
 function req($action,$payload){return App::pairing_request(new WP_REST_Request($payload),$action);}
 function approve($code){$_POST=['code'=>$code,'_wpnonce'=>'test'];try{App::pairing_approve();throw new LogicException('no redirect');}catch(Redirect $e){}}
-function start($id='test-device',$version=3){global $transients;$transients=[];$p=['device_id'=>$id,'device_key'=>str_repeat('k',43),'public_device_id'=>'TEST','platform'=>'android','device_name'=>'Test phone','pairing_version'=>$version];$r=req('start',$p);check($r->status===200,'start failed');return array_merge($p,['code'=>$r->data['code'],'poll_token'=>$r->data['poll_token']]);}
+function start($id='test-device',$version=3,$extra=[]){global $transients;$transients=[];$p=array_merge(['device_id'=>$id,'device_key'=>str_repeat('k',43),'public_device_id'=>'TEST','platform'=>'android','device_name'=>'Test phone','pairing_version'=>$version],$extra);$r=req('start',$p);check($r->status===200,'start failed');return array_merge($p,['code'=>$r->data['code'],'poll_token'=>$r->data['poll_token']]);}
 $p=['device_id'=>'old','device_key'=>str_repeat('k',43),'pairing_version'=>2];check(req('start',$p)->status===403,'old Pro launch gate bypassed');
 $p=start();check(req('status',$p)->data['state']==='pending','unapproved pairing completed');
 check(req('status',array_merge($p,['poll_token'=>str_repeat('a',64)]))->status===403,'wrong polling proof accepted');
@@ -61,6 +62,15 @@ $p=start('expired');$options['nenotv_pair_'.$p['code']]['expires']=time()-1;chec
 $p=start('failed-write');approve($p['code']);$write=false;check(req('status',$p)->status===403,'failed write granted access');$write=true;
 $wpdb->available=false;check(req('status',$p)->status===503,'missing session lock allowed access');$wpdb->available=true;
 $meta[1]['_sunnyiptv_free_devices']=array_fill_keys(range(1,10),['name'=>'test']);$p=start('limit');approve($p['code']);check(req('status',$p)->data['error']==='device_limit','free limit bypassed');$meta[1]['_sunnyiptv_free_devices']=[];
+$p=start('trial-consent',5,['flow'=>'pro','trial_intent'=>true]);
+try{approve($p['code']);throw new LogicException('Consent missing but approved');}catch(RuntimeException $e){check($e->getMessage()==='Confirm trial activation.','Trial requires explicit confirmation');}
+$_POST=['code'=>$p['code'],'_wpnonce'=>'test','trial_start'=>'1'];
+try{App::pairing_approve();}catch(Redirect $e){}
+$digest=hash_hmac('sha256',$p['device_id'],wp_salt('auth'));
+check(!isset($options['sunnyiptv_free_device_'.$digest]),'Web consent skipped private device proof');
+check(req('status',array_merge($p,['poll_token'=>str_repeat('x',64)]))->status===403,'Wrong proof set trial consent');
+check(req('status',$p)->status===200,'Consented trial pairing failed');
+check(($options['sunnyiptv_free_device_'.$digest]['trial_consent']??false)===true,'Approved consent not recorded on bound device');
 App::$live=true;App::$paid[1]=['id'=>1,'reference'=>'test','email'=>'one@example.invalid','status'=>'active','max_devices'=>1];
 $p=start('paid');approve($p['code']);$paid=req('status',$p);check($paid->status===200&&$paid->data['entitlement']['level']==='pro'&&$paid->data['account_link']['kind']==='paid','paid pairing regressed');
 $p2=start('paid-limit');approve($p2['code']);check(req('status',$p2)->data['error']==='device_limit','paid device limit bypassed');

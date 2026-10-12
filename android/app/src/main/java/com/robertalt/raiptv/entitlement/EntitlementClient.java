@@ -19,7 +19,8 @@ public final class EntitlementClient {
     EntitlementClient(Context c,String base){store=new EntitlementStore(c);this.base=base;}
 
     public JSONObject refresh() throws Exception {
-        if(store.isPro()&&!store.cloudAccountScope().isEmpty()){
+        // A trial must check for an approved tester reward before using the catalogue shortcut.
+        if(store.level()==EntitlementStore.Level.PRO&&!store.cloudAccountScope().isEmpty()){
             try{return post("catalog/access",new JSONObject().put("account_scope",store.cloudAccountScope()));}
             catch(ServiceException e){if(!java.util.Arrays.asList("pro_not_live","device_not_linked","pro_inactive","source_account_changed","device_key_mismatch","invalid_device").contains(e.code))throw e;}
             catch(MissingRoute e){/* Older websites continue through the original bridge. */}
@@ -46,6 +47,11 @@ public final class EntitlementClient {
     }
     /** Whether the server sells Pro through Google Play right now, and the trial length. No entitlement change. */
     public JSONObject offer() throws Exception { return request("entitlement/offer",new JSONObject()); }
+    public JSONObject feedback(String kind,String message,String requestId) throws Exception {
+        return request("feedback",new JSONObject().put("kind",kind).put("message",message)
+            .put("request_id",requestId).put("android_version",android.os.Build.VERSION.RELEASE)
+            .put("device_model",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL));
+    }
     public JSONObject redeemToken(String token) throws Exception {
         JSONObject body=new JSONObject();
         body.put("activation_token",token==null?"":token.trim());

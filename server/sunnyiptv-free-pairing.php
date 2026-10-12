@@ -61,13 +61,20 @@ trait SunnyIPTV_Free_Pairing {
                 $links = self::free_links($id);
                 if ($record && ((int)$record['user_id'] !== $id || !hash_equals($record['key_hash'],$session['key_hash']))) return ['ok'=>false,'error'=>'device_account_conflict'];
                 if (!$may_create && (!$record || !isset($links[$digest]))) return ['ok'=>false,'error'=>'device_not_linked'];
-                if ($record && isset($links[$digest])) return ['ok'=>true];
+                if ($record && isset($links[$digest])) {
+                    if(!empty($session['trial_requested'])&&$may_create&&!isset($record['trial_consent'])){
+                        $record['trial_consent']=true;
+                        if(!update_option('sunnyiptv_free_device_'.$digest,$record,false))return ['ok'=>false,'error'=>'device_write_failed'];
+                    }
+                    return ['ok'=>true];
+                }
                 if (count($links) >= 10) return ['ok'=>false,'error'=>'device_limit'];
                 $previous = $links;
                 $links[$digest] = ['name'=>$session['name'], 'linked_at'=>time()];
                 if (!update_user_meta($id,'_sunnyiptv_free_devices',$links) && self::free_links($id) !== $links) return ['ok'=>false,'error'=>'device_write_failed'];
                 $option = 'sunnyiptv_free_device_'.$digest;
                 $value = ['user_id'=>$id,'key_hash'=>$session['key_hash']];
+                if(!empty($session['trial_requested'])&&$may_create)$value['trial_consent']=true;
                 if (!$record && !add_option($option,$value,'',false)) {
                     update_user_meta($id,'_sunnyiptv_free_devices',$previous);
                     return ['ok'=>false,'error'=>'device_write_failed'];

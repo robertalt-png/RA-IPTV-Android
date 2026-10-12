@@ -1,10 +1,12 @@
 <?php
 if (!defined('ABSPATH')) exit;
 require_once __DIR__.'/sunnyiptv-free-pairing.php';
+require_once __DIR__.'/sunnyiptv-pro-onboarding.php';
 
 /** Device proof remains private to the app; the web code only requests account approval. */
 trait NenoTV_Pairing {
     use SunnyIPTV_Free_Pairing;
+    use SunnyIPTV_Pro_Onboarding;
     public static function pairing_hooks(): void {
         add_action('template_redirect', [__CLASS__, 'pairing_page'],0);
         add_action('admin_post_nenotv_pair_approve', [__CLASS__, 'pairing_approve']);
@@ -79,11 +81,14 @@ trait NenoTV_Pairing {
             $free=self::free_device($p);
             if($free&&!hash_equals($free['key_hash'],self::key_hash($p['device_key'])))return self::json(['ok'=>false,'error'=>'invalid_device'],403);
             $token=bin2hex(random_bytes(32));
+            $proFlow=(int)($raw['pairing_version']??1)>=4&&($raw['flow']??'')==='pro';
+            $duration=$proFlow?600:300;
             $session=[
                 'device_id'=>$p['device_id'], 'key_hash'=>self::key_hash($p['device_key']),
                 'public_device_id'=>$p['public_device_id']??'', 'platform'=>$p['platform']??'android',
                 'name'=>substr(sanitize_text_field(is_scalar($raw['device_name']??null)?(string)$raw['device_name']:'SunnyIPTV'),0,80),
-                'token_hash'=>self::key_hash($token), 'expires'=>time()+300,
+                'token_hash'=>self::key_hash($token), 'expires'=>time()+$duration, 'flow'=>$proFlow?'pro':'',
+                'trial_intent'=>$proFlow&&(int)($raw['pairing_version']??1)>=5&&($raw['trial_intent']??false)===true,
                 'entitlement_id'=>0, 'pairing_version'=>(int)($raw['pairing_version']??1), 'state'=>'pending', 'lang'=>in_array($raw['lang']??'',['nl','en','de'],true)?$raw['lang']:'en',
             ];
             $code='';
@@ -94,8 +99,8 @@ trait NenoTV_Pairing {
             }
             if($code==='')return self::json(['ok'=>false,'error'=>'pairing_unavailable'],503);
             wp_schedule_single_event($session['expires']+60,'nenotv_pair_cleanup',[$code]);
-            return self::json(['ok'=>true,'code'=>$code,'poll_token'=>$token,'expires_in'=>300,'poll_interval'=>5,
-                'verification_url'=>home_url('/nenotv-pair/?code='.$code.'&lang='.(in_array($raw['lang']??'',['nl','en','de'],true)?$raw['lang']:'en'))],200);
+            return self::json(['ok'=>true,'code'=>$code,'poll_token'=>$token,'expires_in'=>$duration,'poll_interval'=>5,
+                'verification_url'=>home_url('/nenotv-pair/?code='.$code.'&lang='.(in_array($raw['lang']??'',['nl','en','de'],true)?$raw['lang']:'en').($proFlow?'&flow=pro':''))],200);
         }
         $code=self::pairing_code(is_scalar($raw['code']??null)?(string)$raw['code']:'');
         $token=is_scalar($raw['poll_token']??null)?(string)$raw['poll_token']:'';
@@ -153,6 +158,8 @@ trait NenoTV_Pairing {
         try{
             $session=self::pairing_load($code);
             if(!$session||$session['state']!=='pending')wp_die('This pairing code is expired or already approved.');
+            if(!empty($session['trial_intent'])&&($_POST['trial_start']??'')!=='1')wp_die('Confirm trial activation.');
+            $session['trial_requested']=!empty($session['trial_intent'])&&($_POST['trial_start']??'')==='1';
             if((int)($session['pairing_version']??1)>=3&&!self::free_customer(get_current_user_id()))wp_die('Please use a customer account.');
             $ent=self::current_user_entitlement();
             if(is_array($ent)&&self::user_owns_entitlement($ent)&&self::entitlement_is_active($ent)&&self::app_service_live($ent)){
@@ -166,6 +173,7 @@ trait NenoTV_Pairing {
         }finally{self::pairing_unlock($code);}
         set_transient('nenotv_pair_notice_'.get_current_user_id(),1,MINUTE_IN_SECONDS);
         $next=(int)($session['pairing_version']??1)>=3 ? add_query_arg('lang',$session['lang']??'en',home_url('/sunnyiptv-setup/')) : home_url('/nenotv-pair/?approved=1&lang='.rawurlencode($session['lang']??'en'));
+        if(($session['flow']??'')==='pro')$next=home_url('/nenotv-pair/?code='.$code.'&lang='.rawurlencode($session['lang']??'en').'&flow=pro');
         wp_safe_redirect($next);exit;
     }
 
@@ -179,6 +187,7 @@ trait NenoTV_Pairing {
 
     public static function pairing_page(): void {
         if(trim((string)parse_url($_SERVER['REQUEST_URI']??'',PHP_URL_PATH),'/')!=='nenotv-pair')return;
+        if(($_GET['flow']??'')==='pro'){self::pro_onboarding_page();return;}
         nocache_headers();header('X-Robots-Tag: noindex, nofollow');
         header('X-Frame-Options: DENY');header("Content-Security-Policy: frame-ancestors 'none'");
         $enteredCode=self::pairing_code(is_scalar($_GET['code']??null)?(string)$_GET['code']:'');

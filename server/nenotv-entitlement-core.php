@@ -17,6 +17,8 @@ require_once __DIR__ . '/sunnyiptv-review-access.php';
 require_once __DIR__ . '/sunnyiptv-account-setup.php';
 require_once __DIR__ . '/sunnyiptv-play-billing.php';
 require_once __DIR__ . '/sunnyiptv-admin-api.php';
+require_once __DIR__ . '/sunnyiptv-feedback.php';
+require_once __DIR__ . '/sunnyiptv-test-campaign.php';
 
 final class NenoTV_Entitlement_Core {
     use NenoTV_Pairing;
@@ -26,6 +28,8 @@ final class NenoTV_Entitlement_Core {
     use SunnyIPTV_Account_Setup;
     use SunnyIPTV_Play_Billing;
     use SunnyIPTV_Admin_API;
+    use SunnyIPTV_Feedback;
+    use SunnyIPTV_Test_Campaign;
     const VERSION = '0.1.25';
     const DB_VERSION = '5';
     const NS = 'nenotv-backend/v1';
@@ -54,6 +58,8 @@ final class NenoTV_Entitlement_Core {
         self::account_setup_hooks();
         self::play_hooks();
         self::admin_api_hooks();
+        self::feedback_hooks();
+        self::test_campaign_hooks();
         add_action('wp_enqueue_scripts', static function(){wp_enqueue_style('nenotv-account-flow', plugins_url('account-flow.css',__FILE__), [], self::VERSION . '.' . (string)filemtime(__DIR__.'/account-flow.css'));});
         self::catalog_hooks();
         add_action('init', [__CLASS__, 'review_meta']);
@@ -748,6 +754,7 @@ final class NenoTV_Entitlement_Core {
             'level'=>'pro_trial',
             'status'=>$active ? 'trial_active' : 'trial_expired',
             'trial_state'=>$active ? 'active' : 'expired',
+            'test_access'=>self::test_campaign_access($row),
             'plan'=>'trial',
             'max_devices'=>(int)($row['max_devices'] ?? 1),
             'used_devices'=>self::count_active_devices((int)$row['id']),
@@ -1122,6 +1129,7 @@ final class NenoTV_Entitlement_Core {
         $dev=self::find_device($device_id);
         if (!$dev || ($dev['status']??'')!=='active') return new WP_Error('device_not_linked','This device is not linked to SunnyIPTV Pro.',['status'=>403]);
         if (!hash_equals((string)$dev['device_key_hash'],self::key_hash($device_key))) return new WP_Error('device_key_mismatch','This device identity could not be verified.',['status'=>403]);
+        self::play_recheck_device($p);
         $ent=self::find_by_id((int)$dev['entitlement_id']);
         if (!is_array($ent) || !self::entitlement_is_active($ent)) return new WP_Error('pro_inactive','SunnyIPTV Pro is not active for this device.',['status'=>403]);
         return ['device'=>$dev,'entitlement'=>$ent];

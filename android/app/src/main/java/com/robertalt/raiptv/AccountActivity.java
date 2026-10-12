@@ -21,6 +21,7 @@ public class AccountActivity extends Activity {
     Button refresh,trial,link;
     boolean requestRunning;
     long lastAutoRefresh;
+    boolean googlePlayTest;
     ExecutorService exec=Executors.newSingleThreadExecutor();
     EntitlementStore ent;
 
@@ -45,7 +46,7 @@ public class AccountActivity extends Activity {
         long now=SystemClock.elapsedRealtime();
         if(!requestRunning&&(lastAutoRefresh==0||now-lastAutoRefresh>60000)){lastAutoRefresh=now;refreshServer(true);
             // A paid purchase the server has not confirmed yet (network, app closed) is sent again; silent when there is none.
-            if(ent.level()!=EntitlementStore.Level.PRO)try{play().restore();}catch(RuntimeException noPlay){}}
+            try{play().restore();}catch(RuntimeException noPlay){}}
     }
 
     /** Input fields live in dialogs, but are created once so state and checks stay in one place. */
@@ -76,18 +77,12 @@ public class AccountActivity extends Activity {
         deviceText=new TextView(this);
 
         Tiles.Grid grid=new Tiles.Grid(this,box);
-        grid.add("🌐",myNenoLabel(),text("Apparaten, abonnement en tv-bron","Devices, subscription and TV source","Geräte, Abo und TV-Quelle"),false,v->openWeb(myNenoUrl()));
-        // Google Play policy: the app sells Pro only through Google Play and never links to a payment page.
-        if(ent.level()==EntitlementStore.Level.PRO)grid.add("⭐",ent.statusLabel(this),text("Bekijk je abonnement","View your subscription","Abo ansehen"),false,v->openWeb(myNenoUrl()));
-        else{
-            grid.add("🛒",T("buy_pro"),text("Solo of Multi, via Google Play","Solo or Multi, through Google Play","Solo oder Multi, über Google Play"),false,v->showBuyDialog());
-            // The trial starts automatically when this device is linked to an account (server: sunnyiptv_auto_trial).
-            if(!ent.isPro()&&!new AccountLinkStore(this).linked())grid.add("⭐",T("request_trial"),T("trial_by_pairing"),false,v->startActivity(new Intent(this,PairingActivity.class)));
-        }
-        grid.add("🔑",T("activation_code"),text("Code uit je e-mail invoeren","Enter the code from your email","Code aus deiner E-Mail eingeben"),false,v->showCodeDialog());
+        if(ent.level()!=EntitlementStore.Level.PRO)grid.add("🛒",text("Pro activeren","Activate Pro","Pro aktivieren"),text("Ga door","Continue","Weiter"),false,v->activatePro());
+        grid.add("🌐",myNenoLabel(),text("Account beheren","Manage account","Konto verwalten"),false,v->manageAccount());
         grid.add("📱",T("this_device"),T("device_code")+": "+ent.publicDeviceId(),false,v->showDeviceDialog());
-        if(!new AccountLinkStore(this).linked())grid.add("📲",T("pair_by_phone"),text("Koppel dit apparaat aan je account","Link this device to your account","Dieses Gerät mit deinem Konto verbinden"),false,v->startActivity(new Intent(this,PairingActivity.class)));
         grid.finish();
+
+        if(googlePlayTest)Tiles.link(this,box,text("Google Play-test","Google Play test","Google-Play-Test"),v->showGooglePlayTest());
 
         String language=SettingsStore.language(this);
         TextView privacy=Tiles.link(this,box,"nl".equals(language)?"Privacyverklaring":"de".equals(language)?"Datenschutzerklärung":"Privacy policy",v->openWeb(SiteEndpoints.privacyUrl(SettingsStore.language(this))));
@@ -96,6 +91,25 @@ public class AccountActivity extends Activity {
         deletion.setTag("account_deletion");
         refreshUi();
         UiText.applyDirection(this);
+    }
+
+    void activatePro(){
+        if(requestRunning)return;
+        if(!new AccountLinkStore(this).linked())startActivityForResult(new Intent(this,PairingActivity.class).putExtra("pro_activation",true),43);
+        else showBuyDialog();
+    }
+    void manageAccount(){
+        new AlertDialog.Builder(this).setTitle(myNenoLabel()).setItems(new String[]{text("Mijn account","My account","Mein Konto"),T("activation_code"),text("Aankopen herstellen","Restore purchases","Käufe wiederherstellen")},(d,w)->{
+            if(w==0)openWeb(myNenoUrl());else if(w==1)showCodeDialog();else play().restore();
+        }).setNegativeButton(T("close"),null).show();
+    }
+    @Override protected void onActivityResult(int request,int result,Intent data){
+        super.onActivityResult(request,result,data);
+        if(request==43&&result==RESULT_OK){
+            build();
+            if(ent.isPro())new AlertDialog.Builder(this).setTitle(ent.statusLabel(this)).setMessage(text("Je toegang is actief.","Your access is active.","Dein Zugang ist aktiv.")).setPositiveButton(text("Ga door","Continue","Weiter"),null).show();
+            else showBuyDialog();
+        }
     }
 
     PlayPurchases play;boolean wantProducts;
@@ -126,6 +140,7 @@ public class AccountActivity extends Activity {
         });
     }
     void showProducts(java.util.List<com.android.billingclient.api.ProductDetails> list,String error){
+        if(ent.level()==EntitlementStore.Level.PRO){build();return;}
         if(list.isEmpty()){new AlertDialog.Builder(this).setTitle(T("buy_pro")).setMessage(T(error.isEmpty()?"pro_coming_soon":error)).setPositiveButton(T("close"),null).show();return;}
         // One clear, tappable block per product (remote-friendly): plan, devices, price from Google Play and a yellow "Buy" button.
         LinearLayout l=dialogBox();l.setPadding(dp(16),dp(8),dp(16),dp(8));
@@ -177,15 +192,28 @@ public class AccountActivity extends Activity {
         new AlertDialog.Builder(this).setTitle(T("this_device")).setMessage(msg).setPositiveButton(android.R.string.ok,null).show();
     }
 
+    void showGooglePlayTest(){
+        String message=text(
+                "Je test SunnyIPTV via Google Play en geeft daar je feedback. Er zijn geen aparte SunnyIPTV-testopdrachten. Na onze goedkeuring krijgt je SunnyIPTV-account gratis 1 jaar Pro voor 1 apparaat. Je ontvangt een bedankmail zodra Pro actief is.",
+                "Test SunnyIPTV through Google Play and send your feedback there. There are no separate SunnyIPTV test tasks. After our approval, your SunnyIPTV account receives 1 free year of Pro for 1 device. You receive a thank-you email when Pro is active.",
+                "Teste SunnyIPTV über Google Play und gib dort dein Feedback. Es gibt keine separaten SunnyIPTV-Testaufgaben. Nach unserer Freigabe erhält dein SunnyIPTV-Konto 1 Jahr Pro kostenlos für 1 Gerät. Du erhältst eine Dankes-E-Mail, sobald Pro aktiv ist.");
+        new AlertDialog.Builder(this).setTitle(text("Google Play-test","Google Play test","Google-Play-Test"))
+                .setMessage(message)
+                .setPositiveButton(text("Feedback via Google Play","Feedback through Google Play","Feedback über Google Play"),
+                        (d,w)->openWeb("https://play.google.com/store/apps/details?id="+BuildConfig.APPLICATION_ID))
+                .setNegativeButton(T("close"),null).show();
+    }
+
     void refreshUi(){
         if(statusText==null)return;
         EntitlementStore.Level l=ent.level();
         statusText.setText(ent.statusLabel(this));
         String places="";
         if(ent.isPro()){
-            places="\n"+(l==EntitlementStore.Level.PRO_TRIAL?T("trial_plan"):ent.maxDevices()==1?"Solo":"Multi")+" · "+T("devices")+": "+ent.maxDevices();
+            places="\n"+(ent.isTester()?"Test":l==EntitlementStore.Level.PRO_TRIAL?T("trial_plan"):ent.maxDevices()==1?"Solo":"Multi")+" · "+T("devices")+": "+ent.maxDevices();
         }
-        if(l==EntitlementStore.Level.PRO_TRIAL)detailText.setText(T("trial_remaining")+": "+ent.trialDaysRemaining()+" "+T("days")+places);
+        if(ent.isTester())detailText.setText(places.trim());
+        else if(l==EntitlementStore.Level.PRO_TRIAL)detailText.setText(T("trial_remaining")+": "+ent.trialDaysRemaining()+" "+T("days")+places);
         else if(l==EntitlementStore.Level.PRO)detailText.setText(T("pro_active")+places);
         else detailText.setText(T("free_description"));
         deviceText.setText(T("device_code")+": "+ent.publicDeviceId());
@@ -216,7 +244,10 @@ public class AccountActivity extends Activity {
             // Background refresh on open: never blocks the buttons or shows "checking".
             quietRefreshRunning=true;
             exec.execute(()->{
-                boolean ok=false;try{new EntitlementClient(this).refresh();ok=true;}catch(Exception ignored){}
+                boolean ok=false;
+                EntitlementClient client=new EntitlementClient(this);
+                try{googlePlayTest=client.offer().optBoolean("google_play_test",false);ok=true;}catch(Exception ignored){}
+                try{client.refresh();ok=true;}catch(Exception ignored){}
                 final boolean updated=ok;
                 runOnUiThread(()->{quietRefreshRunning=false;if(updated&&!isFinishing()&&!isDestroyed()&&!requestRunning){build();ProModuleInstaller.syncEntitlement(this);}});
             });

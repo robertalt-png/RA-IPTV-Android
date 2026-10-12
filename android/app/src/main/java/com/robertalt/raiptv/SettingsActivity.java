@@ -85,6 +85,7 @@ public class SettingsActivity extends Activity {
                 g.add("👪", text("Familiefilter", "Family filter", "Familienfilter"), text("Iedereen, Familie of Kinderen", "Everyone, Family or Children", "Alle, Familie oder Kinder"), false, v -> startActivity(new Intent(this, FamilyActivity.class)));
                 g.add("🔧", text("Problemen oplossen", "Troubleshooting", "Fehlerbehebung"), text("Lijst vernieuwen, verbindingstest", "Refresh list, connection test", "Liste erneuern, Verbindungstest"), false, v -> open(TROUBLE));
                 g.add("👤", text("Account", "Account", "Konto"), text("Mijn account, uitloggen", "My account, sign out", "Mein Konto, abmelden"), false, v -> open(ACCOUNT));
+                g.add("💬", text("Feedback", "Feedback", "Feedback"), text("Klacht, opmerking of tip", "Complaint, comment or tip", "Beschwerde, Kommentar oder Tipp"), false, v -> startActivity(new Intent(this, FeedbackActivity.class)));
                 g.finish();
                 Tiles.note(this, box, footer());
                 Tiles.link(this, box, text("Open-sourcesoftware", "Open-source software", "Open-Source-Software"), v -> showOpenSource());

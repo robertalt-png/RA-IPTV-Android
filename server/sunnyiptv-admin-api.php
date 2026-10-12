@@ -166,6 +166,7 @@ trait SunnyIPTV_Admin_API {
             'entitlements' => $ent,
             'pro_devices' => $pro_devices,
             'switches' => $switches,
+            'test_campaign' => self::test_campaign_status(),
             'warnings' => array_values(array_unique($warnings)),
             'events' => $events,
         ], 200, ['Cache-Control' => 'no-store']);

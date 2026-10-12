@@ -1,0 +1,93 @@
+name: Verify Pro sales readiness
+on:
+  pull_request:
+    branches: [sunnyiptv-0.14.46]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pro-readiness-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP syntax and purchase lifecycle
+        run: |
+          php -l server/nenotv-entitlement-core.php
+          php -l server/sunnyiptv-play-billing.php
+          php -l server/sunnyiptv-feedback.php
+          php -l server/sunnyiptv-pro-onboarding.php
+          php -l server/sunnyiptv-test-campaign.php
+          php tools/tests/test-campaign-backend.php
+          php -l server/mu-plugins/sunnyiptv-customer-pairing.php
+          php tools/tests/play-billing-backend.php
+          php tools/tests/play-billing-backend.php action-scheduler
+          php tools/tests/pairing-backend.php
+          php tools/tests/feedback-backend.php
+          php tools/tests/pro-onboarding-backend.php
+          php tools/tests/free-account/test-free-pairing.php
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Android SDK
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+      - uses: actions/cache@v4
+        id: audio
+        with:
+          path: android/app/libs/ffmpeg
+          key: ffmpeg-audio-${{ hashFiles('tools/build-ffmpeg-audio.sh') }}
+      - name: Prepare licensed audio decoder
+        if: steps.audio.outputs.cache-hit != 'true'
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          "$SDKMANAGER" "ndk;26.1.10909125" "cmake;3.22.1" >/dev/null
+          NDK_PATH="$ANDROID_HOME/ndk/26.1.10909125" bash tools/build-ffmpeg-audio.sh android/app/libs/ffmpeg
+      - name: Compile customer app and instrumentation
+        working-directory: android
+        run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:bundleRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SunnyIPTV-0150-debug-validation
+          overwrite: true
+          path: |
+            android/**/build/outputs/apk/**/*.apk
+            android/app/build/outputs/bundle/release/*.aab
+      - name: Enable emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - name: Test simplified phone activation
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -memory 2048
+          script: |
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            adb install -r android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb shell am instrument -w com.nenotv.player.test/com.nenotv.player.ProFlowInstrumentation | tee simple-pro-tests.txt
+            adb pull /sdcard/Android/data/com.nenotv.player/files/qa simple-pro-screenshots
+            grep -q 'SUNNYIPTV_SIMPLE_PRO=passed' simple-pro-tests.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: SunnyIPTV-0150-phone-tests
+          overwrite: true
+          path: |
+            simple-pro-tests.txt
+            simple-pro-screenshots

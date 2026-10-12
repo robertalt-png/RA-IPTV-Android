@@ -36,6 +36,26 @@ public final class EntitlementClientChecks {
                 check(fixture.calls.get()==(fallback?2:1),"Unexpected activation request count");
             }
             com.nenotv.player.storage.EntitlementStore store=new com.nenotv.player.storage.EntitlementStore(context);
+            store.applyServer(new org.json.JSONObject("{\"level\":\"pro_trial\",\"status\":\"trial_active\",\"test_access\":true}"));
+            check(store.isTester()&&store.isPro()&&"TEST".equals(store.shortBadge()),"Verified test access missing");
+            for(String flag:new String[]{"false","\"true\"","1","null"}){
+                store.applyServer(new org.json.JSONObject("{\"level\":\"pro_trial\",\"test_access\":"+flag+"}"));
+                check(!store.isTester(),"Unverified test flag accepted");
+            }
+            store.applyServer(new org.json.JSONObject("{\"level\":\"free\",\"test_access\":true}"));
+            check(!store.isTester()&&!store.isPro(),"Test label granted access to Light");
+            store.applyServer(new org.json.JSONObject("{\"level\":\"pro\",\"test_access\":true}"));
+            check(!store.isTester()&&"PRO".equals(store.shortBadge()),"Paid Pro displayed as Test");
+            long rewardEnd=System.currentTimeMillis()+365L*86400000L;
+            prefs.edit().putString("level","PRO_TRIAL").putString("account_email","paired@example.invalid")
+                    .putLong("expires_at",System.currentTimeMillis()+86400000L).commit();
+            String reward="{\"ok\":true,\"entitlement\":{\"level\":\"pro\",\"status\":\"active\",\"email\":\"paired@example.invalid\",\"max_devices\":1,\"expires_at_ms\":"+rewardEnd+"}}";
+            try(Fixture fixture=new Fixture(200,reward,false)){
+                new EntitlementClient(context,fixture.url()).refresh();
+                check(store.level()==com.nenotv.player.storage.EntitlementStore.Level.PRO,"Approved test reward did not replace trial");
+                check(store.expiresAt()==rewardEnd&&store.maxDevices()==1,"Test reward lost expiry or Solo limit");
+                check(fixture.requests.size()==1&&!fixture.requests.get(0).has("account_scope"),"Trial skipped reward refresh through catalogue");
+            }
             for(String counts:new String[]{"3","0","5"}){
                 store.applyServer(new org.json.JSONObject("{\"level\":\"pro\",\"max_devices\":5,\"used_devices\":"+counts+"}"));
                 check(store.usedDevices()==Integer.parseInt(counts)&&store.freeDevices()==5-Integer.parseInt(counts),"Device places not persisted");

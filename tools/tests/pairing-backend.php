@@ -198,5 +198,19 @@ $shortPoll=array_merge($p,['code'=>$short->data['code'],'poll_token'=>$short->da
 check(request('status',$shortPoll)->data['state']==='pending','Short code bypassed approval');
 check(request('status',array_merge($shortPoll,['poll_token'=>str_repeat('f',64)]))->status===403,'Short code accepted without app proof');
 request('cancel',$shortPoll);
+$pro=request('start',array_merge($p,['pairing_version'=>4,'flow'=>'pro','lang'=>'nl']));
+check($pro->data['expires_in']===600,'Pro login has too little time');
+check(str_contains($pro->data['verification_url'],'&flow=pro'),'Pro login lost its journey');
+$proPoll=array_merge($p,['code'=>$pro->data['code'],'poll_token'=>$pro->data['poll_token']]);
+check(request('status',$proPoll)->data['state']==='pending','Pro flow auto-approved device');
+check(request('status',array_merge($proPoll,['poll_token'=>str_repeat('f',64)]))->status===403,'Pro flow bypassed private device proof');
+check($short->data['expires_in']===300&&!str_contains($short->data['verification_url'],'flow=pro'),'Legacy pairing changed');
+request('cancel',$proPoll);
+$trialStart=request('start',array_merge($p,['pairing_version'=>5,'flow'=>'pro','trial_intent'=>true]));
+$trialSession='nenotv_pair_'.$trialStart->data['code'];
+check($options[$trialSession]['trial_intent']===true,'Trial journey intent lost');
+$_POST=['code'=>$trialStart->data['code'],'_wpnonce'=>'fixture'];
+try{NenoTV_Entitlement_Core::pairing_approve();throw new LogicException('Trial approved without confirmation');}catch(RuntimeException $e){check($e->getMessage()==='Confirm trial activation.','Missing trial confirmation not rejected');}
+check($options[$trialSession]['state']==='pending'&&!isset($options[$trialSession]['trial_requested']),'Login alone requested trial');
 echo $checks." pairing/account authorization checks passed\n";
 
