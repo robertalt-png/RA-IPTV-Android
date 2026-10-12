@@ -163,6 +163,7 @@ final class SunnyIPTV_Customer_Pairing {
     public static function remember_pro(string $code, string $lang): void {
         self::private_headers();
         self::remember(['code'=>$code, 'lang'=>self::language($lang), 'kind'=>'pro']);
+        $_COOKIE[self::COOKIE]=self::encode($code,self::language($lang),time()+600,'pro');
     }
 
     public static function account_labels($translated, $original, $domain) {

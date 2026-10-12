@@ -19,6 +19,7 @@ foreach(['anonymous','customer','administrator','complete','foreign','expired','
 }
 define('ABSPATH',__DIR__.'/');
 function add_action(...$args){}function add_filter(...$args){}
+function nocache_headers(){}function do_action(...$args){}
 function wp_salt($kind){return 'fixture';}function wp_json_encode($s){return json_encode($s);}
 function add_query_arg($args,$url){return $url.'?'.http_build_query($args);}
 function home_url($s){return 'https://example.invalid'.$s;}
@@ -29,4 +30,6 @@ check(($context['kind']??'')==='pro','Login lost Pro context');
 check(str_contains(SunnyIPTV_Customer_Pairing::account_target($context),'flow=pro'),'Login returns to account dashboard');
 check(SunnyIPTV_Customer_Pairing::decode($cookie.'tampered')===[],'Forged context accepted');
 check(SunnyIPTV_Customer_Pairing::decode(SunnyIPTV_Customer_Pairing::encode('AB23','nl',time()-1,'pro'))===[],'Expired login context accepted');
+SunnyIPTV_Customer_Pairing::remember_pro('AB23','nl');
+check((SunnyIPTV_Customer_Pairing::decode($_COOKIE[SunnyIPTV_Customer_Pairing::COOKIE])['kind']??'')==='pro','First sign-in page lost its context');
 echo $checks." simplified activation checks passed\n";
