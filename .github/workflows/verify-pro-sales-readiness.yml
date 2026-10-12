@@ -54,8 +54,10 @@ jobs:
           NDK_PATH="$ANDROID_HOME/ndk/26.1.10909125" bash tools/build-ffmpeg-audio.sh android/app/libs/ffmpeg
       - name: Compile customer app and instrumentation
         working-directory: android
-        run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
+        run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:bundleRelease
       - uses: actions/upload-artifact@v4
         with:
           name: SunnyIPTV-0147-debug-validation
-          path: android/**/build/outputs/apk/**/*.apk
+          path: |
+            android/**/build/outputs/apk/**/*.apk
+            android/app/build/outputs/bundle/release/*.aab
