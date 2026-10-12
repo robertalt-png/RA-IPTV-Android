@@ -70,13 +70,14 @@ public final class EntitlementStore {
 
     public boolean isPro(){Level v=level();return v==Level.PRO||v==Level.PRO_TRIAL;}
     public boolean isTrial(){return level()==Level.PRO_TRIAL;}
+    public boolean isTester(){return isTrial()&&prefs.getBoolean("test_access",false);}
     public long trialDaysRemaining(){
         if(!isTrial())return 0;
         long left=Math.max(0,expiresAt()-System.currentTimeMillis());
         return Math.max(1,(left+86399999L)/86400000L);
     }
-    public String shortBadge(){Level v=level();return v==Level.PRO?"PRO":v==Level.PRO_TRIAL?"TRIAL":"LIGHT";}
-    public String statusLabel(Context c){Level v=level();return v==Level.PRO?"SunnyIPTV Pro":v==Level.PRO_TRIAL?com.nenotv.player.UiText.t(c,"nenotv_pro_trial"):"SunnyIPTV Light";}
+    public String shortBadge(){Level v=level();return v==Level.PRO?"PRO":isTester()?"TEST":v==Level.PRO_TRIAL?"TRIAL":"LIGHT";}
+    public String statusLabel(Context c){Level v=level();return v==Level.PRO?"SunnyIPTV Pro":isTester()?"SunnyIPTV Test":v==Level.PRO_TRIAL?com.nenotv.player.UiText.t(c,"nenotv_pro_trial"):"SunnyIPTV Light";}
 
     public void applyServer(JSONObject o){
         if(o==null)return;
@@ -90,6 +91,7 @@ public final class EntitlementStore {
         long expiry=readEpoch(o,"expires_at_ms",1L);
         if(expiry<=0)expiry=readEpoch(o,"expires_at",1000L);
         SharedPreferences.Editor ed=prefs.edit().putString("level",level.name()).putLong("expires_at",expiry);
+        ed.putBoolean("test_access",level==Level.PRO_TRIAL&&Boolean.TRUE.equals(o.opt("test_access")));
         if(o.has("email"))ed.putString("account_email",o.optString("email",""));
         if(o.has("account_email"))ed.putString("account_email",o.optString("account_email",""));
         int maximum=Math.max(1,Math.min(25,o.optInt("max_devices",1)));

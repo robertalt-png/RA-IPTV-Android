@@ -28,6 +28,7 @@ public final class ProFlowInstrumentation extends Instrumentation {
         };
         PairingActivity.browserOpener=(activity,url)->opened.incrementAndGet();
         try{
+            com.nenotv.player.entitlement.EntitlementClientChecks.run(getTargetContext());
             TrialJourneyChecks.run(this);
             for(String lang:new String[]{"nl","en","de"}){
                 SettingsStore.setPrimaryLanguage(getTargetContext(),lang);

@@ -267,7 +267,7 @@ void scheduleBackgroundIndex(){
 
     void updateHeaderBadges(){
         if(languageBadge!=null)languageBadge.setText(SettingsStore.primaryLanguage(this).toUpperCase(Locale.ROOT));
-        if(planBadge!=null){EntitlementStore e=new EntitlementStore(this);String b=DemoPolicy.isDemo(profiles==null?null:profiles.load())?"DEMO":e.shortBadge();if(e.isTrial())b=T("trial_badge")+" · "+e.trialDaysRemaining()+"d";planBadge.setText(b);boolean premium=e.isPro();planBadge.setTextColor(premium?0xFF0A0A0A:0xFFA7AFBC);planBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(premium?0xFFFFD400:0xFF1B2028));}
+        if(planBadge!=null){EntitlementStore e=new EntitlementStore(this);String b=DemoPolicy.isDemo(profiles==null?null:profiles.load())?"DEMO":e.shortBadge();if(e.isTester())b="Test";else if(e.isTrial())b=T("trial_badge")+" · "+e.trialDaysRemaining()+"d";planBadge.setText(b);boolean premium=e.isPro();planBadge.setTextColor(premium?0xFF0A0A0A:0xFFA7AFBC);planBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(premium?0xFFFFD400:0xFF1B2028));}
     }
     void showLanguageQuickMenu(){
         final String[] codes={"nl","en","de","fr","es","it","pt","tr","pl","ar"};

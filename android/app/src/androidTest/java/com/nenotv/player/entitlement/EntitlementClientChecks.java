@@ -36,6 +36,16 @@ public final class EntitlementClientChecks {
                 check(fixture.calls.get()==(fallback?2:1),"Unexpected activation request count");
             }
             com.nenotv.player.storage.EntitlementStore store=new com.nenotv.player.storage.EntitlementStore(context);
+            store.applyServer(new org.json.JSONObject("{\"level\":\"pro_trial\",\"status\":\"trial_active\",\"test_access\":true}"));
+            check(store.isTester()&&store.isPro()&&"TEST".equals(store.shortBadge()),"Verified test access missing");
+            for(String flag:new String[]{"false","\"true\"","1","null"}){
+                store.applyServer(new org.json.JSONObject("{\"level\":\"pro_trial\",\"test_access\":"+flag+"}"));
+                check(!store.isTester(),"Unverified test flag accepted");
+            }
+            store.applyServer(new org.json.JSONObject("{\"level\":\"free\",\"test_access\":true}"));
+            check(!store.isTester()&&!store.isPro(),"Test label granted access to Light");
+            store.applyServer(new org.json.JSONObject("{\"level\":\"pro\",\"test_access\":true}"));
+            check(!store.isTester()&&"PRO".equals(store.shortBadge()),"Paid Pro displayed as Test");
             long rewardEnd=System.currentTimeMillis()+365L*86400000L;
             prefs.edit().putString("level","PRO_TRIAL").putString("account_email","paired@example.invalid")
                     .putLong("expires_at",System.currentTimeMillis()+86400000L).commit();

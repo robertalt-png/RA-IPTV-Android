@@ -99,6 +99,7 @@ trait SunnyIPTV_Play_Billing {
         if ($action === 'play') return self::play_purchase($request, $p);
         if ($action === 'refresh') {
             self::auto_trial($p);
+            self::test_campaign_refresh($p);
             self::play_recheck_device($p);
         }
         return self::app_entitlement($request, $action, true);

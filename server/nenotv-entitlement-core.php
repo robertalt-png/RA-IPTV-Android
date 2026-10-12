@@ -18,6 +18,7 @@ require_once __DIR__ . '/sunnyiptv-account-setup.php';
 require_once __DIR__ . '/sunnyiptv-play-billing.php';
 require_once __DIR__ . '/sunnyiptv-admin-api.php';
 require_once __DIR__ . '/sunnyiptv-feedback.php';
+require_once __DIR__ . '/sunnyiptv-test-campaign.php';
 
 final class NenoTV_Entitlement_Core {
     use NenoTV_Pairing;
@@ -28,6 +29,7 @@ final class NenoTV_Entitlement_Core {
     use SunnyIPTV_Play_Billing;
     use SunnyIPTV_Admin_API;
     use SunnyIPTV_Feedback;
+    use SunnyIPTV_Test_Campaign;
     const VERSION = '0.1.25';
     const DB_VERSION = '5';
     const NS = 'nenotv-backend/v1';
@@ -57,6 +59,7 @@ final class NenoTV_Entitlement_Core {
         self::play_hooks();
         self::admin_api_hooks();
         self::feedback_hooks();
+        self::test_campaign_hooks();
         add_action('wp_enqueue_scripts', static function(){wp_enqueue_style('nenotv-account-flow', plugins_url('account-flow.css',__FILE__), [], self::VERSION . '.' . (string)filemtime(__DIR__.'/account-flow.css'));});
         self::catalog_hooks();
         add_action('init', [__CLASS__, 'review_meta']);
@@ -751,6 +754,7 @@ final class NenoTV_Entitlement_Core {
             'level'=>'pro_trial',
             'status'=>$active ? 'trial_active' : 'trial_expired',
             'trial_state'=>$active ? 'active' : 'expired',
+            'test_access'=>self::test_campaign_access($row),
             'plan'=>'trial',
             'max_devices'=>(int)($row['max_devices'] ?? 1),
             'used_devices'=>self::count_active_devices((int)$row['id']),

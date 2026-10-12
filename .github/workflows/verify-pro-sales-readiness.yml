@@ -20,6 +20,8 @@ jobs:
           php -l server/sunnyiptv-play-billing.php
           php -l server/sunnyiptv-feedback.php
           php -l server/sunnyiptv-pro-onboarding.php
+          php -l server/sunnyiptv-test-campaign.php
+          php tools/tests/test-campaign-backend.php
           php -l server/mu-plugins/sunnyiptv-customer-pairing.php
           php tools/tests/play-billing-backend.php
           php tools/tests/play-billing-backend.php action-scheduler
@@ -59,7 +61,7 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:bundleRelease
       - uses: actions/upload-artifact@v4
         with:
-          name: SunnyIPTV-0149-debug-validation
+          name: SunnyIPTV-0150-debug-validation
           overwrite: true
           path: |
             android/**/build/outputs/apk/**/*.apk
@@ -84,7 +86,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: SunnyIPTV-0149-phone-tests
+          name: SunnyIPTV-0150-phone-tests
           overwrite: true
           path: |
             simple-pro-tests.txt

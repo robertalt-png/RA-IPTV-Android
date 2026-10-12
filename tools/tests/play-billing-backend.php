@@ -82,8 +82,10 @@ class PlayDb {
     }
 }
 require __DIR__.'/../../server/sunnyiptv-play-billing.php';
+require __DIR__.'/../../server/sunnyiptv-test-campaign.php';
 class PlayFixture {
     use SunnyIPTV_Play_Billing;
+    use SunnyIPTV_Test_Campaign;
     public static array $devices=[];
     public static string $mode='live';
     public static bool $bindFailure=false;
