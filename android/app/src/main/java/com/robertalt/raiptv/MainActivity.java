@@ -1154,7 +1154,8 @@ void scheduleBackgroundIndex(){
         long now=android.os.SystemClock.elapsedRealtime();if(lastEntitlementRefresh!=0&&now-lastEntitlementRefresh<15*60_000L)return;lastEntitlementRefresh=now;
         boolean before=new EntitlementStore(this).isPro();
         try{new com.nenotv.player.entitlement.EntitlementClient(this).refresh();}catch(Exception unavailable){return;}
-        if(before!=new EntitlementStore(this).isPro())runOnUiThread(()->{if(isUiAlive()){ProModuleInstaller.syncEntitlement(this);updateHeaderBadges();}});
+        boolean accessChanged=before!=new EntitlementStore(this).isPro();
+        runOnUiThread(()->{if(isUiAlive()){if(accessChanged)ProModuleInstaller.syncEntitlement(this);updateHeaderBadges();}});
     }
     long guestRefreshAt;
     /** A guest has no account to check; the device entitlement (Play purchase) is refreshed at most every 15 minutes. */

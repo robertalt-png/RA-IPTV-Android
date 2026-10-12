@@ -44,6 +44,8 @@ final class TrialJourneyChecks {
                 }catch(Exception e){throw new AssertionError(e);}
             });
             test.waitForIdleSync();
+            Thread.sleep(200);
+            test.runOnMainSync(()->check("Test".equals(a.planBadge.getText().toString()),"Test badge did not survive drawing"));
             image=test.getUiAutomation().takeScreenshot();
             try(FileOutputStream out=new FileOutputStream(new File(dir,"test-badge.png"))){image.compress(Bitmap.CompressFormat.PNG,100,out);}image.recycle();
             test.runOnMainSync(()->{
