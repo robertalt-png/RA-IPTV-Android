@@ -19,7 +19,8 @@ public final class EntitlementClient {
     EntitlementClient(Context c,String base){store=new EntitlementStore(c);this.base=base;}
 
     public JSONObject refresh() throws Exception {
-        if(store.isPro()&&!store.cloudAccountScope().isEmpty()){
+        // A trial must check for an approved tester reward before using the catalogue shortcut.
+        if(store.level()==EntitlementStore.Level.PRO&&!store.cloudAccountScope().isEmpty()){
             try{return post("catalog/access",new JSONObject().put("account_scope",store.cloudAccountScope()));}
             catch(ServiceException e){if(!java.util.Arrays.asList("pro_not_live","device_not_linked","pro_inactive","source_account_changed","device_key_mismatch","invalid_device").contains(e.code))throw e;}
             catch(MissingRoute e){/* Older websites continue through the original bridge. */}
@@ -152,3 +153,4 @@ public final class EntitlementClient {
         }
     }
 }
+

@@ -36,6 +36,16 @@ public final class EntitlementClientChecks {
                 check(fixture.calls.get()==(fallback?2:1),"Unexpected activation request count");
             }
             com.nenotv.player.storage.EntitlementStore store=new com.nenotv.player.storage.EntitlementStore(context);
+            long rewardEnd=System.currentTimeMillis()+365L*86400000L;
+            prefs.edit().putString("level","PRO_TRIAL").putString("account_email","paired@example.invalid")
+                    .putLong("expires_at",System.currentTimeMillis()+86400000L).commit();
+            String reward="{\"ok\":true,\"entitlement\":{\"level\":\"pro\",\"status\":\"active\",\"email\":\"paired@example.invalid\",\"max_devices\":1,\"expires_at_ms\":"+rewardEnd+"}}";
+            try(Fixture fixture=new Fixture(200,reward,false)){
+                new EntitlementClient(context,fixture.url()).refresh();
+                check(store.level()==com.nenotv.player.storage.EntitlementStore.Level.PRO,"Approved test reward did not replace trial");
+                check(store.expiresAt()==rewardEnd&&store.maxDevices()==1,"Test reward lost expiry or Solo limit");
+                check(fixture.requests.size()==1&&!fixture.requests.get(0).has("account_scope"),"Trial skipped reward refresh through catalogue");
+            }
             for(String counts:new String[]{"3","0","5"}){
                 store.applyServer(new org.json.JSONObject("{\"level\":\"pro\",\"max_devices\":5,\"used_devices\":"+counts+"}"));
                 check(store.usedDevices()==Integer.parseInt(counts)&&store.freeDevices()==5-Integer.parseInt(counts),"Device places not persisted");
@@ -92,3 +102,4 @@ public final class EntitlementClientChecks {
         public void close()throws Exception{socket.close();worker.join(1000);}
     }
 }
+
