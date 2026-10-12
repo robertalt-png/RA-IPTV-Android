@@ -34,7 +34,8 @@ final class TrialJourneyChecks {
             });
             Bitmap image=test.getUiAutomation().takeScreenshot();File dir=new File(c.getExternalFilesDir(null),"qa");dir.mkdirs();
             try(FileOutputStream out=new FileOutputStream(new File(dir,"trial-invitation.png"))){image.compress(Bitmap.CompressFormat.PNG,100,out);}image.recycle();
-            test.runOnMainSync(()->{a.trialInvitation.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();a.maybeInviteTrial();check(!a.trialInvitation.isShowing(),"Later caused repeated invitation");});
+            test.runOnMainSync(()->a.trialInvitation.getButton(AlertDialog.BUTTON_NEGATIVE).performClick());test.waitForIdleSync();
+            test.runOnMainSync(()->{a.maybeInviteTrial();check(!a.trialInvitation.isShowing(),"Later caused repeated invitation");});
             check(profiles.load().server.equals(p.server)&&profiles.load().username.equals(p.username),"Invitation changed customer's source");
             android.app.Instrumentation.ActivityMonitor monitor=test.addMonitor(PairingActivity.class.getName(),null,false);
             try{

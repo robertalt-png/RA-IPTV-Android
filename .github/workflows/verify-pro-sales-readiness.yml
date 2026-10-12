@@ -28,6 +28,7 @@ jobs:
           php tools/tests/pairing-backend.php
           php tools/tests/feedback-backend.php
           php tools/tests/pro-onboarding-backend.php
+          php tools/tests/free-account/test-free-pairing.php
   android:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
