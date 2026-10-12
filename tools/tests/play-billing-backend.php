@@ -5,7 +5,7 @@ define('MINUTE_IN_SECONDS',60);
 define('HOUR_IN_SECONDS',3600);
 define('DAY_IN_SECONDS',86400);
 $checks=0; $options=['sunnyiptv_play_billing'=>'1','fixture_auth'=>['refresh_enc'=>'fixture']];
-$transients=[]; $jobs=[]; $events=[]; $google=[]; $requests=[]; $ackFailures=0; $networkFailure=false; $optionFailure=false; $locked=false;
+$transients=[]; $jobs=[]; $events=[]; $google=[]; $requests=[]; $ackFailures=0; $networkFailure=false; $optionFailure=false; $locked=false; $revokeDuringLookup=false;
 function check($ok,$message) { global $checks; if (!$ok) throw new RuntimeException($message); $checks++; }
 function add_action(...$args) {} function add_filter(...$args) {}
 function get_option($key,$default=false) { global $options; return $options[$key]??$default; }
@@ -27,11 +27,12 @@ function is_wp_error($r) { return isset($r['fixture_error']); }
 function wp_remote_retrieve_response_code($r) { return $r['code']; }
 function wp_remote_retrieve_body($r) { return json_encode($r['data']); }
 function wp_remote_request($url,$args) {
-    global $google,$requests,$ackFailures,$networkFailure;
+    global $google,$requests,$ackFailures,$networkFailure,$revokeDuringLookup,$wpdb;
     $requests[]=['url'=>$url,'method'=>$args['method']];
     if($networkFailure)return ['fixture_error'=>true];
     preg_match('~/tokens/([^/:]+)~',$url,$m); $token=rawurldecode($m[1]??'');
     if(!isset($google[$token]))return ['code'=>404,'data'=>[]];
+    if ($revokeDuringLookup && $args['method']==='GET') { $wpdb->rows[1]['status']='revoked'; $revokeDuringLookup=false; }
     if($args['method']==='POST') {
         if($ackFailures>0){$ackFailures--;return ['code'=>503,'data'=>[]];}
         if(isset($google[$token]['subscriptionState']))$google[$token]['acknowledgementState']='ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED';
@@ -63,7 +64,11 @@ class PlayDb {
     public function insert($table,$values) { if($this->writeFailure)return false; $values['id']=++$this->insert_id; $this->rows[$this->insert_id]=$values; return 1; }
     public function update($table,$values,$where) {
         if($this->writeFailure)return false;
-        if($table==='fixture_entitlements') { $id=$where['id']; if(!isset($this->rows[$id]))return 0; $this->rows[$id]=array_replace($this->rows[$id],$values); }
+        if($table==='fixture_entitlements') {
+            $id=$where['id'];if(!isset($this->rows[$id]))return 0;
+            foreach ($where as $key=>$value) if (($this->rows[$id][$key]??null)!==$value) return 0;
+            $this->rows[$id]=array_replace($this->rows[$id],$values);
+        }
         return 1;
     }
     public function get_col($query) {
@@ -202,4 +207,6 @@ $jobs=[];PlayFixture::play_maintenance();PlayFixture::play_maintenance();
 for($i=100;$i<205;$i++)check(isset($jobs['sunnyiptv_play_ack_retry:'.json_encode([$i])]),'Paged acknowledgement scan must not starve later purchases');
 $old=$wpdb->rows[1];PlayFixture::$mode='shadow';$before=count($requests);checkNow(1);
 check(count($requests)===$before&&$wpdb->rows[1]===$old,'Commercial switch respected');
+PlayFixture::$mode='live';$revokeDuringLookup=true;checkNow(1);
+check($wpdb->rows[1]['status']==='revoked','Concurrent admin revocation survives in-flight Google response');
 echo "Play billing backend: $checks checks passed (".(($argv[1]??'')==='action-scheduler'?'Action Scheduler':'WP-Cron').")\n";

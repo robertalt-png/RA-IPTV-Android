@@ -28,3 +28,7 @@ The server dispatcher runs every five minutes and schedules 50 entitlement check
 ## Local PHP runtime
 
 The bundled Windows PHP initially did not load OpenSSL. Enabling its existing OpenSSL extension makes the original pairing/account authorization suite pass. No change to the pairing logic was needed to resolve that test failure.
+
+Verified locally: 147 purchase lifecycle checks with WP-Cron fixtures and 147 with Action Scheduler fixtures; 85 pairing/account checks; 72 feedback checks. A concurrent administrator revocation is protected against a stale in-flight Google response by comparing the stored state before writing.
+
+The existing live Action Scheduler has completed jobs and no overdue pending jobs at inspection time. The new Play jobs have not been deployed or exercised on the live server. The release-notification monitor follows the internal Google Play track; that monitor does not establish public production eligibility.

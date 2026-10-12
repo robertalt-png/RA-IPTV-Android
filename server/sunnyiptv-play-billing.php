@@ -340,8 +340,14 @@ trait SunnyIPTV_Play_Billing {
     private static function play_apply_state(array $ent, bool $active, ?string $expires): void {
         global $wpdb;
         $status = $active ? 'active' : ($expires === null ? 'revoked' : 'expired');
-        $written = $wpdb->update(self::ent_table(),['status'=>$status,'expires_at'=>$expires,'updated_at'=>self::now_mysql()],['id'=>(int)$ent['id']]);
+        $where = ['id'=>(int)$ent['id'],'source'=>'play','status'=>$ent['status'],'expires_at'=>$ent['expires_at']??null];
+        if (isset($ent['updated_at'])) $where['updated_at'] = $ent['updated_at'];
+        $written = $wpdb->update(self::ent_table(),['status'=>$status,'expires_at'=>$expires,'updated_at'=>self::now_mysql()],$where);
         if ($written === false) throw new RuntimeException('entitlement_write_failed');
+        if ($written === 0) {
+            $current = self::find_by_id((int)$ent['id']);
+            if (!$current || $current['status'] !== $status || ($current['expires_at']??null) !== $expires) throw new RuntimeException('purchase_state_changed');
+        }
         if ($ent['status'] !== $status || ($ent['expires_at']??null) !== $expires) self::log_event('play_recheck',(string)$ent['reference'],(string)$ent['source_ref'],$active?'renewed':'expired','Google Play purchase state synchronized.');
     }
 
