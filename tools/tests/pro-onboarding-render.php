@@ -8,6 +8,7 @@ if($case==='foreign'){$session['state']='complete';$session['account_user_id']=9
 if($case==='expired')$session=null;
 if($case==='legacy')$session['flow']='';
 if($case==='trial')$session['trial_intent']=true;
+if($case==='trial_complete'){$session['trial_intent']=true;$session['state']='complete';}
 $_GET=['code'=>'AB23','flow'=>'pro','lang'=>'nl'];
 function nocache_headers(){}function do_action(...$args){}function status_header(...$args){}function get_header(){}function get_footer(){}
 function esc_html($s){return htmlspecialchars($s,ENT_QUOTES);}
@@ -19,6 +20,7 @@ function home_url($s){return 'https://example.invalid'.$s;}function admin_url($s
 function wp_logout_url($s){return home_url('/logout');}
 function wp_nonce_field($action,...$args){return '<input name="_wpnonce" value="fixture">';}
 function do_shortcode($s){return str_contains($s,'nextend')?'<button>Google</button>':'<form>E-mail</form>';}
+function wp_json_encode($value,...$flags){return json_encode($value,...$flags);}
 class NextendSocialLogin{public static $enabledProviders=['google'=>true];}
 class SunnyIPTV_Customer_Pairing{public static function remember_pro(...$args){}}
 require __DIR__.'/../../server/sunnyiptv-pro-onboarding.php';

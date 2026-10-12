@@ -1,7 +1,5 @@
 name: Verify Pro sales readiness
 on:
-  push:
-    branches: [codex/pro-sales-readiness-0147]
   pull_request:
     branches: [sunnyiptv-0.14.46]
   workflow_dispatch:

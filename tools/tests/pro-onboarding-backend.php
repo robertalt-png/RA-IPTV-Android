@@ -1,10 +1,10 @@
 <?php
 $checks=0;
 function check($value,$message){global $checks;if(!$value)throw new RuntimeException($message);$checks++;}
-foreach(['anonymous','customer','administrator','complete','foreign','expired','legacy','limited','trial'] as $case){
+foreach(['anonymous','customer','administrator','complete','foreign','expired','legacy','limited','trial','trial_complete'] as $case){
     $command=escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/pro-onboarding-render.php').' '.escapeshellarg($case);
     $html=shell_exec($command);
-    check(is_string($html)&&str_contains($html,$case==='trial'?'Mijn SunnyIPTV Pro':'Pro activeren'),$case.' did not render');
+    check(is_string($html)&&str_contains($html,str_starts_with($case,'trial')?'Mijn SunnyIPTV Pro':'Pro activeren'),$case.' did not render');
     check(str_contains($html,'stop=1'),$case.' has no stop action');
     if($case==='anonymous'){
         check(str_contains($html,'Google')&&str_contains($html,'Met e-mail'),'One sign-in entry missing');
@@ -16,6 +16,7 @@ foreach(['anonymous','customer','administrator','complete','foreign','expired','
     }else{
         check(!str_contains($html,'nenotv_pair_approve'),$case.' can approve a device');
         if($case==='complete')check(str_contains($html,'href="nenotv://pro-return"'),'Completed flow has no app return');
+        if($case==='trial_complete')check(str_contains($html,'home=1')&&str_contains($html,'location.replace'),'Trial does not return to app automatically');
     }
 }
 define('ABSPATH',__DIR__.'/');

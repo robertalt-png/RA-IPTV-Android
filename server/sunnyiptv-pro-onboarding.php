@@ -51,6 +51,7 @@ trait SunnyIPTV_Pro_Onboarding {
         }elseif((int)($session['account_user_id']??$session['approved_user_id']??0)===get_current_user_id()){
             echo '<p>'.esc_html($t('Je kunt terug naar de app.','You can return to the app.','Du kannst zur App zurückkehren.')).'</p>';
             echo '<a class="button" href="'.esc_url($return).'">'.esc_html($t('Ga door','Continue','Weiter')).'</a>';
+            if($trial)echo '<script>location.replace('.wp_json_encode($return,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT).');</script>';
         }else{
             echo '<p>'.esc_html($t('Start opnieuw vanuit de app.','Start again from the app.','Starte erneut in der App.')).'</p>';
         }

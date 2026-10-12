@@ -40,6 +40,8 @@ public class MainActivity extends Activity {
             .setNegativeButton(FamilyUi.text(this,"Later","Later","Später"),null).create();
         trialInvitation.setOnShowListener(d->sp.edit().putBoolean("trial_invitation_shown",true).apply());
         trialInvitation.show();
+        trialInvitation.getButton(AlertDialog.BUTTON_POSITIVE).setAllCaps(false);trialInvitation.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xFFFFD600);
+        trialInvitation.getButton(AlertDialog.BUTTON_NEGATIVE).setAllCaps(false);trialInvitation.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFFF7F8FA);
     }
     void addTrialEntry(){
         if(FamilyStore.active(this)||new EntitlementStore(this).isPro())return;
