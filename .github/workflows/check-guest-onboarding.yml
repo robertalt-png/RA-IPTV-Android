@@ -7,6 +7,7 @@ on:
       - 'android/app/src/main/java/com/robertalt/raiptv/MainActivity.java'
       - 'android/app/src/main/java/com/robertalt/raiptv/storage/AccountLinkStore.java'
       - 'android/app/src/main/java/com/robertalt/raiptv/AccountActivity.java'
+      - 'server/sunnyiptv-play-billing.php'
       - 'tools/test_guest_first_launch.py'
       - '.github/workflows/check-guest-onboarding.yml'
   pull_request:
@@ -14,6 +15,7 @@ on:
       - 'android/app/src/main/java/com/robertalt/raiptv/MainActivity.java'
       - 'android/app/src/main/java/com/robertalt/raiptv/storage/AccountLinkStore.java'
       - 'android/app/src/main/java/com/robertalt/raiptv/AccountActivity.java'
+      - 'server/sunnyiptv-play-billing.php'
       - 'tools/test_guest_first_launch.py'
       - '.github/workflows/check-guest-onboarding.yml'
   workflow_dispatch:

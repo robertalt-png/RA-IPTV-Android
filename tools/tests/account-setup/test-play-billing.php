@@ -192,6 +192,11 @@ check('shadow: offer says no Play billing',call('offer','tv-1')['play_billing']=
 check('shadow: no trial',call('refresh','tv-1')['entitlement']['level']==='free');
 check('shadow: purchase refused',call('play','tv-1',['product_id'=>'sunnyiptv_pro_solo','purchase_token'=>'t1'])['error']==='play_billing_off');
 fresh(); check('live: offer has Play billing and 14 days',call('offer','tv-1')['play_billing']===true && call('offer','tv-1')['trial_days']===14);
+check('ordinary device has no internal test mode',call('offer','tv-1')['internal_test_mode']===false);
+$GLOBALS['options']['sunnyiptv_internal_tester_devices']=[hash('sha256','tv-1')=>time()+600];
+check('allowlisted internal tester gets test mode',call('offer','tv-1')['internal_test_mode']===true);
+$GLOBALS['options']['sunnyiptv_internal_tester_devices']=[hash('sha256','tv-1')=>time()-1];
+check('expired internal tester does not get test mode',call('offer','tv-1')['internal_test_mode']===false);
 check('short device key refused',NenoTV_Entitlement_Core::app_entitlement_direct(new WP_REST_Request(['device_id'=>'x','device_key'=>'short']),'refresh')->status===400);
 
 // Automatic trial

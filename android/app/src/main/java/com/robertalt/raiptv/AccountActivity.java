@@ -230,12 +230,31 @@ public class AccountActivity extends Activity {
     }
 
     void handleIntent(Intent i){
+        if(i!=null&&i.getBooleanExtra("internal_test_mode",false)){i.removeExtra("internal_test_mode");showInternalTestDialog();return;}
+        if(i!=null&&i.getBooleanExtra("show_trial_invite",false)){i.removeExtra("show_trial_invite");showTrialDialog();return;}
         Uri u=i==null?null:i.getData();
         if(u==null||!"nenotv".equalsIgnoreCase(u.getScheme())||!"activate".equalsIgnoreCase(u.getHost()))return;
         String token=u.getQueryParameter("token");
         i.setData(null);
         if(token==null||token.trim().isEmpty())return;
         redeem(token);
+    }
+
+    void showInternalTestDialog(){
+        if(requestRunning)return;
+        busy(true);
+        exec.execute(()->{
+            boolean allowed=false;
+            try{allowed=new EntitlementClient(this).offer().optBoolean("internal_test_mode",false);}catch(Exception ignored){}
+            final boolean authorised=allowed;
+            runOnUiThread(()->{
+                if(isFinishing()||isDestroyed())return;
+                busy(false);
+                if(!authorised)return;
+                new AlertDialog.Builder(this).setTitle(T("pro_test_mode_title")).setMessage(T("pro_test_mode_body"))
+                    .setPositiveButton(T("pro_test_mode_continue"),(d,w)->showBuyDialog()).setNegativeButton(T("close"),null).show();
+            });
+        });
     }
 
     void redeemCode(){

@@ -1102,9 +1102,34 @@ void scheduleBackgroundIndex(){
                 if(!Thread.currentThread().isInterrupted())runOnUiThread(()->{if(isUiAlive()&&key.equals(profileKey()))status.setText(T("loading_interrupted"));});
             }finally{
                 indexCategoryBusy=false;synchronized(MainActivity.this){indexRefreshRunning=false;indexFuture=null;}final boolean done=allComplete;
-                runOnUiThread(()->{if(!isUiAlive()||!key.equals(profileKey()))return;if(done)hideIndexBanner("");else restoreFirstSyncBanner();if(indexRefreshRequested){indexRefreshRequested=false;refreshSearchIndex(true);}});
+                runOnUiThread(()->{if(!isUiAlive()||!key.equals(profileKey()))return;if(done){hideIndexBanner("");maybeShowFirstImportProInvite(key);}else restoreFirstSyncBanner();if(indexRefreshRequested){indexRefreshRequested=false;refreshSearchIndex(true);}});
             }
         });
+    }
+
+    void maybeShowFirstImportProInvite(String key){
+        if(key==null||key.isEmpty()||new EntitlementStore(this).isPro()||FamilyStore.active(this))return;
+        android.content.SharedPreferences sp=SettingsStore.prefs(this);String seen="pro_invite_first_import_"+key;
+        if(sp.getBoolean(seen,false))return;
+        new Thread(()->{
+            boolean internal=false;int days=14;
+            try{org.json.JSONObject offer=new com.nenotv.player.entitlement.EntitlementClient(this).offer();internal=offer.optBoolean("internal_test_mode",false);days=Math.max(1,offer.optInt("trial_days",14));}
+            catch(Exception ignored){}
+            final boolean testMode=internal;final int trialDays=days;
+            runOnUiThread(()->{if(isUiAlive()&&!activityPaused&&!playbackActive&&key.equals(profileKey())&&!new EntitlementStore(this).isPro()&&!sp.getBoolean(seen,false)){showFirstImportProInvite(testMode,trialDays);sp.edit().putBoolean(seen,true).apply();}});
+        },"SunnyIPTV-pro-invite").start();
+    }
+
+    void showFirstImportProInvite(boolean internalTestMode,int trialDays){
+        AlertDialog.Builder b=new AlertDialog.Builder(this).setTitle(T("pro_invite_title"))
+            .setMessage(T("pro_invite_body").replace("%d",Integer.toString(Math.max(1,trialDays))))
+            .setPositiveButton(T("pro_invite_trial"),(d,w)->{
+                Intent i=new Intent(this,new AccountLinkStore(this).linked()?AccountActivity.class:PairingActivity.class);
+                i.putExtra("show_trial_invite",true);startActivity(i);
+            })
+            .setNegativeButton(T("pro_invite_keep_light"),null);
+        if(internalTestMode)b.setNeutralButton(T("pro_test_mode_title"),(d,w)->startActivity(new Intent(this,AccountActivity.class).putExtra("internal_test_mode",true)));
+        b.show();
     }
 
     void waitWhilePaused(){while((activityPaused||playbackActive)&&!isFinishing()&&!isDestroyed()&&!Thread.currentThread().isInterrupted()){try{Thread.sleep(250);}catch(InterruptedException e){Thread.currentThread().interrupt();break;}}}

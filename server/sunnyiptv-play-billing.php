@@ -53,6 +53,7 @@ trait SunnyIPTV_Play_Billing {
 
         if ($action === 'offer') {
             return self::json(['ok' => true, 'play_billing' => self::play_billing_enabled(), 'trial_days' => self::trial_days(),
+                'internal_test_mode' => self::internal_test_mode_allowed($p),
                 'products' => array_keys(self::$play_products), 'mode' => self::mode()], 200);
         }
         if ($action === 'play') return self::play_purchase($request, $p);
@@ -91,6 +92,25 @@ trait SunnyIPTV_Play_Billing {
         $bound = self::bind_device($ent, $p);
         if (empty($bound['ok'])) { $wpdb->update(self::ent_table(), ['status' => 'revoked', 'updated_at' => self::now_mysql()], ['id' => (int)$ent['id']]); return; }
         self::log_event('auto_trial_started', (string)$ent['reference'], (string)$p['device_id'], 'success', 'Automatic ' . self::trial_days() . '-day trial at first pairing.');
+    }
+
+    /** Server-controlled UI flag only. Pro still requires a Google-verified test purchase or entitlement. */
+    private static function internal_test_mode_allowed(array $p): bool {
+        if (!self::play_billing_enabled()) return false;
+        $configured = get_option('sunnyiptv_internal_tester_devices', []);
+        if (!is_array($configured) || !$configured) return false;
+        $device_id = (string)($p['device_id'] ?? '');
+        $public_id = strtoupper((string)($p['public_device_id'] ?? ''));
+        $keys = [];
+        if ($device_id !== '') $keys[] = hash('sha256', $device_id);
+        if ($public_id !== '') $keys[] = $public_id;
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $configured)) continue;
+            $until = $configured[$key];
+            if ($until === true || $until === '1' || $until === 1) return true;
+            if (is_numeric($until) && (int)$until > time()) return true;
+        }
+        return false;
     }
 
     /** A quick account that adds an email later keeps its trial and Play entitlements linked to the same account. */
