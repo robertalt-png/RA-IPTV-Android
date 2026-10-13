@@ -1109,7 +1109,7 @@ void scheduleBackgroundIndex(){
 
     void maybeShowFirstImportProInvite(String key){
         if(key==null||key.isEmpty()||new EntitlementStore(this).isPro()||FamilyStore.active(this))return;
-        android.content.SharedPreferences sp=SettingsStore.prefs(this);String seen="pro_invite_first_import_"+key;
+        android.content.SharedPreferences sp=SettingsStore.prefs(this);String seen="pro_invite_first_import_seen";
         if(sp.getBoolean(seen,false))return;
         new Thread(()->{
             boolean internal=false;int days=14;

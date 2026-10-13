@@ -221,6 +221,8 @@ trait SunnyIPTV_Play_Billing {
     private static function play_purchase(WP_REST_Request $request, array $p): WP_REST_Response {
         if (!self::play_billing_enabled()) return self::json(['ok' => false, 'error' => 'play_billing_off'], 200);
         $raw = $request->get_json_params(); if (!is_array($raw)) $raw = [];
+        $internal_test = !empty($raw['internal_test_mode']);
+        if ($internal_test && !self::internal_test_mode_allowed($p)) return self::json(['ok' => false, 'error' => 'internal_test_not_allowed'], 200);
         $product = sanitize_key((string)($raw['product_id'] ?? ''));
         $token = substr(trim((string)($raw['purchase_token'] ?? '')), 0, 2000);
         if (!isset(self::$play_products[$product]) || $token === '' || !preg_match('/^[A-Za-z0-9._:-]+$/D', $token)) return self::json(['ok' => false, 'error' => 'invalid_purchase'], 400);
@@ -233,6 +235,7 @@ trait SunnyIPTV_Play_Billing {
             return self::json(['ok' => false, 'error' => in_array($e->getMessage(), ['play_not_connected', 'play_purchase_unknown', 'play_product_mismatch'], true) ? $e->getMessage() : 'play_unavailable'], 200);
         }
         if (!$active) return self::json(['ok' => false, 'error' => 'play_purchase_inactive'], 200);
+        if ($internal_test && !$test) return self::json(['ok' => false, 'error' => 'internal_test_purchase_required'], 200);
 
         global $wpdb;
         $conf = self::$play_products[$product];
