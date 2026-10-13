@@ -1,0 +1,31 @@
+name: SunnyIPTV guest onboarding checks
+
+on:
+  push:
+    branches: [sunnyiptv-guest-first-launch-20261013]
+    paths:
+      - 'android/app/src/main/java/com/robertalt/raiptv/MainActivity.java'
+      - 'android/app/src/main/java/com/robertalt/raiptv/storage/AccountLinkStore.java'
+      - 'android/app/src/main/java/com/robertalt/raiptv/AccountActivity.java'
+      - 'tools/test_guest_first_launch.py'
+      - '.github/workflows/check-guest-onboarding.yml'
+  pull_request:
+    paths:
+      - 'android/app/src/main/java/com/robertalt/raiptv/MainActivity.java'
+      - 'android/app/src/main/java/com/robertalt/raiptv/storage/AccountLinkStore.java'
+      - 'android/app/src/main/java/com/robertalt/raiptv/AccountActivity.java'
+      - 'tools/test_guest_first_launch.py'
+      - '.github/workflows/check-guest-onboarding.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify optional guest onboarding and preserved Pro entry
+        run: python3 -m unittest discover -s tools -p 'test_guest_first_launch.py' -v
