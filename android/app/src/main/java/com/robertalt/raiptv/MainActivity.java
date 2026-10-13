@@ -1123,6 +1123,13 @@ void scheduleBackgroundIndex(){
         },"SunnyIPTV-pro-invite").start();
     }
 
+    void onProModuleInstalled(){
+        updateHeaderBadges();
+        if(profileReady&&searchIndex!=null){String key=profileKey();
+            if(searchIndex.isComplete(key,"live")&&((provider instanceof M3uProvider&&!DemoPolicy.isDemo(profile))||(searchIndex.isComplete(key,"vod")&&searchIndex.isComplete(key,"series"))))maybeShowAutomaticProWelcome(key);
+        }
+    }
+
     void maybeShowAutomaticProWelcome(String key){
         EntitlementStore entitlement=new EntitlementStore(this);
         if(!entitlement.isTrial()||!ProModuleInstaller.isInstalled(this)||!new AccountLinkStore(this).linked())return;
