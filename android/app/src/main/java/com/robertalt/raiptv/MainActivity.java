@@ -1109,7 +1109,9 @@ void scheduleBackgroundIndex(){
     }
 
     void maybeShowFirstImportProInvite(String key){
-        if(key==null||key.isEmpty()||new EntitlementStore(this).isPro()||FamilyStore.active(this))return;
+        if(key==null||key.isEmpty()||FamilyStore.active(this))return;
+        if(new EntitlementStore(this).isPro()){maybeShowAutomaticProWelcome(key);return;}
+        if(new AccountLinkStore(this).linked())return;
         android.content.SharedPreferences sp=SettingsStore.prefs(this);String seen="pro_invite_first_import_seen";
         if(sp.getBoolean(seen,false))return;
         new Thread(()->{
@@ -1119,6 +1121,20 @@ void scheduleBackgroundIndex(){
             final boolean testMode=internal;final int trialDays=days;
             runOnUiThread(()->{if(isUiAlive()&&!activityPaused&&!playbackActive&&key.equals(profileKey())&&!new EntitlementStore(this).isPro()&&!sp.getBoolean(seen,false)){showFirstImportProInvite(testMode,trialDays);sp.edit().putBoolean(seen,true).apply();}});
         },"SunnyIPTV-pro-invite").start();
+    }
+
+    void maybeShowAutomaticProWelcome(String key){
+        EntitlementStore entitlement=new EntitlementStore(this);
+        if(!entitlement.isTrial()||!ProModuleInstaller.isInstalled(this)||!new AccountLinkStore(this).linked())return;
+        android.content.SharedPreferences prefs=SettingsStore.prefs(this);
+        String seen="automatic_pro_welcome_seen";
+        if(prefs.getBoolean(seen,false)||activityPaused||playbackActive||!isUiAlive()||!key.equals(profileKey()))return;
+        new AlertDialog.Builder(this)
+            .setTitle("Welkom bij SunnyIPTV Pro!")
+            .setMessage("Als welkomstgeschenk ontvang je 14 dagen gratis SunnyIPTV Pro!")
+            .setPositiveButton("Begin met kijken",(dialog,which)->{})
+            .setOnShowListener(dialog->prefs.edit().putBoolean(seen,true).apply())
+            .show();
     }
 
     AlertDialog firstImportProInviteDialog;
