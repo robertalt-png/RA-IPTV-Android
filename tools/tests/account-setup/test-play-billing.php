@@ -194,7 +194,11 @@ check('shadow: purchase refused',call('play','tv-1',['product_id'=>'sunnyiptv_pr
 fresh(); check('live: offer has Play billing and 14 days',call('offer','tv-1')['play_billing']===true && call('offer','tv-1')['trial_days']===14);
 check('ordinary device has no internal test mode',call('offer','tv-1')['internal_test_mode']===false);
 $GLOBALS['options']['sunnyiptv_internal_tester_devices']=[hash('sha256','tv-1')=>time()+600];
+check('unregistered device cannot claim internal test mode',call('offer','tv-1')['internal_test_mode']===false);
+link_device('tv-1',30);
 check('allowlisted internal tester gets test mode',call('offer','tv-1')['internal_test_mode']===true);
+check('forged device key cannot claim internal test mode',NenoTV_Entitlement_Core::app_entitlement_direct(new WP_REST_Request(['device_id'=>'tv-1','device_key'=>str_repeat('wrong',8)]),'offer')->data['internal_test_mode']===false);
+check('caller supplied public id cannot claim internal test mode',call('offer','ordinary',['public_device_id'=>'TESTER'])['internal_test_mode']===false);
 $GLOBALS['options']['sunnyiptv_internal_tester_devices']=[hash('sha256','tv-1')=>time()-1];
 check('expired internal tester does not get test mode',call('offer','tv-1')['internal_test_mode']===false);
 check('short device key refused',NenoTV_Entitlement_Core::app_entitlement_direct(new WP_REST_Request(['device_id'=>'x','device_key'=>'short']),'refresh')->status===400);

@@ -100,7 +100,11 @@ trait SunnyIPTV_Play_Billing {
         $configured = get_option('sunnyiptv_internal_tester_devices', []);
         if (!is_array($configured) || !$configured) return false;
         $device_id = (string)($p['device_id'] ?? '');
-        $public_id = strtoupper((string)($p['public_device_id'] ?? ''));
+        $device = self::find_device($device_id);
+        $linked = self::free_device($p);
+        $registered_hash = (string)($device['device_key_hash'] ?? $linked['key_hash'] ?? '');
+        if ($registered_hash === '' || !hash_equals($registered_hash, self::key_hash((string)($p['device_key'] ?? '')))) return false;
+        $public_id = strtoupper((string)($device['public_device_id'] ?? ''));
         $keys = [];
         if ($device_id !== '') $keys[] = hash('sha256', $device_id);
         if ($public_id !== '') $keys[] = $public_id;

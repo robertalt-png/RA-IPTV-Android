@@ -191,6 +191,29 @@ public final class UiInstrumentation extends ImportInstrumentation {
             result.putString("SUNNYIPTV_FAMILY_TESTS","passed");result.putInt("SUNNYIPTV_FAMILY_CHECK_COUNT",checks);
         }finally{for(Map.Entry<String,Map<String,?>> e:previous.entrySet())FamilyChecks.restore(c.getSharedPreferences(e.getKey(),Context.MODE_PRIVATE),e.getValue());SettingsStore.lockAdults();}
     }
+    void proInvitationChecks(MainActivity activity)throws Exception{
+        Context c=getTargetContext();
+        SharedPreferences rights=c.getSharedPreferences("nenotv_entitlement",Context.MODE_PRIVATE);
+        Map<String,?> before=new HashMap<>(rights.getAll());
+        String oldLanguage=SettingsStore.language(c);
+        try{
+            for(String language:new String[]{"nl","en","de","es","fr","it","pt","tr","pl","ar"}){
+                runOnMainSync(()->{
+                    if(activity.firstImportProInviteDialog!=null)activity.firstImportProInviteDialog.dismiss();
+                    SettingsStore.setPrimaryLanguage(c,language);
+                    AlertDialog dialog=activity.showFirstImportProInvite(false,14);
+                    check(dialog.isShowing(),"Pro invitation not visible: "+language);
+                    check(dialog.getButton(AlertDialog.BUTTON_POSITIVE).getText().toString().equals(UiText.t(language,"pro_invite_trial")),"Trial language incorrect: "+language);
+                    check(dialog.getButton(AlertDialog.BUTTON_NEGATIVE).getText().toString().equals(UiText.t(language,"pro_invite_keep_light")),"Light language incorrect: "+language);
+                    check(dialog.getButton(AlertDialog.BUTTON_NEUTRAL).getVisibility()!=View.VISIBLE,"Ordinary user sees internal Pro test button");
+                    dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();
+                    check(rights.getAll().equals(before),"Invitation changed entitlement rights");
+                });
+                waitForIdleSync();
+                runOnMainSync(()->check(!activity.firstImportProInviteDialog.isShowing(),"Stay in Light did not dismiss invitation"));
+            }
+        }finally{runOnMainSync(()->SettingsStore.setPrimaryLanguage(c,oldLanguage));}
+    }
     void onboarding(Bundle result)throws Exception{
         privacyAccess();
         boolean privacyBefore=com.nenotv.player.storage.ExtraPrivacyStore.answered(getTargetContext());
@@ -231,10 +254,10 @@ public final class UiInstrumentation extends ImportInstrumentation {
             SettingsStore.setPrimaryLanguage(c,"nl");
             ProfileActivity p=(ProfileActivity)startActivitySync(new Intent(c,ProfileActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));waitForIdleSync();
             runOnMainSync(()->{EditText smart=p.findViewById(android.R.id.content).findViewWithTag("source_smart_text");check(smart!=null&&smart.isShown(),"Paste box missing");
-                assertUnclippedText(p.xtream);smart.setText("Username: klant4471\nPassword: Zx81kT\nServer URL: http://best.example.net:25461");});
+                assertUnclippedText(p.xtream);smart.setText("Username: fixture-user\nPassword: fixture-password\nServer URL: http://best.example.net:25461");});
             Thread.sleep(800);waitForIdleSync();
             runOnMainSync(()->{check(p.xtream.isChecked()&&p.xtreamFields.getVisibility()==View.VISIBLE,"Recognised source did not select Xtream");
-                check("http://best.example.net:25461".equals(p.server.getText().toString())&&"klant4471".equals(p.user.getText().toString())&&"Zx81kT".equals(p.pass.getText().toString()),"Pasted provider details not filled in");
+                check("http://best.example.net:25461".equals(p.server.getText().toString())&&"fixture-user".equals(p.user.getText().toString())&&"fixture-password".equals(p.pass.getText().toString()),"Pasted provider details not filled in");
                 check(p.findViewById(android.R.id.content).findViewWithTag("source_show_password")!=null,"Show-password button missing");});
             snapshot("source-paste-nl");
             runOnMainSync(p::finish);
@@ -252,6 +275,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
             long deadline=SystemClock.elapsedRealtime()+10000;
             while(!visible.get()&&SystemClock.elapsedRealtime()<deadline){check(films.gridAdapter!=null,"Main screen closed at start: "+mainGate(c));runOnMainSync(()->visible.set(films.gridAdapter.getCount()>0));Thread.sleep(100);}
             check(visible.get(),"Built-in NenoTV films blocked as M3U live-only");
+            proInvitationChecks(films);
             snapshot("nenotv-offer-films");
         }finally{runOnMainSync(films::finish);SettingsStore.prefs(c).edit().putString("start_screen",previousStart).commit();}
         accountChecks();

@@ -1120,7 +1120,9 @@ void scheduleBackgroundIndex(){
         },"SunnyIPTV-pro-invite").start();
     }
 
-    void showFirstImportProInvite(boolean internalTestMode,int trialDays){
+    AlertDialog firstImportProInviteDialog;
+    AlertDialog showFirstImportProInvite(boolean internalTestMode,int trialDays){
+        if(firstImportProInviteDialog!=null&&firstImportProInviteDialog.isShowing())return firstImportProInviteDialog;
         AlertDialog.Builder b=new AlertDialog.Builder(this).setTitle(T("pro_invite_title"))
             .setMessage(T("pro_invite_body").replace("%d",Integer.toString(Math.max(1,trialDays))))
             .setPositiveButton(T("pro_invite_trial"),(d,w)->{
@@ -1129,7 +1131,8 @@ void scheduleBackgroundIndex(){
             })
             .setNegativeButton(T("pro_invite_keep_light"),null);
         if(internalTestMode)b.setNeutralButton(T("pro_test_mode_title"),(d,w)->startActivity(new Intent(this,AccountActivity.class).putExtra("internal_test_mode",true)));
-        b.show();
+        firstImportProInviteDialog=b.show();
+        return firstImportProInviteDialog;
     }
 
     void waitWhilePaused(){while((activityPaused||playbackActive)&&!isFinishing()&&!isDestroyed()&&!Thread.currentThread().isInterrupted()){try{Thread.sleep(250);}catch(InterruptedException e){Thread.currentThread().interrupt();break;}}}
@@ -1320,6 +1323,10 @@ TextView addInfoBlock(LinearLayout b,String l,String x){TextView h=new TextView(
     static Intent firstRunIntent(android.content.Context context){return new Intent(context,PairingActivity.class).putExtra("first_run",true).putExtra("mandatory_login",true);}
     @Override protected void onActivityResult(int r,int c,Intent d){super.onActivityResult(r,c,d);if(updateNotifier!=null)updateNotifier.onActivityResult(r,c);if(r==10&&profiles.exists())openProfile();}
     @Override protected void onResume(){super.onResume();if(isFinishing())return;AccountLinkStore resumedAccount=new AccountLinkStore(this);if(!resumedAccount.allowed()){startActivity(new Intent(this,AccountCheckActivity.class));finish();return;}if(resumedAccount.linked()&&!resumedAccount.recent())refreshAccountInBackground();else if(resumedAccount.linked())refreshLinkedEntitlementInBackground();else if(resumedAccount.guest())refreshGuestInBackground();long familyNow=FamilyStore.revision(this);if(familyRevision>=0&&familyRevision!=familyNow){familyRevision=familyNow;recreate();return;}familyRevision=familyNow;if(!isFinishing()){try{if(updateNotifier==null)updateNotifier=new PlayUpdateNotifier(this,()->{ProModuleInstaller.syncEntitlement(this);updateHeaderBadges();});updateNotifier.onResume();}catch(Exception ignored){}}if(provider!=null&&expireDemoProfileIfNeeded()){recreate();return;}ProModuleInstaller.syncEntitlement(this);playbackActive=false;activityPaused=false;updateHeaderBadges();if(!profileReady)return;restoreFirstSyncBanner();resumeIndexSoon();String nowLang=SettingsStore.language(this);if(appliedLanguage!=null&&!appliedLanguage.isEmpty()&&!appliedLanguage.equals(nowLang)){recreate();return;}String nowContent=SettingsStore.contentLanguage(this);if(appliedContentLanguage!=null&&!appliedContentLanguage.isEmpty()&&!appliedContentLanguage.equals(nowContent)){appliedContentLanguage=nowContent;if(provider!=null){if("home".equals(section)||"local".equals(section))loadHome();else if("epg".equals(section))loadEpg();else loadSection(section);}return;}if(provider!=null){EpgRequests requests=epgRequests();adapter.setEpg(requests);gridAdapter.setEpg(requests);epgAdapter.configure(requests);gridAdapter.notifyDataSetChanged();epgAdapter.notifyDataSetChanged();if(seriesEpisodeMode){MediaEntry next=EpisodeOrder.next(seriesEpisodes,library);if(next!=null){selectedHero=next;heroSubtitle.setText((library.progress(next)>0?T("continue"):T("next_episode"))+" · S"+next.season+"E"+next.episode);heroAction.setText(library.progress(next)>0?T("continue"):T("next_episode"));heroAction.setVisibility(View.VISIBLE);}else heroAction.setVisibility(View.GONE);adapter.notifyDataSetChanged();}else if("home".equals(section)||"local".equals(section))loadHome();setHeroHeight(heroHeight());android.content.SharedPreferences sp=SettingsStore.prefs(this);if(sp.getBoolean("force_reindex",false)){sp.edit().putBoolean("force_reindex",false).apply();refreshSearchIndex(true);}}}
+    @Override protected void onPostResume(){
+        super.onPostResume();
+        if(profileReady&&searchIndex!=null){String key=profileKey();if(searchIndex.isComplete(key,"live")&&searchIndex.isComplete(key,"vod")&&searchIndex.isComplete(key,"series"))maybeShowFirstImportProInvite(key);}
+    }
     @Override protected void onPause(){if(updateNotifier!=null)updateNotifier.onPause();activityPaused=true;super.onPause();}
     @Override public void onTrimMemory(int level){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW){HERO_CACHE.evictAll();MediaRowAdapter.clearArtworkCache();}}
     @Override public void onBackPressed(){if(seriesEpisodeMode){loadSection("series");}else super.onBackPressed();}
