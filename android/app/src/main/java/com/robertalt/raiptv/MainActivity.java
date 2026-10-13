@@ -83,7 +83,7 @@ public class MainActivity extends Activity {
         if(settings.getBoolean("account_sources_changed",false)){
             settings.edit().remove("account_sources_changed").apply();recreate();return;
         }
-        if(profileReady&&searchIndex!=null){String key=profileKey();if(searchIndex.isComplete(key,"live")&&searchIndex.isComplete(key,"vod")&&searchIndex.isComplete(key,"series"))maybeShowFirstImportProInvite(key);}
+        if(profileReady&&searchIndex!=null){String key=profileKey();if(searchIndex.isComplete(key,"live")&&((provider instanceof M3uProvider&&!DemoPolicy.isDemo(profile))||(searchIndex.isComplete(key,"vod")&&searchIndex.isComplete(key,"series"))))maybeShowFirstImportProInvite(key);}
         com.nenotv.player.entitlement.AutomaticSourceDownload.check(this,()->runOnUiThread(()->{
             settings.edit().putBoolean("account_sources_changed",true).apply();
             if(!isFinishing()&&!isDestroyed()&&!activityPaused&&!playbackActive){
