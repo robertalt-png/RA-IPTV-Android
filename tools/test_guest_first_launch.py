@@ -1,4 +1,4 @@
-"""Regression checks for optional SunnyIPTV onboarding (source-level guardrails)."""
+"""Regression checks for linked-first SunnyIPTV onboarding (source-level guardrails)."""
 from pathlib import Path
 import unittest
 
@@ -10,9 +10,9 @@ PROFILE = ROOT / "android/app/src/main/java/com/robertalt/raiptv/ProfileActivity
 
 
 class GuestFirstLaunchChecks(unittest.TestCase):
-    def test_guest_first_launch_does_not_force_pairing(self):
+    def test_first_launch_starts_automatic_website_pairing(self):
         source = MAIN.read_text(encoding="utf-8")
-        self.assertIn("if(!account.linked()&&!account.guest()&&!FamilyStore.active(this))account.startGuest();", source)
+        self.assertIn("if(!account.linked()&&!account.guest()&&!FamilyStore.active(this)){startActivity(firstRunIntent(this));finish();return;}", source)\n        self.assertIn('putExtra("auto_web",true)', source)
         self.assertNotIn("!account.linked()&&!FamilyStore.active(this)?firstRunIntent(this)", source)
 
     def test_guest_access_remains_light_and_account_is_separate(self):
