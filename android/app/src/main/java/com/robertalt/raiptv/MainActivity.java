@@ -1129,12 +1129,13 @@ void scheduleBackgroundIndex(){
         android.content.SharedPreferences prefs=SettingsStore.prefs(this);
         String seen="automatic_pro_welcome_seen";
         if(prefs.getBoolean(seen,false)||activityPaused||playbackActive||!isUiAlive()||!key.equals(profileKey()))return;
-        new AlertDialog.Builder(this)
+        AlertDialog welcome=new AlertDialog.Builder(this)
             .setTitle("Welkom bij SunnyIPTV Pro!")
             .setMessage("Als welkomstgeschenk ontvang je 14 dagen gratis SunnyIPTV Pro!")
             .setPositiveButton("Begin met kijken",(dialog,which)->{})
-            .setOnShowListener(dialog->prefs.edit().putBoolean(seen,true).apply())
-            .show();
+            .create();
+        welcome.setOnShowListener(dialog->prefs.edit().putBoolean(seen,true).apply());
+        welcome.show();
     }
 
     AlertDialog firstImportProInviteDialog;
