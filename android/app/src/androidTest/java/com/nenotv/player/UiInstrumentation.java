@@ -431,7 +431,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
             com.nenotv.player.storage.ExtraPrivacyStore.choose(getTargetContext(),"unknown");
             android.app.Instrumentation.ActivityMonitor loginMonitor=addMonitor(PairingActivity.class.getName(),null,false);
             MainActivity blocked=(MainActivity)startActivitySync(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            try{android.app.Activity login=waitForMonitorWithTimeout(loginMonitor,5000);check(login instanceof PairingActivity&&blocked.isFinishing(),"Main screen bypassed required login");if(login!=null)runOnMainSync(login::finish);}finally{removeMonitor(loginMonitor);runOnMainSync(blocked::finish);verifiedAccount();}
+            try{waitForIdleSync();com.nenotv.player.storage.AccountLinkStore launchedGuest=new com.nenotv.player.storage.AccountLinkStore(getTargetContext());check(launchedGuest.guest()&&launchedGuest.allowed()&&!launchedGuest.linked(),"First launch did not start as a Light guest");check(loginMonitor.getHits()==0,"First launch unexpectedly forced account pairing");}finally{removeMonitor(loginMonitor);runOnMainSync(blocked::finish);verifiedAccount();}
             check(first.getComponent()!=null&&first.getComponent().getClassName().equals(PairingActivity.class.getName())&&first.getBooleanExtra("first_run",false),"First start has an intermediate source screen");
             int beforeFirst=opened.get();
             PairingActivity firstScreen=(PairingActivity)startActivitySync(first.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
