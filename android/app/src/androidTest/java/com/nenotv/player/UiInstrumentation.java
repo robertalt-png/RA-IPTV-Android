@@ -455,7 +455,7 @@ public final class UiInstrumentation extends ImportInstrumentation {
             com.nenotv.player.storage.ExtraPrivacyStore.choose(getTargetContext(),"unknown");
             android.app.Instrumentation.ActivityMonitor loginMonitor=addMonitor(PairingActivity.class.getName(),null,false);
             MainActivity blocked=(MainActivity)startActivitySync(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            try{waitForIdleSync();com.nenotv.player.storage.AccountLinkStore launchedGuest=new com.nenotv.player.storage.AccountLinkStore(getTargetContext());check(launchedGuest.guest()&&launchedGuest.allowed()&&!launchedGuest.linked(),"First launch did not start as a Light guest");check(loginMonitor.getHits()==0,"First launch unexpectedly forced account pairing");}finally{removeMonitor(loginMonitor);runOnMainSync(blocked::finish);verifiedAccount();}
+            try{waitForIdleSync();com.nenotv.player.storage.AccountLinkStore launchedGuest=new com.nenotv.player.storage.AccountLinkStore(getTargetContext());check(!launchedGuest.guest()&&!launchedGuest.linked(),"First launch unexpectedly created a guest account");check(loginMonitor.getHits()>0,"First launch did not start website pairing");}finally{removeMonitor(loginMonitor);runOnMainSync(blocked::finish);verifiedAccount();}
             check(first.getComponent()!=null&&first.getComponent().getClassName().equals(PairingActivity.class.getName())&&first.getBooleanExtra("first_run",false),"First start has an intermediate source screen");
             int beforeFirst=opened.get();
             PairingActivity firstScreen=(PairingActivity)startActivitySync(first.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
@@ -464,10 +464,9 @@ public final class UiInstrumentation extends ImportInstrumentation {
                 Thread.sleep(600);waitForIdleSync();
                 runOnMainSync(()->{
                     Button skip=firstScreen.findViewById(android.R.id.content).findViewWithTag("start_without_account");
-                    check(skip!=null&&skip.getVisibility()==View.VISIBLE&&skip.isEnabled()&&skip.isFocusable(),"First start has no way to try the app without an account");
-                    assertUnclippedText(skip);
-                    check(opened.get()==beforeFirst,"First start automatically opened browser");
+                    check(skip==null||skip.getVisibility()!=View.VISIBLE,"Mandatory pairing exposed guest bypass");
                 });
+                check(opened.get()>beforeFirst,"First start did not automatically open website");
                 check(sourceMonitor.getHits()==0,"First start opened source screen before approval");
             }finally{removeMonitor(sourceMonitor);runOnMainSync(firstScreen::finish);}
             {   // Guest: allowed without an account, bound to this device, gone after sign-out, and never stronger than a real link.
