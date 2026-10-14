@@ -359,8 +359,11 @@ public final class UiInstrumentation extends ImportInstrumentation {
         GuideChecks.run(c);
         com.nenotv.player.storage.CachePrivacyChecks.run(c);
         EpgSourceChecks.run(this);
+        android.util.Log.i("SunnyIPTV-QA","UI phase: householdScreens START");
         householdScreens();
+        android.util.Log.i("SunnyIPTV-QA","UI phase: householdScreens DONE; pairingScreens START");
         pairingScreens();
+        android.util.Log.i("SunnyIPTV-QA","UI phase: pairingScreens DONE");
         for(String language:new String[]{"nl","en","de"}){
             for(String key:new String[]{"account_and_pro","email_address","request_trial","refresh_status","this_device","device_code","trial_remaining","days","pro_active","devices","free_description","checking_status","status_updated","activation_success","activation_failed","server_unavailable","email_required","view_pro","link_my_nenotv","activation_code","link_device","activation_code_invalid"})
                 check(("en".equals(language)&&"days".equals(key))||!key.equals(UiText.t(language,key)),"Missing account translation: "+language+":"+key);
