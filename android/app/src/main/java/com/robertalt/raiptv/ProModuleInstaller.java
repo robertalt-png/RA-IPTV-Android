@@ -14,6 +14,7 @@ public final class ProModuleInstaller {
     private static final String PRO_SOURCES="com.nenotv.player.proextras.ProSourcesActivity";
     private static final String PRO_NETWORK="com.nenotv.player.proextras.ProNetworkActivity";
     private ProModuleInstaller(){}
+    private static boolean requestPending;
 
     public static boolean isInstalled(Activity a){
         try{Class.forName(PRO_PLAYER,false,a.getClassLoader());return true;}
@@ -23,13 +24,15 @@ public final class ProModuleInstaller {
     public static void request(Activity a){
         try{
             SplitInstallManager m=SplitInstallManagerFactory.create(a);
-            if(isInstalled(a))return;
+            if(isInstalled(a)||requestPending)return;
+            requestPending=true;
             SplitInstallRequest r=SplitInstallRequest.newBuilder().addModule(MODULE).build();
             listen(a,m);
             m.startInstall(r)
               .addOnSuccessListener(id->Toast.makeText(a,UiText.t(a,"pro_pack_downloading"),Toast.LENGTH_LONG).show())
-              .addOnFailureListener(e->Toast.makeText(a,UiText.t(a,"pro_pack_failed"),Toast.LENGTH_LONG).show());
+              .addOnFailureListener(e->{requestPending=false;Toast.makeText(a,UiText.t(a,"pro_pack_failed"),Toast.LENGTH_LONG).show();});
         }catch(Throwable t){
+            requestPending=false;
             Toast.makeText(a,UiText.t(a,"pro_pack_failed"),Toast.LENGTH_LONG).show();
         }
     }
@@ -45,10 +48,12 @@ public final class ProModuleInstaller {
             if(state.status()==SplitInstallSessionStatus.REQUIRES_USER_CONFIRMATION&&now!=null&&!now.isFinishing()){
                 try{m.startConfirmationDialogForResult(state,now,4401);}catch(Throwable ignored){}
             }else if(state.status()==SplitInstallSessionStatus.INSTALLED){
+                requestPending=false;
                 if(now!=null){try{com.google.android.play.core.splitcompat.SplitCompat.install(now);}catch(Throwable ignored){}
                     Toast.makeText(now,UiText.t(now,"pro_pack_ready"),Toast.LENGTH_SHORT).show();}
                 try{m.unregisterListener(listener);}catch(Throwable ignored){}
             }else if(state.status()==SplitInstallSessionStatus.FAILED||state.status()==SplitInstallSessionStatus.CANCELED){
+                requestPending=false;
                 if(now!=null)Toast.makeText(now,UiText.t(now,"pro_pack_failed"),Toast.LENGTH_LONG).show();
                 try{m.unregisterListener(listener);}catch(Throwable ignored){}
             }
@@ -56,18 +61,12 @@ public final class ProModuleInstaller {
         m.registerListener(listener);
     }
 
+    /** Download the optional feature module for both Light and Pro users.
+     * Access to paid features remains guarded by EntitlementStore.isPro().
+     * Never uninstall the module merely because a user is on Light.
+     */
     public static void syncEntitlement(Activity a){
-        try{
-            SplitInstallManager m=SplitInstallManagerFactory.create(a);
-            boolean entitled=new EntitlementStore(a).isPro();
-            boolean installed=isInstalled(a);
-            if(entitled&&!installed){
-                request(a);
-            }else if(!entitled&&installed){
-                if(new com.nenotv.player.storage.UpdateRequirementStore(a).isBasicOnly())return;
-                m.deferredUninstall(Collections.singletonList(MODULE));
-            }
-        }catch(Throwable ignored){}
+        if(!isInstalled(a))request(a);
     }
 
     public static Intent sourcesIntent(Activity a){
