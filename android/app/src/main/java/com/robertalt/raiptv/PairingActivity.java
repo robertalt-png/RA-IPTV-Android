@@ -146,18 +146,15 @@ public final class PairingActivity extends Activity {
         worker.execute(()->{
             try{
                 String state=client.status(active);
-                // The server starts the automatic trial on the first entitlement refresh of a linked device: ask right away,
-                // so Pro is known before setup continues. Offline or failing: MainActivity.onResume retries.
-                if("complete".equals(state)&&new com.nenotv.player.storage.AccountLinkStore(this).linked()){
+                // On first launch, pairing must finish before playlist setup.
+                // Do not refresh Pro or start an import here: the import screen owns that sequence.
+                if("complete".equals(state)&&new com.nenotv.player.storage.AccountLinkStore(this).linked()&&!firstRun()){
                     try{new EntitlementClient(this).refresh();}catch(Exception laterOnResume){}
-                }
-                if("complete".equals(state)&&new com.nenotv.player.storage.AccountLinkStore(this).linked()&&firstRun()){
-                    com.nenotv.player.entitlement.WebsiteSetupJob.start(this,false);
                 }
                 runOnUiThread(()->{
                     if(destroyed||current!=generation)return;
                     busy=false;retry.setEnabled(true);
-                    if("complete".equals(state)){complete=true;clearCode();status.setText(text("pair_complete"));retry.setVisibility(android.view.View.GONE);ProModuleInstaller.syncEntitlement(this);if(resumed)continueSetup();}
+                    if("complete".equals(state)){complete=true;clearCode();status.setText(text("pair_complete"));retry.setVisibility(android.view.View.GONE);if(!firstRun())ProModuleInstaller.syncEntitlement(this);if(resumed)continueSetup();}
                     else if("expired".equals(state)||"cancelled".equals(state))expire();
                     else{status.setText(text("pair_waiting"));schedule(active);}
                 });
