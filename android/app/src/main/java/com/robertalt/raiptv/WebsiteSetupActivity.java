@@ -105,7 +105,7 @@ public final class WebsiteSetupActivity extends Activity {
             case CHOICE: status.setText(t("Je lokale instellingen zijn behouden. Kies opnieuw proberen om de website-lijst te gebruiken.","Your local settings are preserved. Retry to choose the website list.","Lokale Einstellungen bleiben erhalten. Erneut versuchen fuer die Website-Liste.")); break;
             case EXPIRED: case FAILED: status.setText(t("De lijst is nog niet geladen. Controleer je aanbiedergegevens op Mijn SunnyIPTV en probeer opnieuw.","The list has not loaded. Check your provider details on My SunnyIPTV and retry.","Liste nicht geladen. Anbieterdaten in Mein SunnyIPTV pruefen und erneut versuchen.")); break;
             case READY:
-                finished=true; setResult(RESULT_OK); startActivity(new Intent(WebsiteSetupActivity.this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP)); finish(); return;
+                finished=true; setResult(RESULT_OK); if(getCallingActivity()==null) startActivity(new Intent(WebsiteSetupActivity.this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP)); finish(); return;
         }
         handler.postDelayed(this,750);
     }};
