@@ -48,6 +48,7 @@ public final class EntitlementStore {
     public int freeDevices(){return usedDevices()<0?-1:Math.max(0,maxDevices()-usedDevices());}
     public long deviceStatusAt(){return prefs.getLong("device_status_at",0L);}
     public long expiresAt(){return prefs.getLong("expires_at",0L);}
+    public long trialEndedAt(){return prefs.getLong("last_trial_end_at",0L);}
 
     public Level level(){
         if(updates.isBasicOnly())return Level.FREE;
@@ -90,6 +91,8 @@ public final class EntitlementStore {
         long expiry=readEpoch(o,"expires_at_ms",1L);
         if(expiry<=0)expiry=readEpoch(o,"expires_at",1000L);
         SharedPreferences.Editor ed=prefs.edit().putString("level",level.name()).putLong("expires_at",expiry);
+        if(level==Level.PRO_TRIAL&&expiry>0)ed.putLong("last_trial_end_at",expiry);
+        else if(level==Level.PRO)ed.remove("last_trial_end_at");
         if(o.has("email"))ed.putString("account_email",o.optString("email",""));
         if(o.has("account_email"))ed.putString("account_email",o.optString("account_email",""));
         int maximum=Math.max(1,Math.min(25,o.optInt("max_devices",1)));
