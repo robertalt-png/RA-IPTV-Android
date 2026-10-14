@@ -24,6 +24,7 @@ public final class WebsiteSetupActivity extends Activity {
     private int tipIndex=-1;
     private long tipShownAt;
     private boolean resumed, finished;
+    private boolean mandatoryFirstSetup;
     private String language;
     private String t(String nl, String en, String de) { return "nl".equals(language) ? nl : "de".equals(language) ? de : en; }
     private int dp(int n) { return Math.round(n * getResources().getDisplayMetrics().density); }
@@ -35,6 +36,7 @@ public final class WebsiteSetupActivity extends Activity {
     }
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved); language = SettingsStore.language(this);
+        mandatoryFirstSetup = getIntent().getBooleanExtra("mandatory_first_setup",false);
         if (FamilyStore.active(this)) { FamilyUi.blocked(this); finish(); return; }
         if (!new AccountLinkStore(this).linked()) { startActivity(new Intent(this, PairingActivity.class).putExtra("first_run",true)); finish(); return; }
         ScrollView scroll = new ScrollView(this); scroll.setBackgroundColor(0xFF07090D);
@@ -67,7 +69,7 @@ public final class WebsiteSetupActivity extends Activity {
         // While the list is really loading the customer has nothing to choose: show the sun and tips instead of buttons.
         boolean loading=busy && s!=WebsiteSetupJob.State.WAITING;
         website.setVisibility(loading ? View.GONE : View.VISIBLE);
-        manual.setVisibility(loading ? View.GONE : View.VISIBLE);
+        manual.setVisibility(mandatoryFirstSetup || loading ? View.GONE : View.VISIBLE);
         sun.setVisibility(loading ? View.VISIBLE : View.GONE);
         tip.setVisibility(loading ? View.VISIBLE : View.GONE);
         if(loading){ sun.start(); showTip(); } else sun.stop();
@@ -105,7 +107,11 @@ public final class WebsiteSetupActivity extends Activity {
             case CHOICE: status.setText(t("Je lokale instellingen zijn behouden. Kies opnieuw proberen om de website-lijst te gebruiken.","Your local settings are preserved. Retry to choose the website list.","Lokale Einstellungen bleiben erhalten. Erneut versuchen fuer die Website-Liste.")); break;
             case EXPIRED: case FAILED: status.setText(t("De lijst is nog niet geladen. Controleer je aanbiedergegevens op Mijn SunnyIPTV en probeer opnieuw.","The list has not loaded. Check your provider details on My SunnyIPTV and retry.","Liste nicht geladen. Anbieterdaten in Mein SunnyIPTV pruefen und erneut versuchen.")); break;
             case READY:
-                finished=true; setResult(RESULT_OK); if(getCallingActivity()==null) startActivity(new Intent(WebsiteSetupActivity.this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP)); finish(); return;
+                finished=true;
+                if(mandatoryFirstSetup) SettingsStore.prefs(this).edit().putBoolean("sunny_first_import_welcome_pending",true).apply();
+                setResult(RESULT_OK);
+                if(getCallingActivity()==null) startActivity(new Intent(WebsiteSetupActivity.this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP));
+                finish(); return;
         }
         handler.postDelayed(this,750);
     }};
