@@ -35,7 +35,9 @@ class GuestFirstLaunchChecks(unittest.TestCase):
         self.assertIn('case READY:', setup)
         self.assertIn('setResult(RESULT_OK)', setup)
         self.assertIn('if(getCallingActivity()==null) startActivity(', setup)
-        self.assertIn('startActivityForResult(new Intent(this,WebsiteSetupActivity.class),42)', source)
+        self.assertIn('startActivityForResult(new Intent(this,WebsiteSetupActivity.class).putExtra("mandatory_first_setup",firstRun()),42)', source)
+        self.assertIn('manual.setVisibility(mandatoryFirstSetup || loading ? View.GONE : View.VISIBLE)', setup)
+        self.assertIn('sunny_first_import_welcome_pending', setup)
         self.assertIn('if(request==42)', source)
 
     def test_guest_access_remains_light_and_account_is_separate(self):
