@@ -69,7 +69,9 @@ fi
 adb shell am instrument -w -e phase catalog com.nenotv.player.test/com.nenotv.player.UiInstrumentation | tee qa-results/catalog.txt
 rg -q 'NENOTV_CATALOG_PACKAGE=passed' qa-results/catalog.txt
 adb shell am force-stop com.nenotv.player
-adb shell am instrument -w -e device "$device" -e phase ui com.nenotv.player.test/com.nenotv.player.UiInstrumentation | tee qa-results/ui.txt
+# UI instrumentation can hang indefinitely on emulator/browser transitions; cap it and preserve diagnostics.
+echo "QA phase: ui ($device), limit 12 minutes"
+timeout --signal=TERM --kill-after=20s 720s adb shell am instrument -w -e device "$device" -e phase ui com.nenotv.player.test/com.nenotv.player.UiInstrumentation | tee qa-results/ui.txt
 rg -q 'NENOTV_UI_SCREENSHOTS=passed' qa-results/ui.txt
 adb shell am force-stop com.nenotv.player
 adb shell am instrument -w -e phase resume com.nenotv.player.test/com.nenotv.player.UiInstrumentation | tee qa-results/ui-resume.txt
