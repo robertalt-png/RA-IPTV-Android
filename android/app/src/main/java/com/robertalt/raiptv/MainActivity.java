@@ -246,7 +246,7 @@ void scheduleBackgroundIndex(){
 
     void updateHeaderBadges(){
         if(languageBadge!=null)languageBadge.setText(SettingsStore.primaryLanguage(this).toUpperCase(Locale.ROOT));
-        if(planBadge!=null){EntitlementStore e=new EntitlementStore(this);String b=DemoPolicy.isDemo(profiles==null?null:profiles.load())?"DEMO":e.shortBadge();if(e.isTrial())b=T("trial_badge")+" · "+e.trialDaysRemaining()+"d";planBadge.setText(b);boolean premium=e.isPro();planBadge.setTextColor(premium?0xFF0A0A0A:0xFFA7AFBC);planBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(premium?0xFFFFD400:0xFF1B2028));}
+        if(planBadge!=null){EntitlementStore e=new EntitlementStore(this);String b=DemoPolicy.isDemo(profiles==null?null:profiles.load())?"DEMO":e.shortBadge();planBadge.setText(b);boolean premium=e.isPro();planBadge.setTextColor(premium?0xFF0A0A0A:0xFFA7AFBC);planBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(premium?0xFFFFD400:0xFF1B2028));}
     }
     void showLanguageQuickMenu(){
         final String[] codes={"nl","en","de","fr","es","it","pt","tr","pl","ar"};
@@ -1303,9 +1303,9 @@ TextView addInfoBlock(LinearLayout b,String l,String x){TextView h=new TextView(
         if(!prefs.getBoolean("sunny_first_import_welcome_pending",false)||profiles==null||!profiles.exists())return;
         prefs.edit().remove("sunny_first_import_welcome_pending").apply();
         String lang=SettingsStore.language(this);
-        String message="nl".equals(lang)?"Bedankt voor het installeren van SunnyIPTV! Je afspeellijst is geladen en je kunt direct kijken. Pro-functies worden automatisch gedownload als je account daarvoor toegang heeft.":
-            "de".equals(lang)?"Danke für die Installation von SunnyIPTV! Deine Wiedergabeliste ist geladen. Pro-Funktionen werden automatisch heruntergeladen, wenn dein Konto Zugriff darauf hat.":
-            "Thank you for installing SunnyIPTV! Your playlist is ready. Pro features download automatically if your account is eligible.";
+        String message="nl".equals(lang)?(new EntitlementStore(this).isTrial()?"Welkom bij SunnyIPTV! Als welkomstgeschenk krijg je 14 dagen gratis SunnyIPTV Pro. Geen betaalgegevens, geen verplichtingen en geen automatische betaling. Daarna kun je SunnyIPTV Light blijven gebruiken. Veel kijkplezier!":"Welkom bij SunnyIPTV! Je afspeellijst is geladen en je kunt direct kijken."):
+            "de".equals(lang)?(new EntitlementStore(this).isTrial()?"Willkommen bei SunnyIPTV! Du erhältst 14 Tage SunnyIPTV Pro gratis. Keine Zahlungsdaten, keine Verpflichtung und keine automatische Zahlung. Danach kannst du SunnyIPTV Light weiter nutzen.":"Willkommen bei SunnyIPTV! Deine Wiedergabeliste ist bereit."):
+            (new EntitlementStore(this).isTrial()?"Welcome to SunnyIPTV! Enjoy 14 free days of SunnyIPTV Pro. No payment details, no obligation, and no automatic charge. Afterwards you can keep using SunnyIPTV Light.":"Welcome to SunnyIPTV! Your playlist is ready.");
         new AlertDialog.Builder(this).setTitle("SunnyIPTV").setMessage(message).setPositiveButton(android.R.string.ok,null).show();
     }
 
