@@ -68,7 +68,7 @@ public final class PairingActivity extends Activity {
     void localSetup(){
         if(localSetupLaunched||destroyed||!new com.nenotv.player.storage.AccountLinkStore(this).linked()||com.nenotv.player.storage.FamilyStore.active(this))return;
         localSetupLaunched=true;handler.removeCallbacks(poll);
-        startActivityForResult(new Intent(this,WebsiteSetupActivity.class),42);
+        startActivityForResult(new Intent(this,ProfileActivity.class),42);
     }
 
     @Override protected void onActivityResult(int request,int result,Intent data){
@@ -89,13 +89,7 @@ public final class PairingActivity extends Activity {
         open.setEnabled(false);open.setOnClickListener(v->openPairing());LinearLayout.LayoutParams linkParams=new LinearLayout.LayoutParams(-1,-2);linkParams.topMargin=dp(16);linkParams.bottomMargin=dp(8);box.addView(open,linkParams);
         status=label(text("checking_status"),16);status.setPadding(0,dp(12),0,dp(12));status.setAccessibilityLiveRegion(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE);box.addView(status,new LinearLayout.LayoutParams(-1,-2));
         retry=button("pair_new_code");retry.setOnClickListener(v->startPairing());box.addView(retry,new LinearLayout.LayoutParams(-1,-2));
-        if(mandatoryLogin()){
-            // Linking is optional: a guest starts in Light with an own or demo source and can link later under Account (which starts the trial).
-            Button guest=button("try_without_account");guest.setTag("start_without_account");
-            guest.setOnClickListener(v->{if(complete)return;new com.nenotv.player.storage.AccountLinkStore(this).startGuest();handler.removeCallbacks(poll);finishSetup();});
-            box.addView(guest,new LinearLayout.LayoutParams(-1,-2));
-        }
-        Button close=button("close");close.setOnClickListener(v->{if(mandatoryLogin())finishAffinity();else finish();});box.addView(close,new LinearLayout.LayoutParams(-1,-2));
+        Button close=button("close");close.setOnClickListener(v->{if(mandatoryLogin())finishAffinity();else finish();});if(!mandatoryLogin())box.addView(close,new LinearLayout.LayoutParams(-1,-2));
         setContentView(scroll);ScreenInsets.browsing(this);UiText.applyDirection(this);
     }
 

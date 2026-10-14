@@ -117,16 +117,27 @@ public final class PlayPurchases implements PurchasesUpdatedListener {
 
     /** Sends purchases Google still lists (paid but maybe not yet confirmed by our server) again. Silent when there are none. */
     public void restore() {
+        restore(false);
+    }
+
+    /** Restore an existing test purchase only; never starts a billing flow. Server checks tester and Google test status. */
+    public void restoreInternalTest() { restore(true); }
+
+    private void restore(boolean internalTest) {
         connected(() -> client.queryPurchasesAsync(QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.SUBS).build(), (r1, subs) ->
                 client.queryPurchasesAsync(QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.INAPP).build(), (r2, inapp) -> {
                     List<Purchase> all = new ArrayList<>();
                     if (subs != null) all.addAll(subs);
                     if (inapp != null) all.addAll(inapp);
-                    if (!all.isEmpty()) confirm(all, false);
+                    if (!all.isEmpty() || internalTest) confirm(all, internalTest, internalTest);
                 })));
     }
 
     private void confirm(List<Purchase> purchases, boolean report) {
+        confirm(purchases,report,false);
+    }
+
+    private void confirm(List<Purchase> purchases, boolean report, boolean internalTest) {
         exec.execute(() -> {
             String outcome = "";
             for (Purchase p : purchases) {
@@ -134,7 +145,7 @@ public final class PlayPurchases implements PurchasesUpdatedListener {
                 if (p.getPurchaseState() != Purchase.PurchaseState.PURCHASED) continue;
                 for (String product : p.getProducts()) {
                     if (!SUBS.contains(product) && !INAPP.contains(product)) continue;
-                    try { new EntitlementClient(activity).play(product, p.getPurchaseToken()); outcome = "purchase_done"; }
+                    try { new EntitlementClient(activity).play(product, p.getPurchaseToken(),internalTest); outcome = "purchase_done"; }
                     catch (Exception notYet) { if (!"purchase_done".equals(outcome)) outcome = "purchase_unconfirmed"; }
                 }
             }

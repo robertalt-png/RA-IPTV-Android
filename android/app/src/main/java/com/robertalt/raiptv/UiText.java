@@ -48,6 +48,13 @@ public final class UiText {
         {"viewer_name_invalid","Choose a unique name of 1 to 40 characters."},
         {"viewer_storage_error","Profile could not be read or saved. Existing data is preserved."},
         {"free_description","Live TV, movies, series, the TV guide, search per section and favourites are free in Light."},
+        {"pro_invite_title","Your list is ready"},
+        {"pro_invite_body","SunnyIPTV Light is ready. You can try SunnyIPTV Pro free for %d days through your SunnyIPTV account. No payment starts without your confirmation."},
+        {"pro_invite_trial","Try Pro free"},
+        {"pro_invite_keep_light","Stay in Light"},
+        {"pro_test_mode_title","Pro test mode"},
+        {"pro_test_mode_body","Internal test access is available for this authorised tester device only. The app still uses Google Play and the SunnyIPTV server to verify the test purchase."},
+        {"pro_test_mode_continue","Continue to Pro test"},
         {"checking_status","Checking SunnyIPTV account..."},
         {"status_updated","Account status updated"},
         {"activation_success","SunnyIPTV Pro activated"},
@@ -493,6 +500,13 @@ public final class UiText {
         {"viewer_name_invalid","Kies een unieke naam van 1 tot 40 tekens."},
         {"viewer_storage_error","Profiel kan niet worden gelezen of opgeslagen. Bestaande gegevens blijven behouden."},
         {"free_description","Live tv, films, series, de tv-gids, zoeken per onderdeel en favorieten zijn gratis in Light."},
+        {"pro_invite_title","Je lijst is klaar"},
+        {"pro_invite_body","SunnyIPTV Light is klaar. Je kunt SunnyIPTV Pro %d dagen gratis proberen via je SunnyIPTV-account. Er start geen betaling zonder jouw bevestiging."},
+        {"pro_invite_trial","Pro gratis proberen"},
+        {"pro_invite_keep_light","Light blijven gebruiken"},
+        {"pro_test_mode_title","Pro-testmodus"},
+        {"pro_test_mode_body","Interne testtoegang is alleen beschikbaar voor dit geautoriseerde testapparaat. De app gebruikt nog steeds Google Play en de SunnyIPTV-server om de testaankoop te controleren."},
+        {"pro_test_mode_continue","Door naar Pro-test"},
         {"checking_status","SunnyIPTV-account controleren..."},
         {"status_updated","Accountstatus bijgewerkt"},
         {"activation_success","SunnyIPTV Pro geactiveerd"},
@@ -902,6 +916,13 @@ public final class UiText {
     private static final Map<String,String> ES=es();
     // One method per language: a single static initialiser for all languages exceeds the JVM 64 KB method limit.
     private static Map<String,String> es(){return map(new String[][]{
+        {"pro_invite_title","Prueba SunnyIPTV Pro"},
+        {"pro_invite_body","SunnyIPTV Light está listo. Puedes probar SunnyIPTV Pro gratis durante %d días con tu cuenta SunnyIPTV. No se iniciará ningún pago sin tu confirmación."},
+        {"pro_invite_trial","Probar Pro gratis"},
+        {"pro_invite_keep_light","Seguir con Light"},
+        {"pro_test_mode_title","Prueba interna de Pro"},
+        {"pro_test_mode_body","Solo los dispositivos de prueba autorizados tienen acceso. Google Play y el servidor SunnyIPTV verifican la compra de prueba."},
+        {"pro_test_mode_continue","Continuar con la prueba"},
         {"season","Temporada"},
         {"all_seasons","Todas las temporadas"},
         {"remaining","restantes"},
@@ -1352,6 +1373,13 @@ public final class UiText {
         {"viewer_name_invalid","Einen eindeutigen Namen mit 1 bis 40 Zeichen wählen."},
         {"viewer_storage_error","Profil konnte nicht gelesen oder gespeichert werden. Vorhandene Daten bleiben erhalten."},
         {"free_description","Live-TV, Filme, Serien, TV-Programm, Suche pro Bereich und Favoriten sind in Light kostenlos."},
+        {"pro_invite_title","Deine Liste ist bereit"},
+        {"pro_invite_body","SunnyIPTV Light ist bereit. Du kannst SunnyIPTV Pro %d Tage kostenlos über dein SunnyIPTV-Konto testen. Ohne deine Bestätigung startet keine Zahlung."},
+        {"pro_invite_trial","Pro kostenlos testen"},
+        {"pro_invite_keep_light","Light weiter nutzen"},
+        {"pro_test_mode_title","Pro-Testmodus"},
+        {"pro_test_mode_body","Interner Testzugang ist nur für dieses autorisierte Testgerät verfügbar. Die App verwendet weiterhin Google Play und den SunnyIPTV-Server, um den Testkauf zu prüfen."},
+        {"pro_test_mode_continue","Weiter zum Pro-Test"},
         {"checking_status","SunnyIPTV-Konto wird geprüft…"},
         {"status_updated","Kontostatus aktualisiert"},
         {"activation_success","SunnyIPTV Pro aktiviert"},
@@ -1719,6 +1747,13 @@ public final class UiText {
     private static final Map<String,String> FR=fr();
     // One method per language: a single static initialiser for all languages exceeds the JVM 64 KB method limit.
     private static Map<String,String> fr(){return map(new String[][]{
+        {"pro_invite_title","Essayez SunnyIPTV Pro"},
+        {"pro_invite_body","SunnyIPTV Light est prêt. Essayez SunnyIPTV Pro gratuitement pendant %d jours avec votre compte SunnyIPTV. Aucun paiement ne sera lancé sans votre confirmation."},
+        {"pro_invite_trial","Essayer Pro gratuitement"},
+        {"pro_invite_keep_light","Continuer avec Light"},
+        {"pro_test_mode_title","Test interne de Pro"},
+        {"pro_test_mode_body","Seuls les appareils de test autorisés ont accès. Google Play et le serveur SunnyIPTV vérifient l'achat de test."},
+        {"pro_test_mode_continue","Continuer le test"},
         {"season","Saison"},
         {"all_seasons","Toutes les saisons"},
         {"remaining","restantes"},
@@ -2107,6 +2142,13 @@ public final class UiText {
     private static final Map<String,String> IT=it();
     // One method per language: a single static initialiser for all languages exceeds the JVM 64 KB method limit.
     private static Map<String,String> it(){return map(new String[][]{
+        {"pro_invite_title","Prova SunnyIPTV Pro"},
+        {"pro_invite_body","SunnyIPTV Light è pronto. Puoi provare SunnyIPTV Pro gratis per %d giorni con il tuo account SunnyIPTV. Nessun pagamento verrà avviato senza la tua conferma."},
+        {"pro_invite_trial","Prova Pro gratis"},
+        {"pro_invite_keep_light","Continua con Light"},
+        {"pro_test_mode_title","Test interno Pro"},
+        {"pro_test_mode_body","Accesso riservato ai dispositivi di test autorizzati. Google Play e il server SunnyIPTV verificano l'acquisto di test."},
+        {"pro_test_mode_continue","Continua il test"},
         {"season","Stagione"},
         {"all_seasons","Tutte le stagioni"},
         {"remaining","rimanenti"},
@@ -2495,6 +2537,13 @@ public final class UiText {
     private static final Map<String,String> PT=pt();
     // One method per language: a single static initialiser for all languages exceeds the JVM 64 KB method limit.
     private static Map<String,String> pt(){return map(new String[][]{
+        {"pro_invite_title","Experimente SunnyIPTV Pro"},
+        {"pro_invite_body","SunnyIPTV Light está pronto. Pode experimentar SunnyIPTV Pro gratuitamente durante %d dias com a sua conta SunnyIPTV. Nenhum pagamento será iniciado sem a sua confirmação."},
+        {"pro_invite_trial","Experimentar Pro grátis"},
+        {"pro_invite_keep_light","Continuar com Light"},
+        {"pro_test_mode_title","Teste interno Pro"},
+        {"pro_test_mode_body","Acesso apenas para dispositivos de teste autorizados. O Google Play e o servidor SunnyIPTV verificam a compra de teste."},
+        {"pro_test_mode_continue","Continuar o teste"},
         {"season","Temporada"},
         {"all_seasons","Todas as temporadas"},
         {"remaining","restantes"},
@@ -2883,6 +2932,13 @@ public final class UiText {
     private static final Map<String,String> TR=tr();
     // One method per language: a single static initialiser for all languages exceeds the JVM 64 KB method limit.
     private static Map<String,String> tr(){return map(new String[][]{
+        {"pro_invite_title","SunnyIPTV Pro'yu deneyin"},
+        {"pro_invite_body","SunnyIPTV Light hazır. SunnyIPTV hesabınızla SunnyIPTV Pro'yu %d gün ücretsiz deneyebilirsiniz. Onayınız olmadan ödeme başlatılmaz."},
+        {"pro_invite_trial","Pro'yu ücretsiz dene"},
+        {"pro_invite_keep_light","Light ile devam et"},
+        {"pro_test_mode_title","Dahili Pro testi"},
+        {"pro_test_mode_body","Yalnızca yetkili test cihazları erişebilir. Google Play ve SunnyIPTV sunucusu test satın alımını doğrular."},
+        {"pro_test_mode_continue","Teste devam et"},
         {"season","Sezon"},
         {"all_seasons","Tüm sezonlar"},
         {"remaining","kaldı"},
@@ -3271,6 +3327,13 @@ public final class UiText {
     private static final Map<String,String> PL=pl();
     // One method per language: a single static initialiser for all languages exceeds the JVM 64 KB method limit.
     private static Map<String,String> pl(){return map(new String[][]{
+        {"pro_invite_title","Wypróbuj SunnyIPTV Pro"},
+        {"pro_invite_body","SunnyIPTV Light jest gotowy. Możesz bezpłatnie wypróbować SunnyIPTV Pro przez %d dni przez konto SunnyIPTV. Żadna płatność nie rozpocznie się bez Twojego potwierdzenia."},
+        {"pro_invite_trial","Wypróbuj Pro za darmo"},
+        {"pro_invite_keep_light","Pozostań przy Light"},
+        {"pro_test_mode_title","Wewnętrzny test Pro"},
+        {"pro_test_mode_body","Dostęp tylko dla autoryzowanych urządzeń testowych. Google Play i serwer SunnyIPTV weryfikują zakup testowy."},
+        {"pro_test_mode_continue","Kontynuuj test"},
         {"season","Sezon"},
         {"all_seasons","Wszystkie sezony"},
         {"remaining","pozostało"},
@@ -3659,6 +3722,13 @@ public final class UiText {
     private static final Map<String,String> AR=ar();
     // One method per language: a single static initialiser for all languages exceeds the JVM 64 KB method limit.
     private static Map<String,String> ar(){return map(new String[][]{
+        {"pro_invite_title","جرّب SunnyIPTV Pro"},
+        {"pro_invite_body","SunnyIPTV Light جاهز. يمكنك تجربة SunnyIPTV Pro مجانًا لمدة %d يومًا عبر حساب SunnyIPTV. لن يبدأ أي دفع دون تأكيدك."},
+        {"pro_invite_trial","جرّب Pro مجانًا"},
+        {"pro_invite_keep_light","متابعة استخدام Light"},
+        {"pro_test_mode_title","اختبار Pro الداخلي"},
+        {"pro_test_mode_body","الوصول متاح فقط لأجهزة الاختبار المصرّح بها. يتحقق Google Play وخادم SunnyIPTV من عملية الشراء التجريبية."},
+        {"pro_test_mode_continue","متابعة الاختبار"},
         {"season","الموسم"},
         {"all_seasons","كل المواسم"},
         {"remaining","متبقية"},

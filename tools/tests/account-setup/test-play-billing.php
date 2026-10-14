@@ -192,6 +192,15 @@ check('shadow: offer says no Play billing',call('offer','tv-1')['play_billing']=
 check('shadow: no trial',call('refresh','tv-1')['entitlement']['level']==='free');
 check('shadow: purchase refused',call('play','tv-1',['product_id'=>'sunnyiptv_pro_solo','purchase_token'=>'t1'])['error']==='play_billing_off');
 fresh(); check('live: offer has Play billing and 14 days',call('offer','tv-1')['play_billing']===true && call('offer','tv-1')['trial_days']===14);
+check('ordinary device has no internal test mode',call('offer','tv-1')['internal_test_mode']===false);
+$GLOBALS['options']['sunnyiptv_internal_tester_devices']=[hash('sha256','tv-1')=>time()+600];
+check('unregistered device cannot claim internal test mode',call('offer','tv-1')['internal_test_mode']===false);
+link_device('tv-1',30);
+check('allowlisted internal tester gets test mode',call('offer','tv-1')['internal_test_mode']===true);
+check('forged device key cannot claim internal test mode',NenoTV_Entitlement_Core::app_entitlement_direct(new WP_REST_Request(['device_id'=>'tv-1','device_key'=>str_repeat('wrong',8)]),'offer')->data['internal_test_mode']===false);
+check('caller supplied public id cannot claim internal test mode',call('offer','ordinary',['public_device_id'=>'TESTER'])['internal_test_mode']===false);
+$GLOBALS['options']['sunnyiptv_internal_tester_devices']=[hash('sha256','tv-1')=>time()-1];
+check('expired internal tester does not get test mode',call('offer','tv-1')['internal_test_mode']===false);
 check('short device key refused',NenoTV_Entitlement_Core::app_entitlement_direct(new WP_REST_Request(['device_id'=>'x','device_key'=>'short']),'refresh')->status===400);
 
 // Automatic trial
@@ -248,6 +257,18 @@ check('test purchase marked as test',$life['payment_mode']==='test');
 check('lifetime acknowledged via products API',str_contains(end($GLOBALS['acks']),'/purchases/products/sunnyiptv_pro_solo_lifetime/tokens/life-1:acknowledge'));
 $GLOBALS['google']['life-cancelled']=['purchaseState'=>1,'acknowledgementState'=>1];
 check('cancelled one-time purchase refused',call('play','tv-8',['product_id'=>'sunnyiptv_pro_multi_lifetime','purchase_token'=>'life-cancelled'])['error']==='play_purchase_inactive');
+
+// Trial to paid on the same device
+fresh(); link_device('internal-1',30);
+$GLOBALS['options']['sunnyiptv_internal_tester_devices']=[hash('sha256','internal-1')=>time()+600];
+$GLOBALS['google']['internal-live']=sub('SUBSCRIPTION_STATE_ACTIVE',86400);
+check('internal restore rejects real purchase',call('play','internal-1',['product_id'=>'sunnyiptv_pro_solo','purchase_token'=>'internal-live','internal_test_mode'=>true])['error']==='internal_test_purchase_required');
+check('rejected internal restore does not write or acknowledge',count($GLOBALS['wpdb']->ent)===0 && count($GLOBALS['acks'])===0);
+$GLOBALS['google']['internal-test']=sub('SUBSCRIPTION_STATE_ACTIVE',86400,'sunnyiptv_pro_solo',false);
+$GLOBALS['google']['internal-test']['testPurchase']=new stdClass();
+check('ordinary device cannot use internal restore',call('play','ordinary',['product_id'=>'sunnyiptv_pro_solo','purchase_token'=>'internal-test','internal_test_mode'=>true])['error']==='internal_test_not_allowed');
+check('authorised internal tester restores Google test purchase',call('play','internal-1',['product_id'=>'sunnyiptv_pro_solo','purchase_token'=>'internal-test','internal_test_mode'=>true])['entitlement']['level']==='pro');
+check('internal restored entitlement is marked test',$GLOBALS['wpdb']->ent[1]['payment_mode']==='test');
 
 // Trial to paid on the same device
 fresh(); link_device('tv-1',30);

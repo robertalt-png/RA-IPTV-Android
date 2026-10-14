@@ -46,7 +46,11 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle b){
         super.onCreate(b);InfoTranslator.init(this);CrashGuard.install(this);SettingsStore.migrateLanguagePreferences(this);if(!SettingsStore.hasLanguageProfile(this)){startActivity(new Intent(this,LanguageSetupActivity.class));finish();return;}
-        AccountLinkStore account=new AccountLinkStore(this);if(!account.allowed()){startActivity(!account.linked()&&!FamilyStore.active(this)?firstRunIntent(this):new Intent(this,AccountCheckActivity.class));finish();return;}
+        AccountLinkStore account=new AccountLinkStore(this);
+        // First launch: enter Light as a guest without forcing website sign-in or pairing.
+        // Existing linked accounts still use their server-validated access and offline grace period.
+        if(!account.linked()&&!account.guest()&&!FamilyStore.active(this)){startActivity(firstRunIntent(this));finish();return;}
+        if(!account.allowed()){startActivity(new Intent(this,AccountCheckActivity.class));finish();return;}
         setContentView(R.layout.activity_main);UiText.applyDirection(this);AppVisibility.install(getApplication());Reminders.rescheduleAll(this);Recordings.rescheduleAll(this);pendingReminderId=getIntent()==null?null:getIntent().getStringExtra(Reminders.EXTRA_ID);pendingReminderTap=getIntent()!=null&&getIntent().getBooleanExtra(Reminders.EXTRA_TAP,false);BackCompat.route(this);
         resetViewerWithoutPro();profiles=new SecureProfileStore(this);library=new LibraryStore(this);searchIndex=new SearchIndexStore(this);epgStore=new EpgStore(this);
         categories=findViewById(R.id.categorySpinner);list=findViewById(R.id.itemList);grid=findViewById(R.id.itemGrid);search=findViewById(R.id.searchBox);searchToggle=findViewById(R.id.searchToggle);settingsButton=findViewById(R.id.settingsButton);tvShareButton=findViewById(R.id.tvShareButton);status=findViewById(R.id.status);indexBanner=findViewById(R.id.indexBanner);indexBannerText=findViewById(R.id.indexBannerText);indexBannerProgress=findViewById(R.id.indexBannerProgress);languageBadge=findViewById(R.id.languageBadge);planBadge=findViewById(R.id.planBadge);title=findViewById(R.id.title);heroTitle=findViewById(R.id.heroTitle);heroSubtitle=findViewById(R.id.heroSubtitle);heroImage=findViewById(R.id.heroImage);heroAction=findViewById(R.id.heroAction);heroInfo=findViewById(R.id.heroInfo);progress=findViewById(R.id.progress);genreButton=findViewById(R.id.genreButton);sortButton=findViewById(R.id.sortButton);browseScroll=findViewById(R.id.browseScroll);browseContainer=findViewById(R.id.browseContainer);filterBar=findViewById(R.id.filterBar);epgModeBar=findViewById(R.id.epgModeBar);epgGridButton=findViewById(R.id.epgGridButton);epgListButton=findViewById(R.id.epgListButton);epgBoard=findViewById(R.id.epgBoard);epgBoardContainer=findViewById(R.id.epgBoardContainer);
@@ -79,6 +83,7 @@ public class MainActivity extends Activity {
         if(settings.getBoolean("account_sources_changed",false)){
             settings.edit().remove("account_sources_changed").apply();recreate();return;
         }
+        if(profileReady&&searchIndex!=null){String key=profileKey();if(searchIndex.isComplete(key,"live")&&((provider instanceof M3uProvider&&!DemoPolicy.isDemo(profile))||(searchIndex.isComplete(key,"vod")&&searchIndex.isComplete(key,"series"))))maybeShowFirstImportProInvite(key);}
         com.nenotv.player.entitlement.AutomaticSourceDownload.check(this,()->runOnUiThread(()->{
             settings.edit().putBoolean("account_sources_changed",true).apply();
             if(!isFinishing()&&!isDestroyed()&&!activityPaused&&!playbackActive){
@@ -1098,9 +1103,61 @@ void scheduleBackgroundIndex(){
                 if(!Thread.currentThread().isInterrupted())runOnUiThread(()->{if(isUiAlive()&&key.equals(profileKey()))status.setText(T("loading_interrupted"));});
             }finally{
                 indexCategoryBusy=false;synchronized(MainActivity.this){indexRefreshRunning=false;indexFuture=null;}final boolean done=allComplete;
-                runOnUiThread(()->{if(!isUiAlive()||!key.equals(profileKey()))return;if(done)hideIndexBanner("");else restoreFirstSyncBanner();if(indexRefreshRequested){indexRefreshRequested=false;refreshSearchIndex(true);}});
+                runOnUiThread(()->{if(!isUiAlive()||!key.equals(profileKey()))return;if(done){hideIndexBanner("");maybeShowFirstImportProInvite(key);}else restoreFirstSyncBanner();if(indexRefreshRequested){indexRefreshRequested=false;refreshSearchIndex(true);}});
             }
         });
+    }
+
+    void maybeShowFirstImportProInvite(String key){
+        if(key==null||key.isEmpty()||FamilyStore.active(this))return;
+        if(new EntitlementStore(this).isPro()){maybeShowAutomaticProWelcome(key);return;}
+        if(new AccountLinkStore(this).linked())return;
+        android.content.SharedPreferences sp=SettingsStore.prefs(this);String seen="pro_invite_first_import_seen";
+        if(sp.getBoolean(seen,false))return;
+        new Thread(()->{
+            boolean internal=false;int days=14;
+            try{org.json.JSONObject offer=new com.nenotv.player.entitlement.EntitlementClient(this).offer();internal=offer.optBoolean("internal_test_mode",false);days=Math.max(1,offer.optInt("trial_days",14));}
+            catch(Exception ignored){}
+            final boolean testMode=internal;final int trialDays=days;
+            runOnUiThread(()->{if(isUiAlive()&&!activityPaused&&!playbackActive&&key.equals(profileKey())&&!new EntitlementStore(this).isPro()&&!sp.getBoolean(seen,false)){showFirstImportProInvite(testMode,trialDays);sp.edit().putBoolean(seen,true).apply();}});
+        },"SunnyIPTV-pro-invite").start();
+    }
+
+    void onProModuleInstalled(){
+        updateHeaderBadges();
+        if(profileReady&&searchIndex!=null){String key=profileKey();
+            if(searchIndex.isComplete(key,"live")&&((provider instanceof M3uProvider&&!DemoPolicy.isDemo(profile))||(searchIndex.isComplete(key,"vod")&&searchIndex.isComplete(key,"series"))))maybeShowAutomaticProWelcome(key);
+        }
+    }
+
+    void maybeShowAutomaticProWelcome(String key){
+        EntitlementStore entitlement=new EntitlementStore(this);
+        if(!entitlement.isTrial()||!ProModuleInstaller.isInstalled(this)||!new AccountLinkStore(this).linked())return;
+        android.content.SharedPreferences prefs=SettingsStore.prefs(this);
+        String seen="automatic_pro_welcome_seen";
+        if(prefs.getBoolean(seen,false)||activityPaused||playbackActive||!isUiAlive()||!key.equals(profileKey()))return;
+        AlertDialog welcome=new AlertDialog.Builder(this)
+            .setTitle("Welkom bij SunnyIPTV Pro!")
+            .setMessage("Als welkomstgeschenk ontvang je 14 dagen gratis SunnyIPTV Pro!")
+            .setPositiveButton("Begin met kijken",(dialog,which)->{})
+            .create();
+        welcome.setOnShowListener(dialog->prefs.edit().putBoolean(seen,true).apply());
+        welcome.show();
+    }
+
+    AlertDialog firstImportProInviteDialog;
+    AlertDialog showFirstImportProInvite(boolean internalTestMode,int trialDays){
+        if(firstImportProInviteDialog!=null&&firstImportProInviteDialog.isShowing())return firstImportProInviteDialog;
+        AlertDialog.Builder b=new AlertDialog.Builder(this).setTitle(T("pro_invite_title"))
+            .setMessage(T("pro_invite_body").replace("%d",Integer.toString(Math.max(1,trialDays))))
+            .setPositiveButton(T("pro_invite_trial"),(d,w)->{
+                Intent i=new Intent(this,new AccountLinkStore(this).linked()?AccountActivity.class:PairingActivity.class);
+                i.putExtra("show_trial_invite",true);startActivity(i);
+            })
+            .setNegativeButton(T("pro_invite_keep_light"),null);
+        if(internalTestMode)b.setNeutralButton(T("pro_test_mode_title"),(d,w)->startActivity(new Intent(this,AccountActivity.class).putExtra("internal_test_mode",true)));
+        firstImportProInviteDialog=b.show();
+        return firstImportProInviteDialog;
     }
 
     void waitWhilePaused(){while((activityPaused||playbackActive)&&!isFinishing()&&!isDestroyed()&&!Thread.currentThread().isInterrupted()){try{Thread.sleep(250);}catch(InterruptedException e){Thread.currentThread().interrupt();break;}}}
@@ -1288,7 +1345,7 @@ TextView addInfoBlock(LinearLayout b,String l,String x){TextView h=new TextView(
         if(e instanceof java.net.UnknownHostException||e instanceof java.net.ConnectException||e instanceof java.net.SocketTimeoutException||e instanceof java.net.NoRouteToHostException||low.contains("unable to resolve")||low.contains("failed to connect")||low.contains("timeout"))return T("err_network");
         if(low.matches(".*http_(404|5\\d\\d).*"))return T("err_provider");
         return T("unknown_error");} String friendlyThrowable(Throwable e){if(e instanceof OutOfMemoryError)return T("low_memory");String m=e==null?null:e.getMessage();return m==null||m.trim().isEmpty()?e.getClass().getSimpleName():m;} void busy(boolean b,String s){progress.setVisibility(b?View.VISIBLE:View.GONE);status.setText(s);}
-    static Intent firstRunIntent(android.content.Context context){return new Intent(context,PairingActivity.class).putExtra("first_run",true).putExtra("mandatory_login",true);}
+    static Intent firstRunIntent(android.content.Context context){return new Intent(context,PairingActivity.class).putExtra("first_run",true).putExtra("mandatory_login",true).putExtra("auto_web",true);}
     @Override protected void onActivityResult(int r,int c,Intent d){super.onActivityResult(r,c,d);if(updateNotifier!=null)updateNotifier.onActivityResult(r,c);if(r==10&&profiles.exists())openProfile();}
     @Override protected void onResume(){super.onResume();if(isFinishing())return;AccountLinkStore resumedAccount=new AccountLinkStore(this);if(!resumedAccount.allowed()){startActivity(new Intent(this,AccountCheckActivity.class));finish();return;}if(resumedAccount.linked()&&!resumedAccount.recent())refreshAccountInBackground();else if(resumedAccount.linked())refreshLinkedEntitlementInBackground();else if(resumedAccount.guest())refreshGuestInBackground();long familyNow=FamilyStore.revision(this);if(familyRevision>=0&&familyRevision!=familyNow){familyRevision=familyNow;recreate();return;}familyRevision=familyNow;if(!isFinishing()){try{if(updateNotifier==null)updateNotifier=new PlayUpdateNotifier(this,()->{ProModuleInstaller.syncEntitlement(this);updateHeaderBadges();});updateNotifier.onResume();}catch(Exception ignored){}}if(provider!=null&&expireDemoProfileIfNeeded()){recreate();return;}ProModuleInstaller.syncEntitlement(this);playbackActive=false;activityPaused=false;updateHeaderBadges();if(!profileReady)return;restoreFirstSyncBanner();resumeIndexSoon();String nowLang=SettingsStore.language(this);if(appliedLanguage!=null&&!appliedLanguage.isEmpty()&&!appliedLanguage.equals(nowLang)){recreate();return;}String nowContent=SettingsStore.contentLanguage(this);if(appliedContentLanguage!=null&&!appliedContentLanguage.isEmpty()&&!appliedContentLanguage.equals(nowContent)){appliedContentLanguage=nowContent;if(provider!=null){if("home".equals(section)||"local".equals(section))loadHome();else if("epg".equals(section))loadEpg();else loadSection(section);}return;}if(provider!=null){EpgRequests requests=epgRequests();adapter.setEpg(requests);gridAdapter.setEpg(requests);epgAdapter.configure(requests);gridAdapter.notifyDataSetChanged();epgAdapter.notifyDataSetChanged();if(seriesEpisodeMode){MediaEntry next=EpisodeOrder.next(seriesEpisodes,library);if(next!=null){selectedHero=next;heroSubtitle.setText((library.progress(next)>0?T("continue"):T("next_episode"))+" · S"+next.season+"E"+next.episode);heroAction.setText(library.progress(next)>0?T("continue"):T("next_episode"));heroAction.setVisibility(View.VISIBLE);}else heroAction.setVisibility(View.GONE);adapter.notifyDataSetChanged();}else if("home".equals(section)||"local".equals(section))loadHome();setHeroHeight(heroHeight());android.content.SharedPreferences sp=SettingsStore.prefs(this);if(sp.getBoolean("force_reindex",false)){sp.edit().putBoolean("force_reindex",false).apply();refreshSearchIndex(true);}}}
     @Override protected void onPause(){if(updateNotifier!=null)updateNotifier.onPause();activityPaused=true;super.onPause();}

@@ -46,7 +46,7 @@ public final class ProModuleInstaller {
                 try{m.startConfirmationDialogForResult(state,now,4401);}catch(Throwable ignored){}
             }else if(state.status()==SplitInstallSessionStatus.INSTALLED){
                 if(now!=null){try{com.google.android.play.core.splitcompat.SplitCompat.install(now);}catch(Throwable ignored){}
-                    Toast.makeText(now,UiText.t(now,"pro_pack_ready"),Toast.LENGTH_SHORT).show();}
+                    Toast.makeText(now,UiText.t(now,"pro_pack_ready"),Toast.LENGTH_SHORT).show();if(now instanceof MainActivity)((MainActivity)now).onProModuleInstalled();}
                 try{m.unregisterListener(listener);}catch(Throwable ignored){}
             }else if(state.status()==SplitInstallSessionStatus.FAILED||state.status()==SplitInstallSessionStatus.CANCELED){
                 if(now!=null)Toast.makeText(now,UiText.t(now,"pro_pack_failed"),Toast.LENGTH_LONG).show();
