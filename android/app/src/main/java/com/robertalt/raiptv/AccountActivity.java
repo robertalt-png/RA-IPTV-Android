@@ -183,9 +183,9 @@ public class AccountActivity extends Activity {
         statusText.setText(ent.statusLabel(this));
         String places="";
         if(ent.isPro()){
-            places="\n"+(l==EntitlementStore.Level.PRO_TRIAL?T("trial_plan"):ent.maxDevices()==1?"Solo":"Multi")+" · "+T("devices")+": "+ent.maxDevices();
+            places="\n"+(ent.maxDevices()==1?"Solo":"Multi")+" · "+T("devices")+": "+ent.maxDevices();
         }
-        if(l==EntitlementStore.Level.PRO_TRIAL)detailText.setText(T("trial_remaining")+": "+ent.trialDaysRemaining()+" "+T("days")+places);
+        if(l==EntitlementStore.Level.PRO_TRIAL)detailText.setText(T("pro_active")+places);
         else if(l==EntitlementStore.Level.PRO)detailText.setText(T("pro_active")+places);
         else detailText.setText(T("free_description"));
         deviceText.setText(T("device_code")+": "+ent.publicDeviceId());
