@@ -1309,7 +1309,48 @@ TextView addInfoBlock(LinearLayout b,String l,String x){TextView h=new TextView(
         new AlertDialog.Builder(this).setTitle("SunnyIPTV").setMessage(message).setPositiveButton(android.R.string.ok,null).show();
     }
 
-    @Override protected void onResume(){super.onResume();if(isFinishing())return;AccountLinkStore resumedAccount=new AccountLinkStore(this);if(!resumedAccount.allowed()){startActivity(new Intent(this,AccountCheckActivity.class));finish();return;}if(resumedAccount.linked()&&!resumedAccount.recent())refreshAccountInBackground();else if(resumedAccount.linked())refreshLinkedEntitlementInBackground();else if(resumedAccount.guest())refreshGuestInBackground();long familyNow=FamilyStore.revision(this);if(familyRevision>=0&&familyRevision!=familyNow){familyRevision=familyNow;recreate();return;}familyRevision=familyNow;if(!isFinishing()){try{if(updateNotifier==null)updateNotifier=new PlayUpdateNotifier(this,()->{ProModuleInstaller.syncEntitlement(this);updateHeaderBadges();});updateNotifier.onResume();}catch(Exception ignored){}}if(provider!=null&&expireDemoProfileIfNeeded()){recreate();return;}ProModuleInstaller.syncEntitlement(this);showFirstImportWelcome();playbackActive=false;activityPaused=false;updateHeaderBadges();if(!profileReady)return;restoreFirstSyncBanner();resumeIndexSoon();String nowLang=SettingsStore.language(this);if(appliedLanguage!=null&&!appliedLanguage.isEmpty()&&!appliedLanguage.equals(nowLang)){recreate();return;}String nowContent=SettingsStore.contentLanguage(this);if(appliedContentLanguage!=null&&!appliedContentLanguage.isEmpty()&&!appliedContentLanguage.equals(nowContent)){appliedContentLanguage=nowContent;if(provider!=null){if("home".equals(section)||"local".equals(section))loadHome();else if("epg".equals(section))loadEpg();else loadSection(section);}return;}if(provider!=null){EpgRequests requests=epgRequests();adapter.setEpg(requests);gridAdapter.setEpg(requests);epgAdapter.configure(requests);gridAdapter.notifyDataSetChanged();epgAdapter.notifyDataSetChanged();if(seriesEpisodeMode){MediaEntry next=EpisodeOrder.next(seriesEpisodes,library);if(next!=null){selectedHero=next;heroSubtitle.setText((library.progress(next)>0?T("continue"):T("next_episode"))+" · S"+next.season+"E"+next.episode);heroAction.setText(library.progress(next)>0?T("continue"):T("next_episode"));heroAction.setVisibility(View.VISIBLE);}else heroAction.setVisibility(View.GONE);adapter.notifyDataSetChanged();}else if("home".equals(section)||"local".equals(section))loadHome();setHeroHeight(heroHeight());android.content.SharedPreferences sp=SettingsStore.prefs(this);if(sp.getBoolean("force_reindex",false)){sp.edit().putBoolean("force_reindex",false).apply();refreshSearchIndex(true);}}}
+    void showProExpiryReminder(){
+        EntitlementStore e=new EntitlementStore(this);
+        android.content.SharedPreferences p=SettingsStore.prefs(this);
+        if(e.level()==EntitlementStore.Level.PRO){return;}
+        long end=e.expiresAt();
+        if(end<=0)return;
+        boolean trial=e.isTrial();
+        if(!trial&&e.level()!=EntitlementStore.Level.FREE)return;
+        String account=e.cloudAccountScope();
+        if(account.isEmpty())return;
+        String key="sunny_pro_reminders_"+account+"_"+end;
+        if(p.getBoolean("sunny_pro_reminders_disabled_"+account,false))return;
+        long now=System.currentTimeMillis(),day=86400000L;
+        long left=end-now;
+        int stage=0;
+        if(trial&&left>0){
+            if(left<=day)stage=1;
+            else if(left<=3*day)stage=3;
+            else if(left<=7*day)stage=7;
+        }else if(!trial&&left<=-90*day)stage=90;
+        else if(!trial&&left<=-30*day)stage=30;
+        else if(!trial&&left<=-7*day)stage=17;
+        if(stage==0||p.getBoolean(key+"_"+stage,false))return;
+        String lang=SettingsStore.language(this);
+        String message;
+        if(trial){
+            int days=stage;
+            message="nl".equals(lang)?(days==1?"Morgen eindigt je gratis SunnyIPTV Pro-periode.":"Je gratis SunnyIPTV Pro-periode loopt over "+days+" dagen af."):
+                "de".equals(lang)?"Deine kostenlose SunnyIPTV Pro-Zeit endet in "+days+" Tag(en).":"Your free SunnyIPTV Pro access ends in "+days+" day(s).";
+        }else{
+            message="nl".equals(lang)?"Mis je de extra functies van SunnyIPTV Pro? Bekijk onze abonnementen wanneer het jou uitkomt.":
+                "de".equals(lang)?"Vermisst du SunnyIPTV Pro? Entdecke unsere Abos, wenn du möchtest.":"Missing SunnyIPTV Pro? Explore our plans whenever you like.";
+        }
+        p.edit().putBoolean(key+"_"+stage,true).apply();
+        new AlertDialog.Builder(this).setTitle("SunnyIPTV Pro").setMessage(message)
+            .setPositiveButton("nl".equals(lang)?"Bekijk abonnementen":"de".equals(lang)?"Abos ansehen":"View plans",(d,w)->Tiles.open(this,"https://sunnyiptv.com/"))
+            .setNegativeButton("nl".equals(lang)?"Later":"de".equals(lang)?"Später":"Later",null)
+            .setNeutralButton("nl".equals(lang)?"Niet meer herinneren":"de".equals(lang)?"Nicht mehr erinnern":"Stop reminders",(d,w)->p.edit().putBoolean("sunny_pro_reminders_disabled_"+account,true).apply())
+            .show();
+    }
+
+    @Override protected void onResume(){super.onResume();if(isFinishing())return;AccountLinkStore resumedAccount=new AccountLinkStore(this);if(!resumedAccount.allowed()){startActivity(new Intent(this,AccountCheckActivity.class));finish();return;}if(resumedAccount.linked()&&!resumedAccount.recent())refreshAccountInBackground();else if(resumedAccount.linked())refreshLinkedEntitlementInBackground();else if(resumedAccount.guest())refreshGuestInBackground();long familyNow=FamilyStore.revision(this);if(familyRevision>=0&&familyRevision!=familyNow){familyRevision=familyNow;recreate();return;}familyRevision=familyNow;if(!isFinishing()){try{if(updateNotifier==null)updateNotifier=new PlayUpdateNotifier(this,()->{ProModuleInstaller.syncEntitlement(this);updateHeaderBadges();});updateNotifier.onResume();}catch(Exception ignored){}}if(provider!=null&&expireDemoProfileIfNeeded()){recreate();return;}ProModuleInstaller.syncEntitlement(this);showFirstImportWelcome();if(!SettingsStore.prefs(this).getBoolean("sunny_first_import_welcome_pending",false))showProExpiryReminder();playbackActive=false;activityPaused=false;updateHeaderBadges();if(!profileReady)return;restoreFirstSyncBanner();resumeIndexSoon();String nowLang=SettingsStore.language(this);if(appliedLanguage!=null&&!appliedLanguage.isEmpty()&&!appliedLanguage.equals(nowLang)){recreate();return;}String nowContent=SettingsStore.contentLanguage(this);if(appliedContentLanguage!=null&&!appliedContentLanguage.isEmpty()&&!appliedContentLanguage.equals(nowContent)){appliedContentLanguage=nowContent;if(provider!=null){if("home".equals(section)||"local".equals(section))loadHome();else if("epg".equals(section))loadEpg();else loadSection(section);}return;}if(provider!=null){EpgRequests requests=epgRequests();adapter.setEpg(requests);gridAdapter.setEpg(requests);epgAdapter.configure(requests);gridAdapter.notifyDataSetChanged();epgAdapter.notifyDataSetChanged();if(seriesEpisodeMode){MediaEntry next=EpisodeOrder.next(seriesEpisodes,library);if(next!=null){selectedHero=next;heroSubtitle.setText((library.progress(next)>0?T("continue"):T("next_episode"))+" · S"+next.season+"E"+next.episode);heroAction.setText(library.progress(next)>0?T("continue"):T("next_episode"));heroAction.setVisibility(View.VISIBLE);}else heroAction.setVisibility(View.GONE);adapter.notifyDataSetChanged();}else if("home".equals(section)||"local".equals(section))loadHome();setHeroHeight(heroHeight());android.content.SharedPreferences sp=SettingsStore.prefs(this);if(sp.getBoolean("force_reindex",false)){sp.edit().putBoolean("force_reindex",false).apply();refreshSearchIndex(true);}}}
     @Override protected void onPause(){if(updateNotifier!=null)updateNotifier.onPause();activityPaused=true;super.onPause();}
     @Override public void onTrimMemory(int level){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW){HERO_CACHE.evictAll();MediaRowAdapter.clearArtworkCache();}}
     @Override public void onBackPressed(){if(seriesEpisodeMode){loadSection("series");}else super.onBackPressed();}
