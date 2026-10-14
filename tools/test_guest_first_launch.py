@@ -7,6 +7,7 @@ MAIN = ROOT / "android/app/src/main/java/com/robertalt/raiptv/MainActivity.java"
 LINK = ROOT / "android/app/src/main/java/com/robertalt/raiptv/storage/AccountLinkStore.java"
 ACCOUNT = ROOT / "android/app/src/main/java/com/robertalt/raiptv/AccountActivity.java"
 PAIRING = ROOT / "android/app/src/main/java/com/robertalt/raiptv/PairingActivity.java"
+SETUP = ROOT / "android/app/src/main/java/com/robertalt/raiptv/WebsiteSetupActivity.java"
 PROFILE = ROOT / "android/app/src/main/java/com/robertalt/raiptv/ProfileActivity.java"
 
 
@@ -23,6 +24,16 @@ class GuestFirstLaunchChecks(unittest.TestCase):
         self.assertNotIn('guest.setTag("start_without_account")', source)
         self.assertIn('browserOpener.open(this,created.url)', source)
         self.assertIn('getBooleanExtra("auto_web",false)', source)
+
+    def test_first_run_does_not_activate_pro_before_import(self):
+        source = PAIRING.read_text(encoding="utf-8")
+        self.assertIn('if(!firstRun())ProModuleInstaller.syncEntitlement(this)', source)
+        self.assertIn('&&!firstRun()', source)
+        self.assertNotIn('WebsiteSetupJob.start(this,false);', source)
+        self.assertIn('if(firstRun())localSetup();', source)
+        setup = SETUP.read_text(encoding="utf-8")
+        self.assertIn('case READY:', setup)
+        self.assertIn('setResult(RESULT_OK)', setup)
 
     def test_guest_access_remains_light_and_account_is_separate(self):
         source = LINK.read_text(encoding="utf-8")
