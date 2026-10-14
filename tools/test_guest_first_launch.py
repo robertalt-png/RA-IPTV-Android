@@ -34,6 +34,9 @@ class GuestFirstLaunchChecks(unittest.TestCase):
         setup = SETUP.read_text(encoding="utf-8")
         self.assertIn('case READY:', setup)
         self.assertIn('setResult(RESULT_OK)', setup)
+        self.assertIn('if(getCallingActivity()==null) startActivity(', setup)
+        self.assertIn('startActivityForResult(new Intent(this,WebsiteSetupActivity.class),42)', source)
+        self.assertIn('if(request==42)', source)
 
     def test_guest_access_remains_light_and_account_is_separate(self):
         source = LINK.read_text(encoding="utf-8")
