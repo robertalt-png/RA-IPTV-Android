@@ -1313,9 +1313,9 @@ TextView addInfoBlock(LinearLayout b,String l,String x){TextView h=new TextView(
         EntitlementStore e=new EntitlementStore(this);
         android.content.SharedPreferences p=SettingsStore.prefs(this);
         if(e.level()==EntitlementStore.Level.PRO){return;}
-        long end=e.expiresAt();
-        if(end<=0)return;
         boolean trial=e.isTrial();
+        long end=trial?e.expiresAt():e.trialEndedAt();
+        if(end<=0)return;
         if(!trial&&e.level()!=EntitlementStore.Level.FREE)return;
         String account=e.cloudAccountScope();
         if(account.isEmpty())return;
