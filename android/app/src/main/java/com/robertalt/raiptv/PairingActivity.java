@@ -68,7 +68,7 @@ public final class PairingActivity extends Activity {
     void localSetup(){
         if(localSetupLaunched||destroyed||!new com.nenotv.player.storage.AccountLinkStore(this).linked()||com.nenotv.player.storage.FamilyStore.active(this))return;
         localSetupLaunched=true;handler.removeCallbacks(poll);
-        startActivityForResult(new Intent(this,WebsiteSetupActivity.class),42);
+        startActivityForResult(new Intent(this,WebsiteSetupActivity.class).putExtra("mandatory_first_setup",firstRun()),42);
     }
 
     @Override protected void onActivityResult(int request,int result,Intent data){
