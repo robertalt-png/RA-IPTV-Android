@@ -430,8 +430,20 @@ public final class UiInstrumentation extends ImportInstrumentation {
             // Signing out also clears the age answer (AccountLinkStore.clear); answer it so this check isolates the login gate.
             com.nenotv.player.storage.ExtraPrivacyStore.choose(getTargetContext(),"unknown");
             android.app.Instrumentation.ActivityMonitor loginMonitor=addMonitor(PairingActivity.class.getName(),null,false);
-            MainActivity blocked=(MainActivity)startActivitySync(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            try{waitForIdleSync();com.nenotv.player.storage.AccountLinkStore launchedGuest=new com.nenotv.player.storage.AccountLinkStore(getTargetContext());check(!launchedGuest.guest()&&!launchedGuest.linked(),"First launch unexpectedly created a guest or linked account");check(loginMonitor.getHits()>0,"First launch did not require website pairing");}finally{removeMonitor(loginMonitor);runOnMainSync(blocked::finish);verifiedAccount();}
+            // MainActivity finishes during this redirect, so startActivitySync can wait forever for its idle callback.
+            Activity loginScreen=null;
+            try{
+                Bundle progress=new Bundle();progress.putString("SUNNYIPTV_QA_STEP","signed-out main redirects to pairing");sendStatus(0,progress);
+                runOnMainSync(()->getTargetContext().startActivity(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));
+                loginScreen=waitForMonitorWithTimeout(loginMonitor,5000);
+                check(loginScreen!=null,"First launch did not require website pairing within 5 seconds: "+mainGate(getTargetContext()));
+                com.nenotv.player.storage.AccountLinkStore launchedGuest=new com.nenotv.player.storage.AccountLinkStore(getTargetContext());
+                check(!launchedGuest.guest()&&!launchedGuest.linked(),"First launch unexpectedly created a guest or linked account");
+            }finally{
+                removeMonitor(loginMonitor);
+                if(loginScreen!=null){Activity closing=loginScreen;runOnMainSync(closing::finish);}
+                verifiedAccount();
+            }
             check(first.getComponent()!=null&&first.getComponent().getClassName().equals(PairingActivity.class.getName())&&first.getBooleanExtra("first_run",false),"First start has an intermediate source screen");
             int beforeFirst=opened.get();
             PairingActivity firstScreen=(PairingActivity)startActivitySync(first.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));

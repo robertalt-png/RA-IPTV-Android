@@ -54,6 +54,7 @@ jobs:
           php tools/tests/free-account/test-free-pairing.php
       - name: Family demo catalogue tests
         run: |
+          bash tools/tests/test-qa-one-app.sh
           python3 tools/tests/test_family_demo.py
           python3 tools/tests/check_texts.py
           php tools/tests/account-setup/test-account-setup.php

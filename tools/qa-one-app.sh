@@ -4,7 +4,7 @@ device="$1"
 pkg=com.nenotv.player
 mkdir -p qa-results
 capture_phase_evidence() {
-  phase="$1"
+  local phase="$1"
   timeout 15s adb logcat -d > "qa-results/$phase-logcat.txt" || true
   timeout 10s adb shell dumpsys window > "qa-results/$phase-window.txt" || true
   timeout 10s adb shell dumpsys activity activities > "qa-results/$phase-activities.txt" || true
@@ -12,11 +12,12 @@ capture_phase_evidence() {
   timeout 10s adb pull /sdcard/Android/data/$pkg/files/qa "qa-results/$phase-screenshots" || true
 }
 run_instrument() {
-  seconds="$1"; phase="$2"; expected="$3"; shift 3
+  local seconds="$1" phase="$2" expected="$3" rc msg out
+  shift 3
   out="qa-results/$phase.txt"
-  adb logcat -c >/dev/null 2>&1 || true
+  timeout 10s adb logcat -c >/dev/null 2>&1 || true
   echo "QA phase $phase: timeout ${seconds}s, expecting $expected=passed"
-  if timeout "${seconds}s" adb shell am instrument -w "$@" "$pkg.test/$pkg.UiInstrumentation" | tee "$out"; then
+  if timeout --kill-after=10s "${seconds}s" adb shell am instrument -w "$@" "$pkg.test/$pkg.UiInstrumentation" | tee "$out"; then
     if rg -q "$expected=passed" "$out"; then
       return 0
     fi
@@ -24,10 +25,11 @@ run_instrument() {
     msg=$(tail -n 40 "$out" | tr -d '\r' | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
     echo "::error title=QA phase $phase missing $expected::$msg"
     return 2
+  else
+    rc=$?
   fi
-  rc=$?
   capture_phase_evidence "$phase"
-  adb shell am force-stop "$pkg" >/dev/null 2>&1 || true
+  timeout 10s adb shell am force-stop "$pkg" >/dev/null 2>&1 || true
   if [ "$rc" -eq 124 ]; then
     msg="Instrumentation phase $phase exceeded ${seconds}s. See qa-results/$phase-logcat.txt, $phase-window.txt and $phase-activities.txt."
   else
