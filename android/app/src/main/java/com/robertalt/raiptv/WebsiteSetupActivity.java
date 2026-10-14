@@ -108,7 +108,7 @@ public final class WebsiteSetupActivity extends Activity {
             case EXPIRED: case FAILED: status.setText(t("De lijst is nog niet geladen. Controleer je aanbiedergegevens op Mijn SunnyIPTV en probeer opnieuw.","The list has not loaded. Check your provider details on My SunnyIPTV and retry.","Liste nicht geladen. Anbieterdaten in Mein SunnyIPTV pruefen und erneut versuchen.")); break;
             case READY:
                 finished=true;
-                if(mandatoryFirstSetup) SettingsStore.prefs(this).edit().putBoolean("sunny_first_import_welcome_pending",true).apply();
+                if(mandatoryFirstSetup) SettingsStore.prefs(WebsiteSetupActivity.this).edit().putBoolean("sunny_first_import_welcome_pending",true).apply();
                 setResult(RESULT_OK);
                 if(getCallingActivity()==null) startActivity(new Intent(WebsiteSetupActivity.this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP));
                 finish(); return;
