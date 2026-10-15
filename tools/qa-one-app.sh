@@ -54,8 +54,8 @@ report_failure() {
   return 0
 }
 trap report_failure EXIT
-apk="$PWD/distribution/SunnyIPTV-Pro-v0.14.56-vc151-TEST-SIGNED.apk"
-light_apk="$PWD/distribution/SunnyIPTV-Light-v0.14.56-vc151-TEST-SIGNED.apk"
+apk="$PWD/distribution/SunnyIPTV-Pro-v0.14.57-vc152-TEST-SIGNED.apk"
+light_apk="$PWD/distribution/SunnyIPTV-Light-v0.14.57-vc152-TEST-SIGNED.apk"
 adb install "$light_apk"
 adb install qa-tools/tests.apk
 run_instrument 240 family-light SUNNYIPTV_FAMILY_TESTS -e phase family
