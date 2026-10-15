@@ -507,7 +507,7 @@ public class SearchIndexStore extends SQLiteOpenHelper {
     }
     /** 0 app language, 1 MULTI, 2 unknown, 3 another language. */
     static int languageRank(MediaEntry e,String storedTag,String preferred){
-        String x=resultLanguage(e,storedTag);if(x.isEmpty())return 2;if("multi".equals(x))return 1;return !preferred.isEmpty()&&preferred.equals(x)?0:3;
+        return com.nenotv.player.ContentLanguage.rankTag(resultLanguage(e,storedTag),preferred);
     }
     private static int score(MediaEntry e,String q){
         String n=norm(e.name), g=norm(e.group); int s=0;

@@ -76,10 +76,8 @@ public final class LanguageGroups {
 
     /** 0 app language, 1 MULTI, 2 unknown, 3 another language. */
     static int rank(MediaEntry e, String preferred) {
-        String x = language(e);
-        if (x.isEmpty()) return 2;
-        if ("multi".equals(x)) return 1;
-        return preferred != null && preferred.equalsIgnoreCase(x) ? 0 : 3;
+        // "nl" or "nl,tr" (second language, 15-10): same order as ContentLanguage.rankTag.
+        return com.nenotv.player.ContentLanguage.rankTag(language(e), preferred);
     }
 
     /** Groups in the order of the list given (each group where its first version stood). */

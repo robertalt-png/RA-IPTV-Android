@@ -43,6 +43,7 @@ public class SettingsActivity extends Activity {
         switch (page) {
             case LANGUAGE:
                 choice(g, T("app_language"), "language", labels(LANGS), LANGS);
+                secondLanguageChoice(g);
                 choice(g, T("audio_pref"), "audio", prefixed(new String[]{T("follow_app_language"), T("original")}), prefixedValues("auto", "original"));
                 choice(g, T("subtitle_pref"), "subtitles", prefixed(new String[]{T("follow_app_language"), T("off")}), prefixedValues("auto", "off"));
                 onOff(g, T("group_languages"), "group_languages", true);
@@ -182,6 +183,26 @@ public class SettingsActivity extends Activity {
         wrap.addView(url); wrap.addView(token);
         new AlertDialog.Builder(this).setTitle(T("external_subtitle_bridge")).setMessage(T("bridge_help")).setView(wrap).setNegativeButton(T("cancel"), null)
                 .setPositiveButton(T("save"), (d, w) -> { profile.bridgeUrl = url.getText().toString().trim(); profile.bridgeToken = token.getText().toString(); store.save(profile); Toast.makeText(this, T("saved"), Toast.LENGTH_SHORT).show(); }).show();
+    }
+
+    /** Second language (15-10): optional, shown right after the main language; with two languages the player asks per film and per series. */
+    void secondLanguageChoice(Tiles.Grid g) {
+        String primary = SettingsStore.primaryLanguage(this);
+        java.util.ArrayList<String> codes = new java.util.ArrayList<>();
+        codes.add("");
+        for (String c : LANGS) if (!c.equals(primary)) codes.add(c);
+        String[] values = codes.toArray(new String[0]);
+        String[] names = new String[values.length];
+        names[0] = text("Geen", "None", "Keine");
+        for (int i = 1; i < values.length; i++) names[i] = SettingsStore.displayLanguage(this, values[i]);
+        String cur = SettingsStore.secondaryLanguage(this);
+        int at = 0;
+        for (int i = 0; i < values.length; i++) if (values[i].equals(cur)) at = i;
+        final int selected = at;
+        String label = text("Tweede taal", "Second language", "Zweite Sprache");
+        g.add("", label, names[at], false, v -> new AlertDialog.Builder(this).setTitle(label)
+                .setSingleChoiceItems(names, selected, (d, w) -> { d.dismiss(); if (w == selected) return; SettingsStore.setSecondaryLanguage(this, values[w]); build(); })
+                .setNegativeButton(T("cancel"), null).show());
     }
 
     String[] labels(String[] codes) { String[] out = new String[codes.length]; for (int i = 0; i < codes.length; i++) out[i] = SettingsStore.displayLanguage(this, codes[i]); return out; }

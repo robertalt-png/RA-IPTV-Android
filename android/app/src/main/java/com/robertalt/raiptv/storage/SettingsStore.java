@@ -13,6 +13,11 @@ public final class SettingsStore {
     public static String language(Context c){String x=languageSetting(c);if(!"auto".equals(x)&&supportedLanguage(x))return x;String d=Locale.getDefault().getLanguage();return supportedLanguage(d)?d:"en";}
     public static String primaryLanguage(Context c){return hasLanguageProfile(c)?prefs(c).getString("primary_language",language(c)):language(c);}
     public static void setPrimaryLanguage(Context c,String code){String x=supportedLanguage(code)?code.toLowerCase(Locale.ROOT):"en";prefs(c).edit().putBoolean("language_profile_configured",true).putInt("language_profile_version",1).putString("primary_language",x).putString("language",x).putString("content_language","auto").putString("audio","auto").putString("subtitles","auto").apply();}
+    /** Optional second language (Robert 15-10): shown right after the main language everywhere; empty when not set or equal to the main language. */
+    public static String secondaryLanguage(Context c){String x=prefs(c).getString("secondary_language","");return supportedLanguage(x)&&!x.equals(primaryLanguage(c))?x:"";}
+    public static void setSecondaryLanguage(Context c,String code){prefs(c).edit().putString("secondary_language",supportedLanguage(code)?code.toLowerCase(Locale.ROOT):"").apply();}
+    /** "nl" or "nl,tr": the order in which languages come first in lists, guide and search. */
+    public static String preferredLanguages(Context c){String s=secondaryLanguage(c);return s.isEmpty()?primaryLanguage(c):primaryLanguage(c)+","+s;}
     public static Locale appLocale(Context c){try{return Locale.forLanguageTag(primaryLanguage(c));}catch(Exception e){return Locale.ENGLISH;}}
     public static String contentLanguageSetting(Context c){return hasLanguageProfile(c)?"auto":prefs(c).getString("content_language","auto");}
     public static String contentLanguage(Context c){if(hasLanguageProfile(c))return primaryLanguage(c);String x=contentLanguageSetting(c);return "auto".equals(x)?language(c):(supportedLanguage(x)?x:language(c));}
@@ -20,8 +25,10 @@ public final class SettingsStore {
     public static String resolvedSubtitleLanguage(Context c){String x=subtitles(c);if("auto".equals(x))x=primaryLanguage(c);return supportedLanguage(x)?x:primaryLanguage(c);}
     public static boolean supportedLanguage(String x){return Arrays.asList("nl","en","de","fr","es","it","pt","tr","pl","ar").contains(x);}
     public static String[] languageCodes(String x){if(x==null)return new String[0];switch(x){case "nl":return new String[]{"nl","nld","dut"};case "en":return new String[]{"en","eng"};case "de":return new String[]{"de","deu","ger"};case "fr":return new String[]{"fr","fra","fre"};case "es":return new String[]{"es","spa"};case "it":return new String[]{"it","ita"};case "pt":return new String[]{"pt","por"};case "tr":return new String[]{"tr","tur"};case "pl":return new String[]{"pl","pol"};case "ar":return new String[]{"ar","ara"};default:return new String[0];}}
-    public static String[] audioLanguageCodes(Context c){String a=audio(c);if("original".equals(a))return new String[0];if("auto".equals(a))a=primaryLanguage(c);return languageCodes(a);}
-    public static String[] subtitleLanguageCodes(Context c){String x=subtitles(c);if("off".equals(x))return new String[0];if("auto".equals(x))x=primaryLanguage(c);return languageCodes(x);}
+    public static String[] audioLanguageCodes(Context c){String a=audio(c);if("original".equals(a))return new String[0];if("auto".equals(a)){String s=secondaryLanguage(c);if(!s.isEmpty()){String[] x=languageCodes(primaryLanguage(c)),y=languageCodes(s);String[] both=Arrays.copyOf(x,x.length+y.length);System.arraycopy(y,0,both,x.length,y.length);return both;}a=primaryLanguage(c);}return languageCodes(a);}
+    public static String[] subtitleLanguageCodes(Context c){String x=subtitles(c);if("off".equals(x))return new String[0];if("auto".equals(x)){if(!secondaryLanguage(c).isEmpty())return new String[0];x=primaryLanguage(c);}return languageCodes(x);}
+    /** Two languages and subtitles on "automatic": no subtitle until the viewer picks one (TrackChoice asks per film and per series). */
+    public static boolean subtitlesWaitForChoice(Context c){return "auto".equals(subtitles(c))&&!secondaryLanguage(c).isEmpty();}
     public static String csv(String[] a){return a==null||a.length==0?"":android.text.TextUtils.join(",",a);}
     public static String displayLanguage(Context c,String code){if(code==null||code.trim().isEmpty()||"und".equalsIgnoreCase(code))return "";try{Locale l=Locale.forLanguageTag(code);String n=l.getDisplayLanguage(appLocale(c));return n==null||n.trim().isEmpty()?code.toUpperCase(Locale.ROOT):n.substring(0,1).toUpperCase(appLocale(c))+n.substring(1);}catch(Exception e){return code.toUpperCase(Locale.ROOT);}}
     public static boolean compact(Context c){return prefs(c).getBoolean("compact",true);}

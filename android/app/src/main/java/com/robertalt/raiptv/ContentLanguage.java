@@ -123,6 +123,13 @@ public final class ContentLanguage {
     }
 
     /** 0 preferred, 1 MULTI, 2 ungrouped, 3 another known language. */
-    public static int rankText(String raw,String preferred){String p=preferenceCode(preferred);String x=categoryTag(raw);if(x.isEmpty())return 2;if("multi".equals(x))return 1;if(!p.isEmpty()&&p.equals(x))return 0;return 3;}
-    public static int rank(MediaEntry e,String preferred){String p=preferenceCode(preferred);String x=detectTag(e);if(x.isEmpty())return 2;if("multi".equals(x))return 1;if(!p.isEmpty()&&p.equals(x))return 0;return 3;}
+    public static int rankText(String raw,String preferred){return rankTag(categoryTag(raw),preferred);}
+    public static int rank(MediaEntry e,String preferred){return rankTag(detectTag(e),preferred);}
+    /** preferred is one code ("nl") or a list ("nl,tr"). With n preferred languages: their position (0..n-1), then MULTI (n),
+     *  unknown (n+1), any other language (n+2). One language gives the old order 0 / 1 / 2 / 3. */
+    public static int rankTag(String tag,String preferred){
+        String x=tag==null?"":tag.trim().toLowerCase(Locale.ROOT);int n=0;
+        if(preferred!=null)for(String part:preferred.split(",")){String p=preferenceCode(part.trim());if(p.isEmpty())continue;if(p.equals(x))return n;n++;}
+        if(n==0)n=1;if(x.isEmpty())return n+1;if("multi".equals(x))return n;return n+2;
+    }
 }
