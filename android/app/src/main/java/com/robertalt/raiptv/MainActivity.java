@@ -175,27 +175,47 @@ public class MainActivity extends Activity {
         for(int i=0;i<b.length;i++){boolean sel=k[i].equals(searchScope);b[i].setBackgroundTintList(android.content.res.ColorStateList.valueOf(sel?on:off));b[i].setSelected(sel);b[i].setContentDescription(b[i].getText()+(sel?" ✓":""));}}
     void showSearchScope(boolean show){if(!show&&guideHitsButton!=null)guideHitsButton.setVisibility(View.GONE);if(searchScopeBar!=null)searchScopeBar.setVisibility(show&&!"epg".equals(section)?View.VISIBLE:View.GONE);}
     void toggleSearch(){if(search.getVisibility()==View.VISIBLE){if(search.getText().length()>0)search.setText("");search.clearFocus();search.setVisibility(View.GONE);showSearchScope(false);searchToggle.setText("⌕");((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(search.getWindowToken(),0);}else{search.setVisibility(View.VISIBLE);searchScope="all";updateSearchScopeUi();showSearchScope(true);searchToggle.setText("✕");search.requestFocus();((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(search,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);}}
+    /** Main menu, grouped (Robert 15-10): a status card on top, then Kijken / Thuis / Instellen as tiles with an icon and a short line.
+     *  Same destinations as before; the connection test lives in Settings > Problemen (SettingsActivity), the separate
+     *  "Account & SunnyIPTV Pro" button is the status card. */
     void showNenoMenu(){
     final Dialog d=new Dialog(this);
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(14),dp(18),dp(22));
-    android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();bg.setColor(0xFF10141A);bg.setCornerRadii(new float[]{dp(22),dp(22),dp(22),dp(22),0,0,0,0});box.setBackground(bg);
+    android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();bg.setColor(0xFF10141A);bg.setCornerRadii(new float[]{dp(22),dp(22),dp(22),dp(22),0,0,0,0});
+    ScrollView scroll=new ScrollView(this);scroll.setBackground(bg);scroll.addView(box);
     ImageView head=new ImageView(this);head.setImageResource(R.drawable.sunnyiptv_logo);head.setContentDescription(getString(R.string.app_name));head.setScaleType(ImageView.ScaleType.FIT_START);box.addView(head,new LinearLayout.LayoutParams(-1,dp(64)));
-    EntitlementStore ent=new EntitlementStore(this);TextView plan=new TextView(this);plan.setText(ent.statusLabel(this));plan.setTextColor(0xFFA7AFBC);plan.setTextSize(13);plan.setPadding(0,0,0,dp(10));box.addView(plan);
-    addNenoMenuItem(d,box,T("search_everywhere"),()->{toggleSearch();});
-    addNenoMenuItem(d,box,T("account_and_pro"),()->startActivity(new Intent(this,AccountActivity.class)));
-    addNenoMenuItem(d,box,(ProGate.allowed(this)?"":"🔒 ")+T("household_profiles"),()->{if(ProGate.require(this,T("household_profiles")))startActivity(new Intent(this,HouseholdProfilesActivity.class));});
-    addNenoMenuItem(d,box,T("manage_source"),()->startActivityForResult(ProModuleInstaller.sourcesIntent(this),10));
-    addNenoMenuItem(d,box,(ProGate.allowed(this)?"🔔 ":"🔒 ")+T("reminders"),()->{if(ProGate.require(this,T("reminders")))showReminders();});
-    addNenoMenuItem(d,box,(ProGate.allowed(this)?"⏺ ":"🔒 ")+T("recordings"),()->{if(ProGate.require(this,T("recordings")))startActivity(new Intent(this,RecordingsActivity.class));});
-    addNenoMenuItem(d,box,(ProGate.allowed(this)?"":"🔒 ")+T("casting"),()->{if(ProGate.require(this,T("casting")))showTvShareMenu();});
-    addNenoMenuItem(d,box,FamilyUi.text(this,"Verbindingstest","Connection test","Verbindungstest"),()->startActivity(new Intent(this,NetworkTestActivity.class)));
-    addNenoMenuItem(d,box,T("settings"),()->startActivity(new Intent(this,SettingsActivity.class)));
-    addNenoMenuItem(d,box,FamilyUi.text(this,"Familiefilter","Family filter","Familienfilter"),()->startActivity(new Intent(this,FamilyActivity.class)));
+    EntitlementStore ent=new EntitlementStore(this);boolean pro=ProGate.allowed(this);
+    String planTitle=ent.isTrial()?T("nenotv_pro_trial"):ent.statusLabel(this);
+    String planLine;
+    if(ent.isTrial()){long days=ent.trialDaysRemaining();planLine=FamilyUi.text(this,"Nog "+days+(days==1?" dag":" dagen")+" · daarna gratis Light","Still "+days+(days==1?" day":" days")+" · then free Light","Noch "+days+(days==1?" Tag":" Tage")+" · danach kostenlos Light");}
+    else planLine=ent.isPro()?FamilyUi.text(this,"Account, apparaten en abonnement","Account, devices and subscription","Konto, Geräte und Abo"):FamilyUi.text(this,"Bekijk wat SunnyIPTV Pro toevoegt","See what SunnyIPTV Pro adds","Sieh, was SunnyIPTV Pro bietet");
+    Tiles.Grid plan=new Tiles.Grid(this,box,1);
+    plan.add(ent.isPro()?"⭐":"🔓",planTitle,planLine+"  ›",true,menuTap(d,()->startActivity(new Intent(this,AccountActivity.class))));plan.finish();
+    String lock="🔒 ";
+    menuHeading(box,FamilyUi.text(this,"Kijken","Watch","Ansehen"));
+    Tiles.Grid watch=new Tiles.Grid(this,box,2);
+    watch.add("🔍",T("search_everywhere"),FamilyUi.text(this,"Live, films en series","Live, movies and series","Live, Filme und Serien"),false,menuTap(d,this::toggleSearch));
+    watch.add(pro?"📺":lock,T("casting"),FamilyUi.text(this,"Kijk verder op je tv","Continue on your TV","Auf dem Fernseher weiterschauen"),false,menuTap(d,()->{if(ProGate.require(this,T("casting")))showTvShareMenu();}));
+    watch.add(pro?"⏺":lock,T("recordings"),FamilyUi.text(this,"Je opgenomen programma's","Your recorded programmes","Deine Aufnahmen"),false,menuTap(d,()->{if(ProGate.require(this,T("recordings")))startActivity(new Intent(this,RecordingsActivity.class));}));
+    watch.add(pro?"🔔":lock,T("reminders"),FamilyUi.text(this,"Seintje voor je programma","A nudge before your programme","Hinweis vor deiner Sendung"),false,menuTap(d,()->{if(ProGate.require(this,T("reminders")))showReminders();}));
+    watch.finish();
+    menuHeading(box,FamilyUi.text(this,"Thuis","Home","Zuhause"));
+    Tiles.Grid home=new Tiles.Grid(this,box,2);
+    home.add(pro?"👥":lock,T("household_profiles"),FamilyUi.text(this,"Ieder zijn eigen lijst","Everyone their own list","Jeder seine eigene Liste"),false,menuTap(d,()->{if(ProGate.require(this,T("household_profiles")))startActivity(new Intent(this,HouseholdProfilesActivity.class));}));
+    home.add("🛡",FamilyUi.text(this,"Familiefilter","Family filter","Familienfilter"),FamilyUi.text(this,"Wat de kinderen zien","What the children see","Was die Kinder sehen"),false,menuTap(d,()->startActivity(new Intent(this,FamilyActivity.class))));
+    home.finish();
+    menuHeading(box,FamilyUi.text(this,"Instellen","Set up","Einrichten"));
+    Tiles.Grid setup=new Tiles.Grid(this,box,2);
+    setup.add("📡",T("manage_source"),FamilyUi.text(this,"Je aanbieder en lijst","Your provider and list","Dein Anbieter und deine Liste"),false,menuTap(d,()->startActivityForResult(ProModuleInstaller.sourcesIntent(this),10)));
+    setup.add("⚙",T("settings"),FamilyUi.text(this,"Taal, speler, verbindingstest","Language, player, connection test","Sprache, Player, Verbindungstest"),false,menuTap(d,()->startActivity(new Intent(this,SettingsActivity.class))));
+    setup.finish();
     addNenoMenuItem(d,box,T("close"),()->{});
-    d.setContentView(box);
+    d.setContentView(scroll);
     Window w=d.getWindow();if(w!=null){w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));w.setGravity(Gravity.BOTTOM);w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);w.setDimAmount(0.45f);}
     d.show();if(w!=null)w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT);
 }
+View.OnClickListener menuTap(Dialog d,Runnable action){return v->{d.dismiss();action.run();};}
+void menuHeading(LinearLayout box,String text){TextView h=new TextView(this);h.setText(text.toUpperCase(java.util.Locale.ROOT));h.setTextColor(0xFF8F96AA);h.setTextSize(12);h.setLetterSpacing(0.08f);h.setPadding(dp(4),dp(14),0,dp(8));box.addView(h);}
 void addNenoMenuItem(Dialog d,LinearLayout box,String label,Runnable action){
     Button b=new Button(this);b.setText(label);b.setAllCaps(false);b.setTextColor(0xFFF7F8FA);b.setTextSize(15);b.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL);b.setPadding(dp(14),0,dp(14),0);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1B2028));
     LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(50));lp.bottomMargin=dp(7);box.addView(b,lp);b.setOnClickListener(v->{d.dismiss();action.run();});
